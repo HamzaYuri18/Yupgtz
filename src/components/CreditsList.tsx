@@ -79,10 +79,10 @@ const CreditsList: React.FC = () => {
     today.setHours(0, 0, 0, 0);
     const nextWeek = new Date(today);
     nextWeek.setDate(today.getDate() + 7);
-    
+
     return credits.filter(credit => {
-      if (!credit.date_paiement_prevue || credit.statut === 'Payé') return false;
-      
+      if (!credit.date_paiement_prevue || credit.statut === 'Payé' || credit.statut === 'Payé en total') return false;
+
       const dueDate = new Date(credit.date_paiement_prevue);
       dueDate.setHours(0, 0, 0, 0);
       return dueDate >= today && dueDate <= nextWeek;
@@ -92,10 +92,10 @@ const CreditsList: React.FC = () => {
   const getOverdueCredits = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     return credits.filter(credit => {
-      if (!credit.date_paiement_prevue || credit.statut === 'Payé') return false;
-      
+      if (!credit.date_paiement_prevue || credit.statut === 'Payé' || credit.statut === 'Payé en total') return false;
+
       const dueDate = new Date(credit.date_paiement_prevue);
       dueDate.setHours(0, 0, 0, 0);
       return dueDate < today;
@@ -214,8 +214,8 @@ const CreditsList: React.FC = () => {
   const calculateDetailedStats = () => {
     // IMPORTANT: Utiliser TOUS les crédits pour les statistiques globales
     // mais filtrer pour l'affichage du tableau
-    const creditsForStats = viewMode === 'mois' 
-      ? getCreditsByMonth(filters.mois) 
+    const creditsForStats = viewMode === 'mois'
+      ? getCreditsByMonth(filters.mois)
       : credits;
 
     const creditsDueIn7Days = getCreditsDueIn7Days();
@@ -223,14 +223,23 @@ const CreditsList: React.FC = () => {
 
     const totalCredits = creditsForStats.length;
     const totalMontant = creditsForStats.reduce((sum, credit) => sum + (credit.montant_credit || 0), 0);
-    
-    const payes = creditsForStats.filter(c => c.statut === 'Payé');
+
+    // Inclure tous les statuts payés (Payé, Payé partiellement, Payé en total)
+    const payes = creditsForStats.filter(c =>
+      c.statut === 'Payé' || c.statut === 'Payé partiellement' || c.statut === 'Payé en total'
+    );
     const nonPayes = creditsForStats.filter(c => c.statut === 'Non payé');
     const enRetard = creditsForStats.filter(c => c.statut === 'En retard');
 
-    const montantPaye = payes.reduce((sum, credit) => sum + (credit.paiement || 0), 0);
-    const montantNonPaye = nonPayes.reduce((sum, credit) => sum + (credit.montant_credit || 0), 0);
-    const montantEnRetard = enRetard.reduce((sum, credit) => sum + (credit.montant_credit || 0), 0);
+    // Calculer le montant payé en additionnant tous les paiements effectués
+    const montantPaye = creditsForStats.reduce((sum, credit) => sum + (credit.paiement || 0), 0);
+
+    // Calculer le montant non payé en additionnant tous les soldes restants
+    const montantNonPaye = creditsForStats
+      .filter(c => c.statut !== 'Payé en total')
+      .reduce((sum, credit) => sum + (credit.solde || 0), 0);
+
+    const montantEnRetard = enRetard.reduce((sum, credit) => sum + (credit.solde || 0), 0);
 
     const tauxRecouvrement = totalMontant > 0 ? (montantPaye / totalMontant) * 100 : 0;
 
@@ -254,7 +263,10 @@ const CreditsList: React.FC = () => {
   const getStatusIcon = (statut: string) => {
     switch (statut) {
       case 'Payé':
+      case 'Payé en total':
         return <CheckCircle className="w-5 h-5 text-green-500" />;
+      case 'Payé partiellement':
+        return <CheckCircle className="w-5 h-5 text-blue-500" />;
       case 'En retard':
         return <XCircle className="w-5 h-5 text-red-500" />;
       default:
@@ -265,7 +277,10 @@ const CreditsList: React.FC = () => {
   const getStatusColor = (statut: string) => {
     switch (statut) {
       case 'Payé':
+      case 'Payé en total':
         return 'bg-green-100 text-green-800';
+      case 'Payé partiellement':
+        return 'bg-blue-100 text-blue-800';
       case 'En retard':
         return 'bg-red-100 text-red-800';
       default:
@@ -542,6 +557,8 @@ const CreditsList: React.FC = () => {
                 <option value="all">Tous les statuts</option>
                 <option value="Non payé">Non payé</option>
                 <option value="Payé">Payé</option>
+                <option value="Payé partiellement">Payé partiellement</option>
+                <option value="Payé en total">Payé en total</option>
                 <option value="En retard">En retard</option>
               </select>
 
