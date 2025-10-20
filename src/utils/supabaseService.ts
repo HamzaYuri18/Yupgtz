@@ -531,27 +531,96 @@ export const updateCreditStatus = async (id: number, newStatus: string, datePaie
 };
 
 // Fonction pour mettre à jour le paiement d'un crédit
-export const updateCreditPayment = async (id: number, montantPaiement: number): Promise<boolean> => {
+export const updateCreditPayment = async (
+  id: number,
+  montantPaiement: number,
+  assure: string,
+  modePaiement: 'Espece' | 'Cheque'
+): Promise<boolean> => {
   try {
     console.log('💳 Mise à jour paiement crédit...');
 
-    const updateData = {
-      paiement: montantPaiement,
-      date_paiement_effectif: new Date().toISOString().split('T')[0],
-      statut: 'Payé'
-    };
-
-    const { error } = await supabase
+    // 1. Récupérer le crédit actuel pour calculer le nouveau solde et statut
+    const { data: creditActuel, error: fetchError } = await supabase
       .from('liste_credits')
-      .update(updateData)
-      .eq('id', id);
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
 
-    if (error) {
-      console.error('❌ Erreur mise à jour paiement:', error);
+    if (fetchError || !creditActuel) {
+      console.error('❌ Erreur récupération crédit:', fetchError);
       return false;
     }
 
-    console.log('✅ Paiement mis à jour');
+    // 2. Calculer le nouveau paiement total et le nouveau solde
+    const nouveauPaiementTotal = (creditActuel.paiement || 0) + montantPaiement;
+    const nouveauSolde = (creditActuel.solde || 0) - montantPaiement;
+
+    // 3. Déterminer le nouveau statut
+    let nouveauStatut = '';
+    if (nouveauSolde === 0) {
+      nouveauStatut = 'Payé en total';
+    } else if (nouveauSolde > 0) {
+      nouveauStatut = 'Payé partiellement';
+    } else {
+      nouveauStatut = 'Payé';
+    }
+
+    // 4. Mettre à jour le crédit dans liste_credits
+    const { error: updateError } = await supabase
+      .from('liste_credits')
+      .update({
+        paiement: nouveauPaiementTotal,
+        solde: nouveauSolde,
+        date_paiement_effectif: new Date().toISOString().split('T')[0],
+        statut: nouveauStatut
+      })
+      .eq('id', id);
+
+    if (updateError) {
+      console.error('❌ Erreur mise à jour crédit:', updateError);
+      return false;
+    }
+
+    // 5. Enregistrer le paiement dans la table rapport
+    const datePaiement = new Date().toISOString().split('T')[0];
+
+    const { error: rapportError } = await supabase
+      .from('rapport')
+      .insert([{
+        type: 'Paiement Crédit',
+        branche: creditActuel.branche || 'Auto',
+        numero_contrat: creditActuel.numero_contrat,
+        prime: montantPaiement,
+      
+        assure: assure,
+        mode_paiement: modePaiement,
+        type_paiement: 'Au comptant',
+        cree_par: 'Système',
+        created_at: datePaiement,
+        date_paiement_prevue: null,
+        echeance: null,
+        date_depense: null,
+        type_depense: null,
+        date_recette: null,
+        type_recette: null,
+        date_ristourne: null,
+        date_paiement_ristourne: null,
+        client: null,
+        date_sinistre: null,
+        date_paiement_sinistre: null,
+        numero_sinistre: null,
+        montant_credit: null
+      }]);
+
+    if (rapportError) {
+      console.error('⚠️ Erreur enregistrement dans rapport (paiement crédit ok):', rapportError);
+      // On ne retourne pas false ici car le paiement a été enregistré avec succès
+    } else {
+      console.log('✅ Paiement enregistré dans rapport');
+    }
+
+    console.log('✅ Paiement crédit traité avec succès');
     return true;
   } catch (error) {
     console.error('❌ Erreur générale mise à jour paiement:', error);
