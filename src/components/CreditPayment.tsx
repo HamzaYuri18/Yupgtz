@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Search, DollarSign, CheckCircle, AlertCircle, CreditCard } from 'lucide-react';
+import { Search, DollarSign, CheckCircle, AlertCircle, CreditCard, Banknote } from 'lucide-react';
 import { searchCreditByContractNumber, updateCreditPayment } from '../utils/supabaseService';
 
 const CreditPayment: React.FC = () => {
   const [contractNumber, setContractNumber] = useState('');
   const [creditData, setCreditData] = useState<any>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMode, setPaymentMode] = useState<'Espece' | 'Cheque'>('Espece');
   const [isSearching, setIsSearching] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState('');
@@ -53,12 +54,29 @@ const CreditPayment: React.FC = () => {
       return;
     }
 
+    // Vérifier que le solde est supérieur à 0
+    if (!creditData.solde || creditData.solde <= 0) {
+      setMessage('❌ Le solde du contrat est déjà à 0. Aucun paiement possible.');
+      return;
+    }
+
+    // Vérifier que le montant du paiement ne dépasse pas le solde
+    if (amount > creditData.solde) {
+      setMessage(`❌ Le montant du paiement (${amount.toLocaleString('fr-FR')} DT) dépasse le solde (${creditData.solde.toLocaleString('fr-FR')} DT)`);
+      return;
+    }
+
     setIsProcessing(true);
     setMessage('');
 
     try {
-      const success = await updateCreditPayment(creditData.id, amount);
-      
+      const success = await updateCreditPayment(
+        creditData.id,
+        amount,
+        creditData.assure,
+        paymentMode
+      );
+
       if (success) {
         setMessage('✅ Paiement enregistré avec succès');
         // Recharger les données du crédit
@@ -67,6 +85,7 @@ const CreditPayment: React.FC = () => {
           setCreditData(updatedCredit);
         }
         setPaymentAmount('');
+        setPaymentMode('Espece');
       } else {
         setMessage('❌ Erreur lors de l\'enregistrement du paiement');
       }
@@ -83,7 +102,7 @@ const CreditPayment: React.FC = () => {
     if (!creditData || !paymentAmount) return null;
     const amount = parseFloat(paymentAmount);
     if (isNaN(amount)) return null;
-    return creditData.prime - amount;
+    return creditData.solde - amount;
   };
 
   return (
@@ -201,7 +220,7 @@ const CreditPayment: React.FC = () => {
         {creditData && (
           <div className="bg-green-50 rounded-lg p-6">
             <h3 className="text-lg font-semibold text-green-800 mb-4">Enregistrer un paiement</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <DollarSign className="inline w-4 h-4 mr-1" />
@@ -213,18 +232,34 @@ const CreditPayment: React.FC = () => {
                   onChange={(e) => setPaymentAmount(e.target.value)}
                   step="0.01"
                   min="0"
+                  max={creditData.solde || 0}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   placeholder="0.00"
                 />
               </div>
-              
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Banknote className="inline w-4 h-4 mr-1" />
+                  Mode de paiement
+                </label>
+                <select
+                  value={paymentMode}
+                  onChange={(e) => setPaymentMode(e.target.value as 'Espece' | 'Cheque')}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  <option value="Espece">Espèce</option>
+                  <option value="Cheque">Chèque</option>
+                </select>
+              </div>
+
               {paymentAmount && (
                 <div className="flex items-end">
                   <div className="w-full">
                     <span className="block text-sm font-medium text-gray-700 mb-2">Nouveau solde (DT):</span>
                     <div className={`p-3 rounded-lg font-semibold text-lg ${
-                      (calculateNewSolde() || 0) >= 0 
-                        ? 'bg-green-100 text-green-800' 
+                      (calculateNewSolde() || 0) >= 0
+                        ? 'bg-green-100 text-green-800'
                         : 'bg-red-100 text-red-800'
                     }`}>
                       {(calculateNewSolde() || 0).toLocaleString('fr-FR')}
