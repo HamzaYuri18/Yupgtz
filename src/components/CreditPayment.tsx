@@ -1,38 +1,59 @@
 import React, { useState } from 'react';
-import { Search, DollarSign, CheckCircle, AlertCircle, CreditCard, Banknote } from 'lucide-react';
+import { Search, DollarSign, CheckCircle, AlertCircle, CreditCard, Banknote, Calendar, User } from 'lucide-react';
 import { searchCreditByContractNumber, updateCreditPayment } from '../utils/supabaseService';
+import { searchCreditFlexible } from '../utils/creditSearchService';
 
 const CreditPayment: React.FC = () => {
   const [contractNumber, setContractNumber] = useState('');
+  const [insuredName, setInsuredName] = useState('');
+  const [creditDate, setCreditDate] = useState('');
   const [creditData, setCreditData] = useState<any>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMode, setPaymentMode] = useState<'Espece' | 'Cheque'>('Espece');
   const [isSearching, setIsSearching] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
 
   const handleSearch = async () => {
-    if (!contractNumber.trim()) {
-      setMessage('Veuillez saisir un numéro de contrat');
+    // Validation: au moins 2 champs doivent être remplis
+    const filledFields = [
+      contractNumber.trim(),
+      insuredName.trim(),
+      creditDate.trim()
+    ].filter(field => field !== '').length;
+
+    if (filledFields < 2) {
+      setMessage('Veuillez remplir au moins 2 champs de recherche');
       return;
     }
 
     setIsSearching(true);
     setMessage('');
     setCreditData(null);
+    setSearchResults([]);
 
     try {
-      const result = await searchCreditByContractNumber(contractNumber);
-      
-      if (result) {
-        setCreditData(result);
+      const results = await searchCreditFlexible(
+        contractNumber.trim() || null,
+        insuredName.trim() || null,
+        creditDate.trim() || null
+      );
+
+      if (results.length === 1) {
+        // Un seul résultat trouvé
+        setCreditData(results[0]);
         setMessage('Crédit trouvé avec succès');
         // Pré-remplir avec le montant du crédit si aucun paiement n'a été fait
-        if (!result.paiement || result.paiement === 0) {
-          setPaymentAmount(result.montant_credit.toString());
+        if (!results[0].paiement || results[0].paiement === 0) {
+          setPaymentAmount(results[0].montant_credit.toString());
         }
+      } else if (results.length > 1) {
+        // Plusieurs résultats trouvés
+        setSearchResults(results);
+        setMessage(`${results.length} crédits trouvés. Veuillez sélectionner le bon crédit.`);
       } else {
-        setMessage('Aucun crédit trouvé pour ce numéro de contrat');
+        setMessage('Aucun crédit trouvé avec ces critères de recherche');
       }
     } catch (error) {
       setMessage('Erreur lors de la recherche du crédit');
@@ -40,6 +61,16 @@ const CreditPayment: React.FC = () => {
     }
 
     setIsSearching(false);
+  };
+
+  const selectCredit = (credit: any) => {
+    setCreditData(credit);
+    setSearchResults([]);
+    setMessage('Crédit sélectionné avec succès');
+    // Pré-remplir avec le montant du crédit si aucun paiement n'a été fait
+    if (!credit.paiement || credit.paiement === 0) {
+      setPaymentAmount(credit.montant_credit.toString());
+    }
   };
 
   const handlePayment = async () => {
@@ -113,12 +144,15 @@ const CreditPayment: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-900">Paiement de Crédit</h2>
         </div>
 
-        {/* Recherche par numéro de contrat */}
+        {/* Recherche multi-critères */}
         <div className="bg-gray-50 rounded-lg p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Rechercher un crédit</h3>
-          <div className="flex space-x-4">
-            <div className="flex-1">
+          <p className="text-sm text-gray-600 mb-4">Remplissez au moins 2 champs parmi les 3 disponibles</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
+                <CreditCard className="inline w-4 h-4 mr-1" />
                 Numéro de contrat
               </label>
               <input
@@ -126,40 +160,104 @@ const CreditPayment: React.FC = () => {
                 value={contractNumber}
                 onChange={(e) => setContractNumber(e.target.value)}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Saisissez le numéro de contrat"
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                placeholder="Ex: 12345"
               />
             </div>
-            <div className="flex items-end">
-              <button
-                onClick={handleSearch}
-                disabled={isSearching}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 flex items-center space-x-2"
-              >
-                {isSearching ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  <Search className="w-5 h-5" />
-                )}
-                <span>{isSearching ? 'Recherche...' : 'Rechercher'}</span>
-              </button>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <User className="inline w-4 h-4 mr-1" />
+                Nom de l'assuré
+              </label>
+              <input
+                type="text"
+                value={insuredName}
+                onChange={(e) => setInsuredName(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Ex: Mohamed Ben Ali"
+              />
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Calendar className="inline w-4 h-4 mr-1" />
+                Date de création du crédit
+              </label>
+              <input
+                type="date"
+                value={creditDate}
+                onChange={(e) => setCreditDate(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              onClick={handleSearch}
+              disabled={isSearching}
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 flex items-center space-x-2"
+            >
+              {isSearching ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <Search className="w-5 h-5" />
+              )}
+              <span>{isSearching ? 'Recherche...' : 'Rechercher'}</span>
+            </button>
           </div>
         </div>
 
         {/* Message */}
         {message && (
           <div className={`mb-6 p-4 rounded-lg text-sm flex items-center space-x-2 ${
-            message.includes('succès') || message.includes('trouvé')
-              ? 'bg-green-50 text-green-700 border border-green-200' 
+            message.includes('succès') || message.includes('trouvé') || message.includes('sélectionné')
+              ? 'bg-green-50 text-green-700 border border-green-200'
+              : message.includes('crédits trouvés')
+              ? 'bg-blue-50 text-blue-700 border border-blue-200'
               : 'bg-red-50 text-red-700 border border-red-200'
           }`}>
-            {message.includes('succès') || message.includes('trouvé') ? (
+            {message.includes('succès') || message.includes('trouvé') || message.includes('sélectionné') ? (
               <CheckCircle className="w-5 h-5" />
             ) : (
               <AlertCircle className="w-5 h-5" />
             )}
             <span>{message}</span>
+          </div>
+        )}
+
+        {/* Liste des résultats multiples */}
+        {searchResults.length > 0 && (
+          <div className="bg-yellow-50 rounded-lg p-6 mb-6">
+            <h3 className="text-lg font-semibold text-yellow-800 mb-4">Sélectionnez le crédit souhaité</h3>
+            <div className="space-y-3">
+              {searchResults.map((credit) => (
+                <div
+                  key={credit.id}
+                  onClick={() => selectCredit(credit)}
+                  className="bg-white p-4 rounded-lg border border-yellow-200 hover:border-yellow-400 cursor-pointer transition-all duration-200 hover:shadow-md"
+                >
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">N° Contrat:</span>
+                      <p className="text-sm font-semibold text-gray-900">{credit.numero_contrat}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Assuré:</span>
+                      <p className="text-sm font-semibold text-gray-900">{credit.assure}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Montant:</span>
+                      <p className="text-sm font-semibold text-gray-900">{credit.montant_credit.toLocaleString('fr-FR')} DT</p>
+                    </div>
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Date:</span>
+                      <p className="text-sm font-semibold text-gray-900">{new Date(credit.created_at).toLocaleDateString('fr-FR')}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
