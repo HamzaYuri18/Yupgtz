@@ -200,10 +200,10 @@ const TransactionReport: React.FC = () => {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'TND'
-    }).format(amount);
+    return `${new Intl.NumberFormat('fr-FR', {
+      minimumFractionDigits: 3,
+      maximumFractionDigits: 3
+    }).format(amount)} DT`;
   };
 
   return (
