@@ -24,10 +24,18 @@ interface Statistics {
   totalPrime: number;
   totalMontant: number;
   totalCredit: number;
+  totalEspecesNet: number;
+  totalCheque: number;
+  totalDepenses: number;
+  totalPaiementCredits: number;
+  totalRistournes: number;
+  totalSinistres: number;
+  totalRecettes: number;
   byBranche: { [key: string]: number };
   byModePaiement: { [key: string]: number };
   byTypePaiement: { [key: string]: number };
   byType: { [key: string]: number };
+  byBanque: { [key: string]: number };
 }
 
 const TransactionReport: React.FC = () => {
@@ -43,21 +51,84 @@ const TransactionReport: React.FC = () => {
       totalPrime: 0,
       totalMontant: 0,
       totalCredit: 0,
+      totalEspecesNet: 0,
+      totalCheque: 0,
+      totalDepenses: 0,
+      totalPaiementCredits: 0,
+      totalRistournes: 0,
+      totalSinistres: 0,
+      totalRecettes: 0,
       byBranche: {},
       byModePaiement: {},
       byTypePaiement: {},
-      byType: {}
+      byType: {},
+      byBanque: {}
     };
 
     data.forEach(transaction => {
-      stats.totalPrime += transaction.prime || 0;
-      stats.totalMontant += transaction.montant || 0;
+      const prime = transaction.prime || 0;
+      const montant = transaction.montant || 0;
+
+      stats.totalPrime += prime;
+      stats.totalMontant += montant;
       stats.totalCredit += transaction.montant_credit || 0;
 
-      stats.byBranche[transaction.branche] = (stats.byBranche[transaction.branche] || 0) + transaction.prime;
-      stats.byModePaiement[transaction.mode_paiement] = (stats.byModePaiement[transaction.mode_paiement] || 0) + transaction.prime;
-      stats.byTypePaiement[transaction.type_paiement] = (stats.byTypePaiement[transaction.type_paiement] || 0) + transaction.prime;
-      stats.byType[transaction.type] = (stats.byType[transaction.type] || 0) + transaction.prime;
+      // Calculer Total Espèces Net (Espèce - Dépenses - Ristournes)
+      if (transaction.mode_paiement === 'Espece') {
+        if (transaction.type === 'Dépense' || transaction.type === 'Ristourne') {
+          stats.totalEspecesNet -= montant;
+        } else {
+          stats.totalEspecesNet += montant;
+        }
+      }
+
+      // Calculer Total Chèque
+      if (transaction.mode_paiement === 'Cheque') {
+        stats.totalCheque += montant;
+      }
+
+      // Calculer Total Dépenses
+      if (transaction.type === 'Dépense') {
+        stats.totalDepenses += montant;
+      }
+
+      // Calculer Total Paiement Crédits
+      if (transaction.type === 'Paiement Crédit') {
+        stats.totalPaiementCredits += montant;
+      }
+
+      // Calculer Total Ristournes
+      if (transaction.type === 'Ristourne') {
+        stats.totalRistournes += montant;
+      }
+
+      // Calculer Total Sinistres
+      if (transaction.type === 'Sinistre') {
+        stats.totalSinistres += montant;
+      }
+
+      // Calculer Total Recettes Exceptionnelles
+      if (transaction.type === 'Recette') {
+        stats.totalRecettes += montant;
+      }
+
+      // Par Branche
+      stats.byBranche[transaction.branche] = (stats.byBranche[transaction.branche] || 0) + prime;
+
+      // Par Mode de Paiement
+      stats.byModePaiement[transaction.mode_paiement] = (stats.byModePaiement[transaction.mode_paiement] || 0) + prime;
+
+      // Par Type de Paiement
+      stats.byTypePaiement[transaction.type_paiement] = (stats.byTypePaiement[transaction.type_paiement] || 0) + prime;
+
+      // Par Type
+      stats.byType[transaction.type] = (stats.byType[transaction.type] || 0) + prime;
+
+      // Par Banque (si Chèque)
+      if (transaction.mode_paiement === 'Cheque' && transaction.type_paiement) {
+        const banque = transaction.type_paiement || 'Non spécifié';
+        stats.byBanque[banque] = (stats.byBanque[banque] || 0) + montant;
+      }
     });
 
     return stats;
@@ -190,41 +261,97 @@ const TransactionReport: React.FC = () => {
 
       {statistics && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-sm p-6 text-white">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-sm p-4 text-white">
               <div className="flex items-center justify-between mb-2">
-                <FileText className="w-8 h-8 opacity-80" />
-                <span className="text-2xl font-bold">{statistics.totalTransactions}</span>
+                <FileText className="w-6 h-6 opacity-80" />
+                <span className="text-xl font-bold">{statistics.totalTransactions}</span>
               </div>
-              <p className="text-blue-100 text-sm font-medium">Total Transactions</p>
+              <p className="text-blue-100 text-xs font-medium">Total Transactions</p>
             </div>
 
-            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-sm p-6 text-white">
+            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-sm p-4 text-white">
               <div className="flex items-center justify-between mb-2">
-                <TrendingUp className="w-8 h-8 opacity-80" />
-                <span className="text-2xl font-bold">{formatCurrency(statistics.totalPrime)}</span>
+                <TrendingUp className="w-6 h-6 opacity-80" />
+                <span className="text-xl font-bold">{formatCurrency(statistics.totalPrime)}</span>
               </div>
-              <p className="text-green-100 text-sm font-medium">Total Primes</p>
+              <p className="text-green-100 text-xs font-medium">Total Primes</p>
             </div>
 
-            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-sm p-6 text-white">
+            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-sm p-4 text-white">
               <div className="flex items-center justify-between mb-2">
-                <DollarSign className="w-8 h-8 opacity-80" />
-                <span className="text-2xl font-bold">{formatCurrency(statistics.totalMontant)}</span>
+                <DollarSign className="w-6 h-6 opacity-80" />
+                <span className="text-xl font-bold">{formatCurrency(statistics.totalMontant)}</span>
               </div>
-              <p className="text-emerald-100 text-sm font-medium">Total Montants</p>
+              <p className="text-emerald-100 text-xs font-medium">Total Montants</p>
             </div>
 
-            <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-sm p-6 text-white">
+            <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-sm p-4 text-white">
               <div className="flex items-center justify-between mb-2">
-                <CreditCard className="w-8 h-8 opacity-80" />
-                <span className="text-2xl font-bold">{formatCurrency(statistics.totalCredit)}</span>
+                <CreditCard className="w-6 h-6 opacity-80" />
+                <span className="text-xl font-bold">{formatCurrency(statistics.totalCredit)}</span>
               </div>
-              <p className="text-orange-100 text-sm font-medium">Total Crédits</p>
+              <p className="text-orange-100 text-xs font-medium">Total Crédits</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl shadow-sm p-4 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <DollarSign className="w-6 h-6 opacity-80" />
+                <span className="text-xl font-bold">{formatCurrency(statistics.totalEspecesNet)}</span>
+              </div>
+              <p className="text-teal-100 text-xs font-medium">Total Espèces Net</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl shadow-sm p-4 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <CreditCard className="w-6 h-6 opacity-80" />
+                <span className="text-xl font-bold">{formatCurrency(statistics.totalCheque)}</span>
+              </div>
+              <p className="text-cyan-100 text-xs font-medium">Total Chèque</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-sm p-4 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <TrendingUp className="w-6 h-6 opacity-80" />
+                <span className="text-xl font-bold">{formatCurrency(statistics.totalDepenses)}</span>
+              </div>
+              <p className="text-red-100 text-xs font-medium">Total Dépenses</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-sm p-4 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <DollarSign className="w-6 h-6 opacity-80" />
+                <span className="text-xl font-bold">{formatCurrency(statistics.totalPaiementCredits)}</span>
+              </div>
+              <p className="text-amber-100 text-xs font-medium">Total Paiement Crédits</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl shadow-sm p-4 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <TrendingUp className="w-6 h-6 opacity-80" />
+                <span className="text-xl font-bold">{formatCurrency(statistics.totalRistournes)}</span>
+              </div>
+              <p className="text-violet-100 text-xs font-medium">Total Ristournes</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl shadow-sm p-4 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <FileText className="w-6 h-6 opacity-80" />
+                <span className="text-xl font-bold">{formatCurrency(statistics.totalSinistres)}</span>
+              </div>
+              <p className="text-pink-100 text-xs font-medium">Total Sinistres</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-sky-500 to-sky-600 rounded-xl shadow-sm p-4 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <DollarSign className="w-6 h-6 opacity-80" />
+                <span className="text-xl font-bold">{formatCurrency(statistics.totalRecettes)}</span>
+              </div>
+              <p className="text-sky-100 text-xs font-medium">Total Recettes</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Par Branche</h3>
               <div className="space-y-3">
@@ -272,6 +399,20 @@ const TransactionReport: React.FC = () => {
                 ))}
               </div>
             </div>
+
+            {Object.keys(statistics.byBanque).length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Par Banque (Chèques)</h3>
+                <div className="space-y-3">
+                  {Object.entries(statistics.byBanque).map(([banque, amount]) => (
+                    <div key={banque} className="flex justify-between items-center">
+                      <span className="text-gray-700 font-medium">{banque}</span>
+                      <span className="text-cyan-600 font-bold">{formatCurrency(amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}
