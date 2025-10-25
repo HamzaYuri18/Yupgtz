@@ -31,11 +31,19 @@ interface Statistics {
   totalRistournes: number;
   totalSinistres: number;
   totalRecettes: number;
-  byBranche: { [key: string]: number };
-  byModePaiement: { [key: string]: number };
-  byTypePaiement: { [key: string]: number };
-  byType: { [key: string]: number };
-  byBanque: { [key: string]: number };
+  countEspeces: number;
+  countCheque: number;
+  countDepenses: number;
+  countPaiementCredits: number;
+  countRistournes: number;
+  countSinistres: number;
+  countRecettes: number;
+  countCredits: number;
+  byBranche: { [key: string]: { montant: number; count: number } };
+  byModePaiement: { [key: string]: { montant: number; count: number } };
+  byTypePaiement: { [key: string]: { montant: number; count: number } };
+  byType: { [key: string]: { montant: number; count: number } };
+  byBanque: { [key: string]: { montant: number; count: number } };
 }
 
 const TransactionReport: React.FC = () => {
@@ -58,6 +66,14 @@ const TransactionReport: React.FC = () => {
       totalRistournes: 0,
       totalSinistres: 0,
       totalRecettes: 0,
+      countEspeces: 0,
+      countCheque: 0,
+      countDepenses: 0,
+      countPaiementCredits: 0,
+      countRistournes: 0,
+      countSinistres: 0,
+      countRecettes: 0,
+      countCredits: 0,
       byBranche: {},
       byModePaiement: {},
       byTypePaiement: {},
@@ -71,10 +87,15 @@ const TransactionReport: React.FC = () => {
 
       stats.totalPrime += prime;
       stats.totalMontant += montant;
-      stats.totalCredit += transaction.montant_credit || 0;
+
+      if (transaction.montant_credit) {
+        stats.totalCredit += transaction.montant_credit;
+        stats.countCredits++;
+      }
 
       // Calculer Total Espèces Net (Espèce - Dépenses - Ristournes)
       if (transaction.mode_paiement === 'Espece') {
+        stats.countEspeces++;
         if (transaction.type === 'Dépense' || transaction.type === 'Ristourne') {
           stats.totalEspecesNet -= montant;
         } else {
@@ -85,49 +106,75 @@ const TransactionReport: React.FC = () => {
       // Calculer Total Chèque
       if (transaction.mode_paiement === 'Cheque') {
         stats.totalCheque += montant;
+        stats.countCheque++;
       }
 
       // Calculer Total Dépenses
       if (transaction.type === 'Dépense') {
         stats.totalDepenses += montant;
+        stats.countDepenses++;
       }
 
       // Calculer Total Paiement Crédits
       if (transaction.type === 'Paiement Crédit') {
         stats.totalPaiementCredits += montant;
+        stats.countPaiementCredits++;
       }
 
       // Calculer Total Ristournes
       if (transaction.type === 'Ristourne') {
         stats.totalRistournes += montant;
+        stats.countRistournes++;
       }
 
       // Calculer Total Sinistres
       if (transaction.type === 'Sinistre') {
         stats.totalSinistres += montant;
+        stats.countSinistres++;
       }
 
       // Calculer Total Recettes Exceptionnelles
       if (transaction.type === 'Recette') {
         stats.totalRecettes += montant;
+        stats.countRecettes++;
       }
 
       // Par Branche
-      stats.byBranche[transaction.branche] = (stats.byBranche[transaction.branche] || 0) + prime;
+      if (!stats.byBranche[transaction.branche]) {
+        stats.byBranche[transaction.branche] = { montant: 0, count: 0 };
+      }
+      stats.byBranche[transaction.branche].montant += prime;
+      stats.byBranche[transaction.branche].count++;
 
       // Par Mode de Paiement
-      stats.byModePaiement[transaction.mode_paiement] = (stats.byModePaiement[transaction.mode_paiement] || 0) + prime;
+      if (!stats.byModePaiement[transaction.mode_paiement]) {
+        stats.byModePaiement[transaction.mode_paiement] = { montant: 0, count: 0 };
+      }
+      stats.byModePaiement[transaction.mode_paiement].montant += prime;
+      stats.byModePaiement[transaction.mode_paiement].count++;
 
       // Par Type de Paiement
-      stats.byTypePaiement[transaction.type_paiement] = (stats.byTypePaiement[transaction.type_paiement] || 0) + prime;
+      if (!stats.byTypePaiement[transaction.type_paiement]) {
+        stats.byTypePaiement[transaction.type_paiement] = { montant: 0, count: 0 };
+      }
+      stats.byTypePaiement[transaction.type_paiement].montant += prime;
+      stats.byTypePaiement[transaction.type_paiement].count++;
 
       // Par Type
-      stats.byType[transaction.type] = (stats.byType[transaction.type] || 0) + prime;
+      if (!stats.byType[transaction.type]) {
+        stats.byType[transaction.type] = { montant: 0, count: 0 };
+      }
+      stats.byType[transaction.type].montant += prime;
+      stats.byType[transaction.type].count++;
 
       // Par Banque (si Chèque)
       if (transaction.mode_paiement === 'Cheque' && transaction.type_paiement) {
         const banque = transaction.type_paiement || 'Non spécifié';
-        stats.byBanque[banque] = (stats.byBanque[banque] || 0) + montant;
+        if (!stats.byBanque[banque]) {
+          stats.byBanque[banque] = { montant: 0, count: 0 };
+        }
+        stats.byBanque[banque].montant += montant;
+        stats.byBanque[banque].count++;
       }
     });
 
@@ -289,7 +336,10 @@ const TransactionReport: React.FC = () => {
             <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-sm p-4 text-white">
               <div className="flex items-center justify-between mb-2">
                 <CreditCard className="w-6 h-6 opacity-80" />
-                <span className="text-xl font-bold">{formatCurrency(statistics.totalCredit)}</span>
+                <div className="text-right">
+                  <span className="text-xl font-bold block">{formatCurrency(statistics.totalCredit)}</span>
+                  <span className="text-sm opacity-90">({statistics.countCredits} crédits)</span>
+                </div>
               </div>
               <p className="text-orange-100 text-xs font-medium">Total Crédits</p>
             </div>
@@ -297,7 +347,10 @@ const TransactionReport: React.FC = () => {
             <div className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl shadow-sm p-4 text-white">
               <div className="flex items-center justify-between mb-2">
                 <DollarSign className="w-6 h-6 opacity-80" />
-                <span className="text-xl font-bold">{formatCurrency(statistics.totalEspecesNet)}</span>
+                <div className="text-right">
+                  <span className="text-xl font-bold block">{formatCurrency(statistics.totalEspecesNet)}</span>
+                  <span className="text-sm opacity-90">({statistics.countEspeces} opérations)</span>
+                </div>
               </div>
               <p className="text-teal-100 text-xs font-medium">Total Espèces Net</p>
             </div>
@@ -305,7 +358,10 @@ const TransactionReport: React.FC = () => {
             <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl shadow-sm p-4 text-white">
               <div className="flex items-center justify-between mb-2">
                 <CreditCard className="w-6 h-6 opacity-80" />
-                <span className="text-xl font-bold">{formatCurrency(statistics.totalCheque)}</span>
+                <div className="text-right">
+                  <span className="text-xl font-bold block">{formatCurrency(statistics.totalCheque)}</span>
+                  <span className="text-sm opacity-90">({statistics.countCheque} chèques)</span>
+                </div>
               </div>
               <p className="text-cyan-100 text-xs font-medium">Total Chèque</p>
             </div>
@@ -313,7 +369,10 @@ const TransactionReport: React.FC = () => {
             <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-sm p-4 text-white">
               <div className="flex items-center justify-between mb-2">
                 <TrendingUp className="w-6 h-6 opacity-80" />
-                <span className="text-xl font-bold">{formatCurrency(statistics.totalDepenses)}</span>
+                <div className="text-right">
+                  <span className="text-xl font-bold block">{formatCurrency(statistics.totalDepenses)}</span>
+                  <span className="text-sm opacity-90">({statistics.countDepenses} dépenses)</span>
+                </div>
               </div>
               <p className="text-red-100 text-xs font-medium">Total Dépenses</p>
             </div>
@@ -321,7 +380,10 @@ const TransactionReport: React.FC = () => {
             <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-sm p-4 text-white">
               <div className="flex items-center justify-between mb-2">
                 <DollarSign className="w-6 h-6 opacity-80" />
-                <span className="text-xl font-bold">{formatCurrency(statistics.totalPaiementCredits)}</span>
+                <div className="text-right">
+                  <span className="text-xl font-bold block">{formatCurrency(statistics.totalPaiementCredits)}</span>
+                  <span className="text-sm opacity-90">({statistics.countPaiementCredits} paiements)</span>
+                </div>
               </div>
               <p className="text-amber-100 text-xs font-medium">Total Paiement Crédits</p>
             </div>
@@ -329,7 +391,10 @@ const TransactionReport: React.FC = () => {
             <div className="bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl shadow-sm p-4 text-white">
               <div className="flex items-center justify-between mb-2">
                 <TrendingUp className="w-6 h-6 opacity-80" />
-                <span className="text-xl font-bold">{formatCurrency(statistics.totalRistournes)}</span>
+                <div className="text-right">
+                  <span className="text-xl font-bold block">{formatCurrency(statistics.totalRistournes)}</span>
+                  <span className="text-sm opacity-90">({statistics.countRistournes} ristournes)</span>
+                </div>
               </div>
               <p className="text-violet-100 text-xs font-medium">Total Ristournes</p>
             </div>
@@ -337,7 +402,10 @@ const TransactionReport: React.FC = () => {
             <div className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl shadow-sm p-4 text-white">
               <div className="flex items-center justify-between mb-2">
                 <FileText className="w-6 h-6 opacity-80" />
-                <span className="text-xl font-bold">{formatCurrency(statistics.totalSinistres)}</span>
+                <div className="text-right">
+                  <span className="text-xl font-bold block">{formatCurrency(statistics.totalSinistres)}</span>
+                  <span className="text-sm opacity-90">({statistics.countSinistres} sinistres)</span>
+                </div>
               </div>
               <p className="text-pink-100 text-xs font-medium">Total Sinistres</p>
             </div>
@@ -345,7 +413,10 @@ const TransactionReport: React.FC = () => {
             <div className="bg-gradient-to-br from-sky-500 to-sky-600 rounded-xl shadow-sm p-4 text-white">
               <div className="flex items-center justify-between mb-2">
                 <DollarSign className="w-6 h-6 opacity-80" />
-                <span className="text-xl font-bold">{formatCurrency(statistics.totalRecettes)}</span>
+                <div className="text-right">
+                  <span className="text-xl font-bold block">{formatCurrency(statistics.totalRecettes)}</span>
+                  <span className="text-sm opacity-90">({statistics.countRecettes} recettes)</span>
+                </div>
               </div>
               <p className="text-sky-100 text-xs font-medium">Total Recettes</p>
             </div>
@@ -355,10 +426,13 @@ const TransactionReport: React.FC = () => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Par Branche</h3>
               <div className="space-y-3">
-                {Object.entries(statistics.byBranche).map(([branche, amount]) => (
+                {Object.entries(statistics.byBranche).map(([branche, data]) => (
                   <div key={branche} className="flex justify-between items-center">
                     <span className="text-gray-700 font-medium">{branche}</span>
-                    <span className="text-blue-600 font-bold">{formatCurrency(amount)}</span>
+                    <div className="text-right">
+                      <span className="text-blue-600 font-bold block">{formatCurrency(data.montant)}</span>
+                      <span className="text-xs text-gray-500">({data.count} transactions)</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -367,10 +441,13 @@ const TransactionReport: React.FC = () => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Par Mode de Paiement</h3>
               <div className="space-y-3">
-                {Object.entries(statistics.byModePaiement).map(([mode, amount]) => (
+                {Object.entries(statistics.byModePaiement).map(([mode, data]) => (
                   <div key={mode} className="flex justify-between items-center">
                     <span className="text-gray-700 font-medium">{mode}</span>
-                    <span className="text-green-600 font-bold">{formatCurrency(amount)}</span>
+                    <div className="text-right">
+                      <span className="text-green-600 font-bold block">{formatCurrency(data.montant)}</span>
+                      <span className="text-xs text-gray-500">({data.count} transactions)</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -379,10 +456,13 @@ const TransactionReport: React.FC = () => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Par Type de Paiement</h3>
               <div className="space-y-3">
-                {Object.entries(statistics.byTypePaiement).map(([type, amount]) => (
+                {Object.entries(statistics.byTypePaiement).map(([type, data]) => (
                   <div key={type} className="flex justify-between items-center">
                     <span className="text-gray-700 font-medium">{type}</span>
-                    <span className="text-emerald-600 font-bold">{formatCurrency(amount)}</span>
+                    <div className="text-right">
+                      <span className="text-emerald-600 font-bold block">{formatCurrency(data.montant)}</span>
+                      <span className="text-xs text-gray-500">({data.count} transactions)</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -391,10 +471,13 @@ const TransactionReport: React.FC = () => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Par Type</h3>
               <div className="space-y-3">
-                {Object.entries(statistics.byType).map(([type, amount]) => (
+                {Object.entries(statistics.byType).map(([type, data]) => (
                   <div key={type} className="flex justify-between items-center">
                     <span className="text-gray-700 font-medium">{type}</span>
-                    <span className="text-orange-600 font-bold">{formatCurrency(amount)}</span>
+                    <div className="text-right">
+                      <span className="text-orange-600 font-bold block">{formatCurrency(data.montant)}</span>
+                      <span className="text-xs text-gray-500">({data.count} transactions)</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -404,10 +487,13 @@ const TransactionReport: React.FC = () => {
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Par Banque (Chèques)</h3>
                 <div className="space-y-3">
-                  {Object.entries(statistics.byBanque).map(([banque, amount]) => (
+                  {Object.entries(statistics.byBanque).map(([banque, data]) => (
                     <div key={banque} className="flex justify-between items-center">
                       <span className="text-gray-700 font-medium">{banque}</span>
-                      <span className="text-cyan-600 font-bold">{formatCurrency(amount)}</span>
+                      <div className="text-right">
+                        <span className="text-cyan-600 font-bold block">{formatCurrency(data.montant)}</span>
+                        <span className="text-xs text-gray-500">({data.count} chèques)</span>
+                      </div>
                     </div>
                   ))}
                 </div>
