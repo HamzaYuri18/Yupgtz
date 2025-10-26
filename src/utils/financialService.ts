@@ -256,7 +256,8 @@ export const saveRistourne = async (ristourne: Ristourne): Promise<boolean> => {
         cree_par: ristourne.cree_par
       }, {
         date_ristourne: ristourne.date_ristourne,
-        date_paiement_ristourne: data[0].date_paiement_ristourne
+        date_paiement_ristourne: data[0].date_paiement_ristourne,
+        client: ristourne.client
       });
     } catch (rapportError) {
       console.error('⚠️ Erreur lors de la sauvegarde dans rapport:', rapportError);
@@ -355,7 +356,8 @@ export const saveSinistre = async (sinistre: Sinistre): Promise<boolean> => {
       }, {
         date_sinistre: sinistre.date_sinistre,
         date_paiement_sinistre: data[0].date_paiement_sinistre,
-        numero_sinistre: sinistre.numero_sinistre
+        numero_sinistre: sinistre.numero_sinistre,
+        client: sinistre.client
       });
     } catch (rapportError) {
       console.error('⚠️ Erreur lors de la sauvegarde dans rapport:', rapportError);
@@ -418,6 +420,7 @@ const saveToRapport = async (baseData: any, additionalData?: any): Promise<void>
     type_recette: null,
     date_ristourne: null,
     date_paiement_ristourne: null,
+    client: null,
     date_sinistre: null,
     date_paiement_sinistre: null,
     numero_sinistre: null,
