@@ -499,17 +499,17 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-2xl p-8 border border-white/20">
-        <div className="flex items-center space-x-3 mb-6">
+      <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-2xl p-4 sm:p-6 lg:p-8 border border-white/20">
+        <div className="flex items-center space-x-2 sm:space-x-3 mb-4 sm:mb-6">
           <div className="p-2 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-lg shadow-md">
-            <FileText className="w-6 h-6 text-white" />
+            <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
           </div>
-          <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">Nouveau Contrat</h2>
+          <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">Nouveau Contrat</h2>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
           {/* Type et Branche */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
                 <FileText className="w-4 h-4 mr-2" />
@@ -519,7 +519,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="type"
                 value={formData.type}
                 onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
+                className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 required
               >
                 <option value="Affaire">Affaire</option>
@@ -536,7 +536,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="branch"
                 value={formData.branch}
                 onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
+                className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 required
               >
                 <option value="Auto">Auto</option>
@@ -623,7 +623,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           )}
 
           {/* Montant Prime et Nom Assuré */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
                 <DollarSign className="w-4 h-4 mr-2" />
@@ -661,7 +661,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="insuredName"
                 value={formData.insuredName}
                 onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
+                className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 placeholder="Nom complet de l'assuré"
                 required
               />
@@ -669,7 +669,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           </div>
 
           {/* Mode et Type de Paiement */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 💳 Mode de paiement *
@@ -678,7 +678,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="paymentMode"
                 value={formData.paymentMode}
                 onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
+                className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 required
               >
                 <option value="Espece">Espèce</option>
@@ -695,7 +695,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="paymentType"
                 value={formData.paymentType}
                 onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
+                className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 required
               >
                 <option value="Au comptant">Au comptant</option>
@@ -771,7 +771,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 Informations de Crédit
               </h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Montant du crédit (DT) *
@@ -873,16 +873,16 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             <button
               type="submit"
               disabled={isLoading}
-              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-3 px-8 rounded-lg transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-2 sm:py-3 px-4 sm:px-8 rounded-lg transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none text-sm sm:text-base"
             >
               {isLoading ? (
                 <>
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                   <span>Enregistrement...</span>
                 </>
               ) : (
                 <>
-                  <Save className="w-5 h-5" />
+                  <Save className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span>Enregistrer le contrat</span>
                 </>
               )}

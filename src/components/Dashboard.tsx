@@ -61,38 +61,38 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-md shadow-lg border-b border-white/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
+          <div className="flex justify-between items-center h-14 sm:h-16">
+            <div className="flex items-center space-x-2 sm:space-x-4">
               <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center shadow-md">
-                  <User className="w-5 h-5 text-white" />
+                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center shadow-md">
+                  <User className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <div>
-                  <h1 className="text-lg font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">SHIRI FARES HAMZA</h1>
+                <div className="hidden sm:block">
+                  <h1 className="text-base sm:text-lg font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">SHIRI FARES HAMZA</h1>
                   <p className="text-xs text-gray-600 font-medium">Gestion d'Agence</p>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 sm:space-x-4">
               <div className="text-right">
-                <p className="text-sm font-semibold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">{username}</p>
+                <p className="text-xs sm:text-sm font-semibold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">{username}</p>
                 {isUserAdmin && (
-                  <span className="text-xs bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent font-semibold">Administrateur</span>
+                  <span className="text-xs bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent font-semibold">Admin</span>
                 )}
               </div>
               {sessionInfo && (
-                <div className="flex items-center text-xs text-gray-600">
+                <div className="hidden md:flex items-center text-xs text-gray-600">
                   <Clock className="w-4 h-4 mr-1 text-indigo-500" />
                   <span>Connecté depuis {formatDate(sessionInfo.loginTime)}</span>
                 </div>
               )}
               <button
                 onClick={handleLogout}
-                className="flex items-center space-x-2 text-gray-700 hover:text-red-600 transition-all duration-200 px-3 py-2 rounded-lg hover:bg-red-50"
+                className="flex items-center space-x-1 sm:space-x-2 text-gray-700 hover:text-red-600 transition-all duration-200 px-2 sm:px-3 py-2 rounded-lg hover:bg-red-50"
               >
-                <LogOut className="w-5 h-5" />
-                <span>Déconnexion</span>
+                <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">Déconnexion</span>
               </button>
             </div>
           </div>
@@ -100,12 +100,12 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
       </header>
 
       {/* Navigation */}
-      <nav className="bg-white/70 backdrop-blur-md border-b border-white/30 shadow-sm">
+      <nav className="bg-white/70 backdrop-blur-md border-b border-white/30 shadow-sm overflow-x-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
+          <div className="flex space-x-4 sm:space-x-8 min-w-max">
             <button
               onClick={() => setActiveTab('contract')}
-              className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center space-x-2 ${
+              className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
                 activeTab === 'contract'
                   ? 'border-indigo-500 text-indigo-600 bg-indigo-50/50'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -118,7 +118,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
             {isUserAdmin && (
               <button
                 onClick={() => setActiveTab('xml')}
-                className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center space-x-2 ${
+                className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
                   activeTab === 'xml'
                     ? 'border-green-500 text-green-600 bg-green-50/50'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -201,7 +201,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
             {username.toLowerCase() === 'hamza' && (
               <button
                 onClick={() => setActiveTab('cheques')}
-                className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center space-x-2 ${
+                className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
                   activeTab === 'cheques'
                     ? 'border-teal-500 text-teal-600 bg-teal-50/50'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -216,7 +216,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
       </nav>
 
       {/* Content */}
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto py-3 sm:py-6 px-2 sm:px-4 lg:px-8">
         {activeTab === 'contract' && <ContractForm username={username} />}
         {activeTab === 'xml' && isUserAdmin && <XLSXUploader />}
         {activeTab === 'reports' && <ReportGenerator />}

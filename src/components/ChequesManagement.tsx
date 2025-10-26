@@ -130,13 +130,13 @@ export default function ChequesManagement() {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Gestion des Chèques</h1>
-        <p className="text-gray-600">Gérez et encaissez les chèques reçus</p>
+    <div className="p-3 sm:p-6">
+      <div className="mb-4 sm:mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Gestion des Chèques</h1>
+        <p className="text-sm sm:text-base text-gray-600">Gérez et encaissez les chèques reçus</p>
       </div>
 
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-4 sm:mb-6">
         <div className="flex items-center gap-2 mb-4">
           <Filter className="w-5 h-5 text-gray-600" />
           <h2 className="text-lg font-semibold">Filtres</h2>
@@ -186,38 +186,38 @@ export default function ChequesManagement() {
       </div>
 
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   N° Contrat
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Assuré
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   N° Chèque
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Banque
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Montant
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Date Prévue
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Date Émission
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Statut
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Date Encaissement
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 xl:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Action
                 </th>
               </tr>
@@ -232,28 +232,28 @@ export default function ChequesManagement() {
               ) : (
                 filteredCheques.map((cheque) => (
                   <tr key={cheque.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <td className="px-4 xl:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {cheque.Numero_Contrat}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-4 xl:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {cheque.Assure}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-4 xl:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {cheque.Numero_Cheque}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-4 xl:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {cheque.Banque}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                    <td className="px-4 xl:px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                       {formatCurrency(cheque.Montant)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-4 xl:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatDate(cheque.Date_Encaissement_prévue)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-4 xl:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatDate(cheque.created_at)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 xl:px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         cheque.Statut === 'Encaissé'
                           ? 'bg-green-100 text-green-800'
@@ -262,10 +262,10 @@ export default function ChequesManagement() {
                         {cheque.Statut}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-4 xl:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {cheque.date_encaissement ? formatDate(cheque.date_encaissement) : '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <td className="px-4 xl:px-6 py-4 whitespace-nowrap text-sm">
                       {cheque.Statut === 'Non Encaissé' && (
                         <button
                           onClick={() => handleEncaisserClick(cheque)}
@@ -281,6 +281,76 @@ export default function ChequesManagement() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="lg:hidden divide-y divide-gray-200">
+          {filteredCheques.length === 0 ? (
+            <div className="p-6 text-center text-gray-500">
+              Aucun chèque trouvé
+            </div>
+          ) : (
+            filteredCheques.map((cheque) => (
+              <div key={cheque.id} className="p-4 hover:bg-gray-50">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <p className="text-xs text-gray-500">N° Contrat</p>
+                    <p className="font-semibold text-gray-900">{cheque.Numero_Contrat}</p>
+                  </div>
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                    cheque.Statut === 'Encaissé'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {cheque.Statut}
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Assuré:</span>
+                    <span className="font-medium text-gray-900">{cheque.Assure}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">N° Chèque:</span>
+                    <span className="font-medium text-gray-900">{cheque.Numero_Cheque}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Banque:</span>
+                    <span className="font-medium text-gray-900">{cheque.Banque}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Montant:</span>
+                    <span className="font-semibold text-gray-900">{formatCurrency(cheque.Montant)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Date prévue:</span>
+                    <span className="text-gray-900">{formatDate(cheque.Date_Encaissement_prévue)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Date émission:</span>
+                    <span className="text-gray-900">{formatDate(cheque.created_at)}</span>
+                  </div>
+                  {cheque.date_encaissement && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Date encaissement:</span>
+                      <span className="text-gray-900">{formatDate(cheque.date_encaissement)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {cheque.Statut === 'Non Encaissé' && (
+                  <button
+                    onClick={() => handleEncaisserClick(cheque)}
+                    className="mt-3 w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Check className="w-4 h-4" />
+                    Encaisser
+                  </button>
+                )}
+              </div>
+            ))
+          )}
         </div>
       </div>
 
