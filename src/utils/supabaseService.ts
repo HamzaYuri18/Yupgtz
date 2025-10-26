@@ -891,7 +891,7 @@ export const saveCheque = async (chequeData: {
         Montant: chequeData.montant,
         Date_Encaissement_prévue: chequeData.dateEncaissementPrevue,
         Banque: chequeData.banque,
-        created_at:'sss',
+      
         Statut: 'Non Encaissé'
       }])
       .select();
