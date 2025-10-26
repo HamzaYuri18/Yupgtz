@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Save, FileText, DollarSign, Calendar, Search, CreditCard, User, Hash, Building, RotateCcw } from 'lucide-react';
+import { Save, FileText, DollarSign, Calendar, Search, CreditCard, User, Hash, Building, RotateCcw, Receipt } from 'lucide-react';
 import { Contract } from '../types';
 import { saveContract, generateContractId, getXMLContracts } from '../utils/storage';
 import { findContractInXLSX } from '../utils/xlsxParser';
 import { searchContractInTable, getAvailableMonths, saveAffaireContract, saveCreditContract, saveContractToRapport, checkTermeContractExists, saveTermeContract,checkAffaireContractExists,checkAffaireInRapport,checkTermeInRapport} from '../utils/supabaseService';
+import { supabase } from '../lib/supabase';
 import { getSessionDate } from '../utils/auth';
 
 interface ContractFormProps {
@@ -23,6 +24,14 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     paymentDate: ''
   });
 
+  const handleChequeDataChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setChequeData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   const [xmlSearchResult, setXmlSearchResult] = useState<any>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
@@ -30,6 +39,11 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const [message, setMessage] = useState('');
   const [isRetourTechniqueMode, setIsRetourTechniqueMode] = useState(false);
   const [originalPremiumAmount, setOriginalPremiumAmount] = useState('');
+  const [chequeData, setChequeData] = useState({
+    numeroCheque: '',
+    banque: '',
+    dateEncaissement: ''
+  });
 
   React.useEffect(() => {
     loadAvailableMonths();
@@ -389,6 +403,31 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           setMessage(prev => prev + ' (erreur crédit)');
         }
       }
+
+      // SAUVEGARDE CHÈQUE DANS LA TABLE CHEQUES
+      if (contract.paymentMode === 'Cheque') {
+        try {
+          const { data: chequeInsert, error: chequeError } = await supabase
+            .from('cheques')
+            .insert({
+              numero_contrat: contract.contractNumber,
+              assure: contract.insuredName,
+              numero_cheque: chequeData.numeroCheque,
+              titulaire_cheque: contract.insuredName,
+              montant: contract.premiumAmount,
+              date_encaissement_prevue: chequeData.dateEncaissement,
+              banque: chequeData.banque,
+              statut: 'Non Encaissé',
+              cree_par: username
+            });
+
+          if (chequeError) throw chequeError;
+          setMessage(prev => prev + ' + Chèque enregistré');
+        } catch (chequeError) {
+          console.error('Erreur chèque:', chequeError);
+          setMessage(prev => prev + ' (erreur chèque)');
+        }
+      }
       
       // Reset form
       setFormData({
@@ -405,6 +444,11 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       setXmlSearchResult(null);
       setIsRetourTechniqueMode(false);
       setOriginalPremiumAmount('');
+      setChequeData({
+        numeroCheque: '',
+        banque: '',
+        dateEncaissement: ''
+      });
 
     } catch (error) {
       console.error('Erreur générale:', error);
@@ -621,6 +665,63 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               </select>
             </div>
           </div>
+
+          {/* Section CHÈQUE (conditionnelle) */}
+          {formData.paymentMode === 'Cheque' && (
+            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-blue-800 mb-4 flex items-center">
+                <Receipt className="w-5 h-5 mr-2" />
+                Informations du Chèque
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Numéro du chèque *
+                  </label>
+                  <input
+                    type="text"
+                    name="numeroCheque"
+                    value={chequeData.numeroCheque}
+                    onChange={handleChequeDataChange}
+                    className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                    placeholder="Numéro du chèque"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Banque *
+                  </label>
+                  <input
+                    type="text"
+                    name="banque"
+                    value={chequeData.banque}
+                    onChange={handleChequeDataChange}
+                    className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                    placeholder="Nom de la banque"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Date d'encaissement prévue *
+                  </label>
+                  <input
+                    type="date"
+                    name="dateEncaissement"
+                    value={chequeData.dateEncaissement}
+                    onChange={handleChequeDataChange}
+                    className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Section CRÉDIT (conditionnelle) */}
           {formData.paymentType === 'Crédit' && (
