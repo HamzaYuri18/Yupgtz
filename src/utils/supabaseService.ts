@@ -62,7 +62,6 @@ export const saveContractToRapport = async (contractData: any): Promise<boolean>
       type_recette: null,
       date_ristourne: null,
       date_paiement_ristourne: null,
-      client: null,
       date_sinistre: null,
       date_paiement_sinistre: null,
       numero_sinistre: null
@@ -606,7 +605,6 @@ export const updateCreditPayment = async (
         type_recette: null,
         date_ristourne: null,
         date_paiement_ristourne: null,
-        client: null,
         date_sinistre: null,
         date_paiement_sinistre: null,
         numero_sinistre: null,
