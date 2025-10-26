@@ -4,16 +4,15 @@ import { Check, X, Filter, Calendar } from 'lucide-react';
 
 interface Cheque {
   id: number;
-  numero_contrat: string;
-  assure: string;
-  numero_cheque: string;
-  titulaire_cheque: string;
-  montant: number;
-  date_encaissement_prevue: string;
-  banque: string;
-  statut: string;
+  Numero_Contrat: string;
+  Assure: string;
+  Numero_Cheque: string;
+  Titulaire_Cheque: string;
+  Montant: string;
+  Date_Encaissement_prévue: string;
+  Banque: string;
+  Statut: string;
   created_at: string;
-  cree_par: string;
   date_encaissement?: string;
 }
 
@@ -57,7 +56,7 @@ export default function ChequesManagement() {
     let filtered = [...cheques];
 
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(c => c.statut === statusFilter);
+      filtered = filtered.filter(c => c.Statut === statusFilter);
     }
 
     if (monthFilter !== 'all') {
@@ -92,7 +91,7 @@ export default function ChequesManagement() {
       const { error } = await supabase
         .from('Cheques')
         .update({
-          statut: 'Encaissé',
+          Statut: 'Encaissé',
           date_encaissement: encaissementDate
         })
         .eq('id', selectedCheque.id);
@@ -110,11 +109,12 @@ export default function ChequesManagement() {
     }
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: string | number) => {
+    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
     return new Intl.NumberFormat('fr-FR', {
       style: 'currency',
       currency: 'MAD'
-    }).format(amount);
+    }).format(numAmount);
   };
 
   const formatDate = (dateString: string) => {
@@ -233,40 +233,40 @@ export default function ChequesManagement() {
                 filteredCheques.map((cheque) => (
                   <tr key={cheque.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {cheque.numero_contrat}
+                      {cheque.Numero_Contrat}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {cheque.assure}
+                      {cheque.Assure}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {cheque.numero_cheque}
+                      {cheque.Numero_Cheque}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {cheque.banque}
+                      {cheque.Banque}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                      {formatCurrency(cheque.montant)}
+                      {formatCurrency(cheque.Montant)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatDate(cheque.date_encaissement_prevue)}
+                      {formatDate(cheque.Date_Encaissement_prévue)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatDate(cheque.created_at)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        cheque.statut === 'Encaissé'
+                        cheque.Statut === 'Encaissé'
                           ? 'bg-green-100 text-green-800'
                           : 'bg-yellow-100 text-yellow-800'
                       }`}>
-                        {cheque.statut}
+                        {cheque.Statut}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {cheque.date_encaissement ? formatDate(cheque.date_encaissement) : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {cheque.statut === 'Non Encaissé' && (
+                      {cheque.Statut === 'Non Encaissé' && (
                         <button
                           onClick={() => handleEncaisserClick(cheque)}
                           className="inline-flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -292,19 +292,19 @@ export default function ChequesManagement() {
             <div className="space-y-4 mb-6">
               <div>
                 <p className="text-sm text-gray-600">Numéro de contrat</p>
-                <p className="font-semibold">{selectedCheque.numero_contrat}</p>
+                <p className="font-semibold">{selectedCheque.Numero_Contrat}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Assuré</p>
-                <p className="font-semibold">{selectedCheque.assure}</p>
+                <p className="font-semibold">{selectedCheque.Assure}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Numéro de chèque</p>
-                <p className="font-semibold">{selectedCheque.numero_cheque}</p>
+                <p className="font-semibold">{selectedCheque.Numero_Cheque}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Montant</p>
-                <p className="font-semibold text-lg">{formatCurrency(selectedCheque.montant)}</p>
+                <p className="font-semibold text-lg">{formatCurrency(selectedCheque.Montant)}</p>
               </div>
 
               <div>
