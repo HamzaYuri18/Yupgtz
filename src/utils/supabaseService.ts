@@ -867,6 +867,46 @@ export const searchCreditByContractNumber = async (contractNumber: string): Prom
   }
 };
 
+// Fonction pour enregistrer un chèque
+export const saveCheque = async (chequeData: {
+  numeroContrat: string;
+  assure: string;
+  numeroCheque: string;
+  montant: number;
+  dateEncaissementPrevue: string;
+  banque: string;
+  creePar: string;
+}): Promise<boolean> => {
+  try {
+    console.log('💳 Enregistrement du chèque...');
+
+    const { error } = await supabase
+      .from('cheques')
+      .insert([{
+        numero_contrat: chequeData.numeroContrat,
+        assure: chequeData.assure,
+        numero_cheque: chequeData.numeroCheque,
+        titulaire_cheque: chequeData.assure,
+        montant: chequeData.montant,
+        date_encaissement_prevue: chequeData.dateEncaissementPrevue,
+        banque: chequeData.banque,
+        statut: 'Non Encaissé',
+        cree_par: chequeData.creePar
+      }]);
+
+    if (error) {
+      console.error('❌ Erreur lors de l\'enregistrement du chèque:', error);
+      return false;
+    }
+
+    console.log('✅ Chèque enregistré avec succès');
+    return true;
+  } catch (error) {
+    console.error('❌ Erreur générale lors de l\'enregistrement du chèque:', error);
+    return false;
+  }
+};
+
 // Fonction utilitaire pour convertir les dates Excel
 const convertExcelDateToISO = (excelDate: string | number): string => {
   if (typeof excelDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(excelDate)) {
@@ -958,5 +998,6 @@ export default {
   createMonthlyTable,
   insertContractsToTable,
   searchCreditByContractNumber,
-  getFilteredDataForExport
+  getFilteredDataForExport,
+  saveCheque
 };

@@ -3,7 +3,7 @@ import { Save, FileText, DollarSign, Calendar, Search, CreditCard, User, Hash, B
 import { Contract } from '../types';
 import { saveContract, generateContractId, getXMLContracts } from '../utils/storage';
 import { findContractInXLSX } from '../utils/xlsxParser';
-import { searchContractInTable, getAvailableMonths, saveAffaireContract, saveCreditContract, saveContractToRapport, checkTermeContractExists, saveTermeContract,checkAffaireContractExists,checkAffaireInRapport,checkTermeInRapport} from '../utils/supabaseService';
+import { searchContractInTable, getAvailableMonths, saveAffaireContract, saveCreditContract, saveContractToRapport, checkTermeContractExists, saveTermeContract,checkAffaireContractExists,checkAffaireInRapport,checkTermeInRapport, saveCheque} from '../utils/supabaseService';
 import { getSessionDate } from '../utils/auth';
 
 interface ContractFormProps {
@@ -20,7 +20,10 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     paymentMode: 'Espece' as 'Espece' | 'Cheque' | 'Carte Bancaire',
     paymentType: 'Au comptant' as 'Au comptant' | 'Crédit',
     creditAmount: '',
-    paymentDate: ''
+    paymentDate: '',
+    numeroCheque: '',
+    banque: '',
+    dateEncaissementPrevue: ''
   });
 
   const [xmlSearchResult, setXmlSearchResult] = useState<any>(null);
@@ -130,7 +133,16 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    // VALIDATION POUR PAIEMENT PAR CHÈQUE
+    if (formData.paymentMode === 'Cheque') {
+      if (!formData.numeroCheque || !formData.banque || !formData.dateEncaissementPrevue) {
+        setMessage('❌ Veuillez remplir tous les champs du chèque (numéro, banque, date d\'encaissement prévue)');
+        setTimeout(() => setMessage(''), 5000);
+        return;
+      }
+    }
+
     // VALIDATION SPÉCIFIQUE POUR CRÉDIT
     if (formData.paymentType === 'Crédit') {
       const primeAmount = parseFloat(formData.premiumAmount);
@@ -231,7 +243,10 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             paymentMode: 'Espece',
             paymentType: 'Au comptant',
             creditAmount: '',
-            paymentDate: ''
+            paymentDate: '',
+            numeroCheque: '',
+            banque: '',
+            dateEncaissementPrevue: ''
           });
           setXmlSearchResult(null);
           setIsRetourTechniqueMode(false);
@@ -258,7 +273,10 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             paymentMode: 'Espece',
             paymentType: 'Au comptant',
             creditAmount: '',
-            paymentDate: ''
+            paymentDate: '',
+            numeroCheque: '',
+            banque: '',
+            dateEncaissementPrevue: ''
           });
           setXmlSearchResult(null);
           setIsRetourTechniqueMode(false);
@@ -290,7 +308,10 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             paymentMode: 'Espece',
             paymentType: 'Au comptant',
             creditAmount: '',
-            paymentDate: ''
+            paymentDate: '',
+            numeroCheque: '',
+            banque: '',
+            dateEncaissementPrevue: ''
           });
           setXmlSearchResult(null);
           setIsRetourTechniqueMode(false);
@@ -317,7 +338,10 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             paymentMode: 'Espece',
             paymentType: 'Au comptant',
             creditAmount: '',
-            paymentDate: ''
+            paymentDate: '',
+            numeroCheque: '',
+            banque: '',
+            dateEncaissementPrevue: ''
           });
           setXmlSearchResult(null);
           setIsRetourTechniqueMode(false);
@@ -389,6 +413,25 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           setMessage(prev => prev + ' (erreur crédit)');
         }
       }
+
+      // SAUVEGARDE CHÈQUE
+      if (contract.paymentMode === 'Cheque' && formData.numeroCheque && formData.banque && formData.dateEncaissementPrevue) {
+        try {
+          await saveCheque({
+            numeroContrat: contract.contractNumber,
+            assure: contract.insuredName,
+            numeroCheque: formData.numeroCheque,
+            montant: contract.premiumAmount,
+            dateEncaissementPrevue: formData.dateEncaissementPrevue,
+            banque: formData.banque,
+            creePar: username
+          });
+          setMessage(prev => prev + ' + Chèque enregistré');
+        } catch (chequeError) {
+          console.error('Erreur chèque:', chequeError);
+          setMessage(prev => prev + ' (erreur chèque)');
+        }
+      }
       
       // Reset form
       setFormData({
@@ -400,7 +443,10 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
         paymentMode: 'Espece',
         paymentType: 'Au comptant',
         creditAmount: '',
-        paymentDate: ''
+        paymentDate: '',
+        numeroCheque: '',
+        banque: '',
+        dateEncaissementPrevue: ''
       });
       setXmlSearchResult(null);
       setIsRetourTechniqueMode(false);
@@ -621,6 +667,60 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               </select>
             </div>
           </div>
+
+          {/* Section CHÈQUE (conditionnelle) */}
+          {formData.paymentMode === 'Cheque' && (
+            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-blue-800 mb-4 flex items-center">
+                <FileText className="w-5 h-5 mr-2" />
+                Informations du Chèque
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Numéro du chèque *
+                  </label>
+                  <input
+                    type="text"
+                    name="numeroCheque"
+                    value={formData.numeroCheque}
+                    onChange={handleInputChange}
+                    className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                    placeholder="Numéro du chèque"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Banque *
+                  </label>
+                  <input
+                    type="text"
+                    name="banque"
+                    value={formData.banque}
+                    onChange={handleInputChange}
+                    className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                    placeholder="Nom de la banque"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Date d'encaissement prévue *
+                  </label>
+                  <input
+                    type="date"
+                    name="dateEncaissementPrevue"
+                    value={formData.dateEncaissementPrevue}
+                    onChange={handleInputChange}
+                    className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Section CRÉDIT (conditionnelle) */}
           {formData.paymentType === 'Crédit' && (
