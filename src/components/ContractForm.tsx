@@ -141,6 +141,26 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
         setTimeout(() => setMessage(''), 5000);
         return;
       }
+
+      // Validation de la date d'encaissement prévue
+      const dateEncaissement = new Date(formData.dateEncaissementPrevue);
+      const dateActuelle = new Date();
+      dateActuelle.setHours(0, 0, 0, 0);
+
+      const dateLimite = new Date(dateActuelle);
+      dateLimite.setDate(dateLimite.getDate() + 7);
+
+      if (dateEncaissement < dateActuelle) {
+        setMessage('❌ La date d\'encaissement prévue ne peut pas être antérieure à la date actuelle');
+        setTimeout(() => setMessage(''), 5000);
+        return;
+      }
+
+      if (dateEncaissement > dateLimite) {
+        setMessage('❌ La date d\'encaissement prévue ne peut pas être supérieure à 7 jours à partir d\'aujourd\'hui');
+        setTimeout(() => setMessage(''), 5000);
+        return;
+      }
     }
 
     // VALIDATION SPÉCIFIQUE POUR CRÉDIT
@@ -415,9 +435,16 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       }
 
       // SAUVEGARDE CHÈQUE
+      console.log('🔍 Vérification sauvegarde chèque:');
+      console.log('  - paymentMode:', contract.paymentMode);
+      console.log('  - numeroCheque:', formData.numeroCheque);
+      console.log('  - banque:', formData.banque);
+      console.log('  - dateEncaissementPrevue:', formData.dateEncaissementPrevue);
+
       if (contract.paymentMode === 'Cheque' && formData.numeroCheque && formData.banque && formData.dateEncaissementPrevue) {
+        console.log('💳 Démarrage de la sauvegarde du chèque...');
         try {
-          await saveCheque({
+          const chequeResult = await saveCheque({
             numeroContrat: contract.contractNumber,
             assure: contract.insuredName,
             numeroCheque: formData.numeroCheque,
@@ -426,11 +453,20 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             banque: formData.banque,
             creePar: username
           });
-          setMessage(prev => prev + ' + Chèque enregistré');
+
+          if (chequeResult) {
+            console.log('✅ Chèque enregistré avec succès');
+            setMessage(prev => prev + ' + Chèque enregistré');
+          } else {
+            console.error('❌ Échec de l\'enregistrement du chèque');
+            setMessage(prev => prev + ' (erreur chèque)');
+          }
         } catch (chequeError) {
-          console.error('Erreur chèque:', chequeError);
+          console.error('❌ Erreur chèque:', chequeError);
           setMessage(prev => prev + ' (erreur chèque)');
         }
+      } else {
+        console.log('⚠️ Conditions non remplies pour enregistrer le chèque');
       }
       
       // Reset form
@@ -715,8 +751,13 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     name="dateEncaissementPrevue"
                     value={formData.dateEncaissementPrevue}
                     onChange={handleInputChange}
+                    min={new Date().toISOString().split('T')[0]}
+                    max={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                     className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
                   />
+                  <p className="text-xs text-blue-600 mt-1">
+                    Date entre aujourd'hui et {new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR')}
+                  </p>
                 </div>
               </div>
             </div>

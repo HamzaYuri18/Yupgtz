@@ -879,27 +879,30 @@ export const saveCheque = async (chequeData: {
 }): Promise<boolean> => {
   try {
     console.log('💳 Enregistrement du chèque...');
+    console.log('Données du chèque:', chequeData);
 
-    const { error } = await supabase
-      .from('cheques')
+    const { data, error } = await supabase
+      .from('Cheques')
       .insert([{
-        numero_contrat: chequeData.numeroContrat,
-        assure: chequeData.assure,
-        numero_cheque: chequeData.numeroCheque,
-        titulaire_cheque: chequeData.assure,
-        montant: chequeData.montant,
-        date_encaissement_prevue: chequeData.dateEncaissementPrevue,
-        banque: chequeData.banque,
-        statut: 'Non Encaissé',
-        cree_par: chequeData.creePar
-      }]);
+        Numero_Contrat: chequeData.numeroContrat,
+        Assure: chequeData.assure,
+        Numero_Cheque: chequeData.numeroCheque,
+        Titulaire_Cheque: chequeData.assure,
+        Montant: chequeData.montant,
+        Date_Encaissement_prévue: chequeData.dateEncaissementPrevue,
+        Banque: chequeData.banque,
+        Statut: 'Non Encaissé'
+      }])
+      .select();
 
     if (error) {
       console.error('❌ Erreur lors de l\'enregistrement du chèque:', error);
+      console.error('Détails de l\'erreur:', error.message, error.details);
       return false;
     }
 
     console.log('✅ Chèque enregistré avec succès');
+    console.log('Données insérées:', data);
     return true;
   } catch (error) {
     console.error('❌ Erreur générale lors de l\'enregistrement du chèque:', error);
