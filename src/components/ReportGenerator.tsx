@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Download, Calendar, DollarSign, FileText, Users, Trash2 } from 'lucide-react';
+import { BarChart3, Download, Calendar, DollarSign, FileText, Users, Trash2, Banknote, CreditCard, Landmark } from 'lucide-react';
 import { getContracts, exportToXLSX } from '../utils/storage';
 import { Contract } from '../types';
 import { getAffaireContracts, getRapportContracts, getTermeContracts, deleteRapportContract, deleteAffaireContract, deleteTermeContract, getFilteredDataForExport } from '../utils/supabaseService';
@@ -131,6 +131,18 @@ const ReportGenerator: React.FC = () => {
     const totalMontant = filteredContracts.reduce((sum, contract) => sum + (contract.montant || 0), 0);
     const avgPremium = totalContracts > 0 ? totalPremium / totalContracts : 0;
     
+    const totalEspeces = filteredContracts
+      .filter(contract => contract.mode_paiement === 'Espece')
+      .reduce((sum, contract) => sum + (contract.montant || 0), 0);
+
+    const totalCheque = filteredContracts
+      .filter(contract => contract.mode_paiement === 'Cheque')
+      .reduce((sum, contract) => sum + (contract.montant || 0), 0);
+
+    const totalBanque = filteredContracts
+      .filter(contract => contract.mode_paiement === 'Banque' || contract.mode_paiement === 'Carte Bancaire')
+      .reduce((sum, contract) => sum + (contract.montant || 0), 0);
+
     const byType = filteredContracts.reduce((acc, contract) => {
       acc[contract.type] = (acc[contract.type] || 0) + 1;
       return acc;
@@ -151,6 +163,9 @@ const ReportGenerator: React.FC = () => {
       totalPremium,
       totalMontant,
       avgPremium,
+      totalEspeces,
+      totalCheque,
+      totalBanque,
       byType,
       byBranch,
       byPaymentMode
@@ -270,6 +285,13 @@ const ReportGenerator: React.FC = () => {
   const uniqueUsers = [...new Set(rapportContracts.map(c => c.cree_par))];
   const sessionDate = getSessionDate();
 
+  const formatCurrency = (amount: number) => {
+    return `${new Intl.NumberFormat('fr-FR', {
+      minimumFractionDigits: 3,
+      maximumFractionDigits: 3
+    }).format(amount)} DT`;
+  };
+
   return (
     <div className="max-w-7xl mx-auto">
       <div className="bg-white rounded-lg shadow-lg p-6">
@@ -316,6 +338,11 @@ const ReportGenerator: React.FC = () => {
               <option value="Affaire">Affaire</option>
               <option value="Credit">Credit</option>
               <option value="Rapport">Rapport</option>
+              <option value="Dépense">Dépense</option>
+              <option value="Recette Exceptionnelle">Recette Exceptionnelle</option>
+              <option value="Ristourne">Ristourne</option>
+              <option value="Sinistre">Sinistre</option>
+              <option value="Paiement Crédit">Paiement Crédit</option>
             </select>
 
             <select
@@ -329,6 +356,7 @@ const ReportGenerator: React.FC = () => {
               <option value="Vie">Vie</option>
               <option value="Santé">Santé</option>
               <option value="IRDS">IRDS</option>
+              <option value="Financier">Financier</option>
             </select>
 
             <select
@@ -341,6 +369,7 @@ const ReportGenerator: React.FC = () => {
               <option value="Espece">Espèce</option>
               <option value="Cheque">Chèque</option>
               <option value="Carte Bancaire">Carte Bancaire</option>
+              <option value="Banque">Banque</option>
             </select>
 
             <select
@@ -374,7 +403,7 @@ const ReportGenerator: React.FC = () => {
         </div>
 
         {/* Statistiques générales */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <div className="bg-blue-50 rounded-lg p-6">
             <div className="flex items-center space-x-3">
               <FileText className="w-8 h-8 text-blue-600" />
@@ -392,7 +421,7 @@ const ReportGenerator: React.FC = () => {
               <div>
                 <p className="text-sm font-medium text-green-600">Prime Totale</p>
                 <p className="text-2xl font-bold text-green-900">
-                  {stats.totalPremium.toLocaleString('fr-FR')} DT
+                  {formatCurrency(stats.totalPremium)}
                 </p>
               </div>
             </div>
@@ -402,9 +431,9 @@ const ReportGenerator: React.FC = () => {
             <div className="flex items-center space-x-3">
               <DollarSign className="w-8 h-8 text-emerald-600" />
               <div>
-                <p className="text-sm font-medium text-emerald-600">Total Session</p>
+                <p className="text-sm font-medium text-emerald-600">Total Montant</p>
                 <p className={`text-2xl font-bold ${stats.totalMontant >= 0 ? 'text-emerald-900' : 'text-red-900'}`}>
-                  {stats.totalMontant.toLocaleString('fr-FR')} DT
+                  {formatCurrency(stats.totalMontant)}
                 </p>
                 <p className="text-xs text-emerald-600">
                   {stats.totalMontant >= 0 ? 'Résultat positif' : 'Résultat négatif'}
@@ -419,7 +448,7 @@ const ReportGenerator: React.FC = () => {
               <div>
                 <p className="text-sm font-medium text-purple-600">Prime Moyenne</p>
                 <p className="text-2xl font-bold text-purple-900">
-                  {stats.avgPremium.toLocaleString('fr-FR')} DT
+                  {formatCurrency(stats.avgPremium)}
                 </p>
               </div>
             </div>
@@ -431,6 +460,45 @@ const ReportGenerator: React.FC = () => {
               <div>
                 <p className="text-sm font-medium text-orange-600">Utilisateurs</p>
                 <p className="text-2xl font-bold text-orange-900">{uniqueUsers.length}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Nouveaux totaux de paiement */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-indigo-50 rounded-lg p-6">
+            <div className="flex items-center space-x-3">
+              <Banknote className="w-8 h-8 text-indigo-600" />
+              <div>
+                <p className="text-sm font-medium text-indigo-600">Total Espèces</p>
+                <p className="text-2xl font-bold text-indigo-900">
+                  {formatCurrency(stats.totalEspeces)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-teal-50 rounded-lg p-6">
+            <div className="flex items-center space-x-3">
+              <CreditCard className="w-8 h-8 text-teal-600" />
+              <div>
+                <p className="text-sm font-medium text-teal-600">Total Chèque</p>
+                <p className="text-2xl font-bold text-teal-900">
+                  {formatCurrency(stats.totalCheque)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-cyan-50 rounded-lg p-6">
+            <div className="flex items-center space-x-3">
+              <Landmark className="w-8 h-8 text-cyan-600" />
+              <div>
+                <p className="text-sm font-medium text-cyan-600">Total Banque</p>
+                <p className="text-2xl font-bold text-cyan-900">
+                  {formatCurrency(stats.totalBanque)}
+                </p>
               </div>
             </div>
           </div>
@@ -467,12 +535,12 @@ const ReportGenerator: React.FC = () => {
                 <div key={branch} className="flex justify-between items-center">
                   <span className="text-gray-700">{branch}</span>
                   <div className="flex items-center space-x-2">
-                    <div className="w-20 bg-gray-200 rounded-full h-2">
+                    <div className="w-20 bg-gray-200 rounded-full h-2"> {/* Added missing div wrapper */}
                       <div
-                        className="bg-green-600 h-2 rounded-full"
-                        style={{ width: `${(count / stats.totalContracts) * 100}%` }}
-                      ></div>
-                    </div>
+                          className="bg-green-600 h-2 rounded-full"
+                          style={{ width: `${(count / stats.totalContracts) * 100}%` }}
+                        ></div>
+                    </div> {/* Closed the div */}
                     <span className="text-sm font-medium text-gray-900 w-8">{count}</span>
                   </div>
                 </div>
@@ -548,7 +616,7 @@ const ReportGenerator: React.FC = () => {
                         {contract.assure}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {contract.prime.toLocaleString('fr-FR')}
+                        {formatCurrency(contract.prime)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {new Date(contract.echeance).toLocaleDateString('fr-FR')}
@@ -622,7 +690,7 @@ const ReportGenerator: React.FC = () => {
                         {contract.assure}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {contract.prime.toLocaleString('fr-FR')}
+                        {formatCurrency(contract.prime)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div>
@@ -630,7 +698,7 @@ const ReportGenerator: React.FC = () => {
                           <div className="text-xs text-gray-500">{contract.type_paiement}</div>
                           {contract.montant_credit && (
                             <div className="text-xs text-orange-600">
-                              Crédit: {contract.montant_credit} DT
+                              Crédit: {formatCurrency(contract.montant_credit)}
                             </div>
                           )}
                         </div>
@@ -739,11 +807,11 @@ const ReportGenerator: React.FC = () => {
                     {contract.assure}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {(contract.prime || 0).toLocaleString('fr-FR')}
+                    {formatCurrency(contract.prime || 0)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <span className={`font-semibold ${(contract.montant || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {(contract.montant || 0).toLocaleString('fr-FR')}
+                      {formatCurrency(contract.montant || 0)}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -761,7 +829,7 @@ const ReportGenerator: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {contract.montant_credit ? (
                       <span className="font-semibold text-orange-600">
-                        {contract.montant_credit.toLocaleString('fr-FR')}
+                        {formatCurrency(contract.montant_credit)}
                       </span>
                     ) : (
                       <span className="text-gray-400 italic">-</span>
