@@ -535,7 +535,13 @@ export const updateCreditPayment = async (
   id: number,
   montantPaiement: number,
   assure: string,
-  modePaiement: 'Espece' | 'Cheque'
+  modePaiement: 'Espece' | 'Cheque' | 'Carte Bancaire',
+  numeroContrat?: string,
+  chequeData?: {
+    numeroCheque: string;
+    banque: string;
+    dateEncaissementPrevue: string;
+  }
 ): Promise<boolean> => {
   try {
     console.log('💳 Mise à jour paiement crédit...');
@@ -618,6 +624,29 @@ export const updateCreditPayment = async (
       // On ne retourne pas false ici car le paiement a été enregistré avec succès
     } else {
       console.log('✅ Paiement enregistré dans rapport');
+    }
+
+    // 6. Si paiement par chèque, enregistrer dans la table Cheques
+    if (modePaiement === 'Cheque' && chequeData && numeroContrat) {
+      const { error: chequeError } = await supabase
+        .from('Cheques')
+        .insert([{
+          Numero_Contrat: numeroContrat,
+          Assure: assure,
+          Numero_Cheque: chequeData.numeroCheque,
+          Titulaire_Cheque: assure,
+          Montant: montantPaiement.toString(),
+          Date_Encaissement_prévue: chequeData.dateEncaissementPrevue,
+          Banque: chequeData.banque,
+          Statut: 'Non Encaissé',
+          created_at: new Date().toISOString()
+        }]);
+
+      if (chequeError) {
+        console.error('⚠️ Erreur enregistrement chèque:', chequeError);
+      } else {
+        console.log('✅ Chèque enregistré dans la table Cheques');
+      }
     }
 
     console.log('✅ Paiement crédit traité avec succès');

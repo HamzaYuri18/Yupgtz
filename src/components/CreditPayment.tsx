@@ -9,7 +9,10 @@ const CreditPayment: React.FC = () => {
   const [creditDate, setCreditDate] = useState('');
   const [creditData, setCreditData] = useState<any>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentMode, setPaymentMode] = useState<'Espece' | 'Cheque'>('Espece');
+  const [paymentMode, setPaymentMode] = useState<'Espece' | 'Cheque' | 'Carte Bancaire'>('Espece');
+  const [numeroCheque, setNumeroCheque] = useState('');
+  const [banque, setBanque] = useState('');
+  const [dateEncaissementPrevue, setDateEncaissementPrevue] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState('');
@@ -79,6 +82,13 @@ const CreditPayment: React.FC = () => {
       return;
     }
 
+    if (paymentMode === 'Cheque') {
+      if (!numeroCheque || !banque || !dateEncaissementPrevue) {
+        setMessage('Veuillez remplir tous les champs du chèque (numéro, banque, date d\'encaissement prévue)');
+        return;
+      }
+    }
+
     const amount = parseFloat(paymentAmount);
     if (isNaN(amount) || amount <= 0) {
       setMessage('Veuillez saisir un montant valide');
@@ -105,7 +115,13 @@ const CreditPayment: React.FC = () => {
         creditData.id,
         amount,
         creditData.assure,
-        paymentMode
+        paymentMode,
+        creditData.numero_contrat,
+        paymentMode === 'Cheque' ? {
+          numeroCheque,
+          banque,
+          dateEncaissementPrevue
+        } : undefined
       );
 
       if (success) {
@@ -117,6 +133,9 @@ const CreditPayment: React.FC = () => {
         }
         setPaymentAmount('');
         setPaymentMode('Espece');
+        setNumeroCheque('');
+        setBanque('');
+        setDateEncaissementPrevue('');
       } else {
         setMessage('❌ Erreur lors de l\'enregistrement du paiement');
       }
@@ -343,11 +362,12 @@ const CreditPayment: React.FC = () => {
                 </label>
                 <select
                   value={paymentMode}
-                  onChange={(e) => setPaymentMode(e.target.value as 'Espece' | 'Cheque')}
+                  onChange={(e) => setPaymentMode(e.target.value as 'Espece' | 'Cheque' | 'Carte Bancaire')}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 >
                   <option value="Espece">Espèce</option>
                   <option value="Cheque">Chèque</option>
+                  <option value="Carte Bancaire">Carte Bancaire</option>
                 </select>
               </div>
 
@@ -366,6 +386,53 @@ const CreditPayment: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {/* Champs supplémentaires pour le paiement par chèque */}
+            {paymentMode === 'Cheque' && (
+              <div className="mt-6 bg-blue-50 rounded-lg p-4 border border-blue-200">
+                <h4 className="text-sm font-semibold text-blue-800 mb-4">Informations du chèque</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Numéro du chèque *
+                    </label>
+                    <input
+                      type="text"
+                      value={numeroCheque}
+                      onChange={(e) => setNumeroCheque(e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Ex: 1234567"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Banque *
+                    </label>
+                    <input
+                      type="text"
+                      value={banque}
+                      onChange={(e) => setBanque(e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Ex: BIAT"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Date d'encaissement prévue *
+                    </label>
+                    <input
+                      type="date"
+                      value={dateEncaissementPrevue}
+                      onChange={(e) => setDateEncaissementPrevue(e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="mt-6 flex justify-end">
               <button
