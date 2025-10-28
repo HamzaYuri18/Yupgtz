@@ -28,6 +28,7 @@ export interface Ristourne {
   montant_ristourne: number;
   date_ristourne?: string;
   date_paiement_ristourne?: string;
+  type_paiement?: 'Espece' | 'Cheque' | 'Banque';
   cree_par: string;
   created_at?: string;
 }

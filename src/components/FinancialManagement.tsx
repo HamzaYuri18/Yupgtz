@@ -55,8 +55,15 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     client: '',
     montant_ristourne: '',
     date_ristourne: new Date().toISOString().split('T')[0],
-    date_paiement_ristourne: new Date().toISOString().split('T')[0]
+    date_paiement_ristourne: new Date().toISOString().split('T')[0],
+    type_paiement: 'Espece' as 'Espece' | 'Cheque' | 'Banque'
   });
+  const [ristourneDateFilter, setRistourneDateFilter] = useState({
+    dateFrom: '',
+    dateTo: ''
+  });
+  const [showRistourneDateFilter, setShowRistourneDateFilter] = useState(false);
+  const [ristourneCheckMessage, setRistourneCheckMessage] = useState('');
 
   // États pour les sinistres
   const [sinistres, setSinistres] = useState<Sinistre[]>([]);
@@ -80,7 +87,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
   useEffect(() => {
     loadData();
-  }, [activeSection, monthFilter]);
+  }, [activeSection, monthFilter, showRistourneDateFilter, ristourneDateFilter.dateFrom, ristourneDateFilter.dateTo]);
 
   useEffect(() => {
     loadAvailableMonths();
@@ -136,7 +143,24 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
           setRecettes(recettesData);
           break;
         case 'ristournes':
-          const ristournesData = await getRistournes();
+          let ristournesData = await getRistournes();
+
+          // Filtrer par date de session ou par plage de dates
+          if (showRistourneDateFilter && ristourneDateFilter.dateFrom && ristourneDateFilter.dateTo) {
+            // Filtre par plage de dates
+            ristournesData = ristournesData.filter(r => {
+              if (!r.created_at) return false;
+              const createdDate = r.created_at.split('T')[0];
+              return createdDate >= ristourneDateFilter.dateFrom && createdDate <= ristourneDateFilter.dateTo;
+            });
+          } else {
+            // Filtre par date de session (par défaut)
+            const sessionDate = getSessionDate();
+            ristournesData = ristournesData.filter(r =>
+              r.created_at && r.created_at.startsWith(sessionDate)
+            );
+          }
+
           setRistournes(ristournesData);
           break;
         case 'sinistres':
@@ -294,22 +318,66 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     setTimeout(() => setMessage(''), 3000);
   };
 
+  const handleDeleteRistourne = async (id: number) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette ristourne ?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('ristournes')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setMessage('✅ Ristourne supprimée avec succès');
+      loadData();
+    } catch (error) {
+      console.error('Erreur suppression:', error);
+      setMessage('❌ Erreur lors de la suppression');
+    }
+
+    setTimeout(() => setMessage(''), 3000);
+  };
+
   const handleSaveRistourne = async () => {
     if (!newRistourne.numero_contrat || !newRistourne.client || !newRistourne.montant_ristourne) {
       setMessage('Veuillez remplir tous les champs');
       return;
     }
 
-    // Vérifier l'existence
-    const exists = await checkRistourneExists(
-      newRistourne.numero_contrat,
-      newRistourne.date_ristourne,
-      parseFloat(newRistourne.montant_ristourne),
-      newRistourne.client
-    );
+    setRistourneCheckMessage('');
 
-    if (exists) {
-      setMessage('❌ Cette ristourne existe déjà');
+    // Vérifier si le contrat existe déjà dans la table ristournes
+    try {
+      const { data: existingRistourne, error } = await supabase
+        .from('ristournes')
+        .select('numero_contrat, type_paiement, created_at')
+        .eq('numero_contrat', newRistourne.numero_contrat)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Erreur vérification ristourne:', error);
+        setMessage('❌ Erreur lors de la vérification');
+        setTimeout(() => setMessage(''), 3000);
+        return;
+      }
+
+      if (existingRistourne) {
+        const dateCreation = new Date(existingRistourne.created_at).toLocaleDateString('fr-FR');
+        const messageText = `Cette ristourne est payée en ${existingRistourne.type_paiement} en date du ${dateCreation}`;
+        setRistourneCheckMessage('⚠️ ' + messageText);
+        setMessage('⚠️ ' + messageText);
+        setTimeout(() => {
+          setMessage('');
+          setRistourneCheckMessage('');
+        }, 8000);
+        return;
+      }
+    } catch (error) {
+      console.error('Erreur:', error);
+      setMessage('❌ Erreur lors de la vérification');
       setTimeout(() => setMessage(''), 3000);
       return;
     }
@@ -320,6 +388,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       montant_ristourne: parseFloat(newRistourne.montant_ristourne),
       date_paiement_ristourne: newRistourne.date_paiement_ristourne,
       date_ristourne: newRistourne.date_ristourne,
+      type_paiement: newRistourne.type_paiement,
       cree_par: username
     };
 
@@ -331,8 +400,10 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         client: '',
         montant_ristourne: '',
         date_ristourne: new Date().toISOString().split('T')[0],
-        date_paiement_ristourne: new Date().toISOString().split('T')[0]
+        date_paiement_ristourne: new Date().toISOString().split('T')[0],
+        type_paiement: 'Espece'
       });
+      setRistourneCheckMessage('');
       loadData();
     } else {
       setMessage('❌ Erreur lors de l\'enregistrement de la ristourne');
@@ -701,7 +772,26 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Type de paiement</label>
+            <select
+              value={newRistourne.type_paiement}
+              onChange={(e) => setNewRistourne({...newRistourne, type_paiement: e.target.value as 'Espece' | 'Cheque' | 'Banque'})}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            >
+              <option value="Espece">Espèce</option>
+              <option value="Cheque">Chèque</option>
+              <option value="Banque">Banque</option>
+            </select>
+          </div>
         </div>
+
+        {ristourneCheckMessage && (
+          <div className="mt-4 p-3 bg-yellow-100 text-yellow-800 rounded-lg text-sm">
+            {ristourneCheckMessage}
+          </div>
+        )}
+
         <button
           onClick={handleSaveRistourne}
           className="mt-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2"
@@ -709,6 +799,49 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
           <Save className="w-4 h-4" />
           <span>Enregistrer</span>
         </button>
+      </div>
+
+      {/* Filtre par date */}
+      <div className="bg-white rounded-lg p-4 mb-4 border border-purple-200">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <Calendar className="w-5 h-5 text-purple-600" />
+            <label className="text-sm font-medium text-gray-700">Affichage:</label>
+            <button
+              onClick={() => setShowRistourneDateFilter(!showRistourneDateFilter)}
+              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                showRistourneDateFilter
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              {showRistourneDateFilter ? 'Filtre par plage' : 'Session actuelle'}
+            </button>
+          </div>
+        </div>
+
+        {showRistourneDateFilter && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date du</label>
+              <input
+                type="date"
+                value={ristourneDateFilter.dateFrom}
+                onChange={(e) => setRistourneDateFilter({...ristourneDateFilter, dateFrom: e.target.value})}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date à</label>
+              <input
+                type="date"
+                value={ristourneDateFilter.dateTo}
+                onChange={(e) => setRistourneDateFilter({...ristourneDateFilter, dateTo: e.target.value})}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Liste des ristournes */}
@@ -721,28 +854,49 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                 <th className="px-6 py-3 text-left text-xs font-medium text-purple-600 uppercase tracking-wider">Contrat</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-purple-600 uppercase tracking-wider">Client</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-purple-600 uppercase tracking-wider">Montant (DT)</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-purple-600 uppercase tracking-wider">Type Paiement</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-purple-600 uppercase tracking-wider">Date Ristourne</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-purple-600 uppercase tracking-wider">Date Paiement</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-purple-600 uppercase tracking-wider">Créé par</th>
+                {!showRistourneDateFilter && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-purple-600 uppercase tracking-wider">Action</th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {ristournes.map((ristourne) => (
-                <tr key={ristourne.id} className="hover:bg-purple-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{ristourne.numero_contrat}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{ristourne.client}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-purple-600">
-                    {ristourne.montant_ristourne.toLocaleString('fr-FR')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {ristourne.date_ristourne ? new Date(ristourne.date_ristourne).toLocaleDateString('fr-FR') : '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {ristourne.date_paiement_ristourne ? new Date(ristourne.date_paiement_ristourne).toLocaleDateString('fr-FR') : '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{ristourne.cree_par}</td>
-                </tr>
-              ))}
+              {ristournes.map((ristourne) => {
+                const isCurrentSession = !showRistourneDateFilter;
+                return (
+                  <tr key={ristourne.id} className="hover:bg-purple-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{ristourne.numero_contrat}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{ristourne.client}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-purple-600">
+                      {ristourne.montant_ristourne.toLocaleString('fr-FR')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {ristourne.type_paiement || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {ristourne.date_ristourne ? new Date(ristourne.date_ristourne).toLocaleDateString('fr-FR') : '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {ristourne.date_paiement_ristourne ? new Date(ristourne.date_paiement_ristourne).toLocaleDateString('fr-FR') : '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{ristourne.cree_par}</td>
+                    {isCurrentSession && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <button
+                          onClick={() => handleDeleteRistourne(ristourne.id!)}
+                          className="text-red-600 hover:text-red-800 transition-colors"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {ristournes.length === 0 && (
