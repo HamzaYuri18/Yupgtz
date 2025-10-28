@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Gift, AlertTriangle, Save, Plus, Trash2 } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Gift, AlertTriangle, Save, Plus, Trash2, Search, Calendar } from 'lucide-react';
+import { getSessionDate } from '../utils/auth';
+import { supabase } from '../lib/supabase';
 import { 
   saveDepense, 
   getDepenses, 
@@ -29,8 +31,14 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
   const [newDepense, setNewDepense] = useState({
     type_depense: 'Frais Bureau',
     montant: '',
-    date_depense: new Date().toISOString().split('T')[0]
+    date_depense: new Date().toISOString().split('T')[0],
+    numero_contrat: '',
+    client: ''
   });
+  const [monthFilter, setMonthFilter] = useState<string>('all');
+  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
+  const [searchingContract, setSearchingContract] = useState(false);
+  const [contractSearchMessage, setContractSearchMessage] = useState('');
 
   // États pour les recettes exceptionnelles
   const [recettes, setRecettes] = useState<RecetteExceptionnelle[]>([]);
@@ -72,14 +80,55 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
   useEffect(() => {
     loadData();
+  }, [activeSection, monthFilter]);
+
+  useEffect(() => {
+    loadAvailableMonths();
   }, [activeSection]);
+
+  const loadAvailableMonths = async () => {
+    if (activeSection !== 'depenses') return;
+
+    try {
+      const { data, error } = await supabase
+        .from('depenses')
+        .select('created_at');
+
+      if (error) throw error;
+
+      const months = new Set<string>();
+      data?.forEach(item => {
+        if (item.created_at) {
+          const month = item.created_at.substring(0, 7);
+          months.add(month);
+        }
+      });
+
+      setAvailableMonths(Array.from(months).sort().reverse());
+    } catch (error) {
+      console.error('Erreur lors du chargement des mois:', error);
+    }
+  };
 
   const loadData = async () => {
     setIsLoading(true);
     try {
       switch (activeSection) {
         case 'depenses':
-          const depensesData = await getDepenses();
+          let depensesData = await getDepenses();
+
+          // Filtrer par date de session si "all", sinon par mois sélectionné
+          if (monthFilter === 'all') {
+            const sessionDate = getSessionDate();
+            depensesData = depensesData.filter(d =>
+              d.created_at && d.created_at.startsWith(sessionDate)
+            );
+          } else {
+            depensesData = depensesData.filter(d =>
+              d.created_at && d.created_at.startsWith(monthFilter)
+            );
+          }
+
           setDepenses(depensesData);
           break;
         case 'recettes':
@@ -101,17 +150,101 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     setIsLoading(false);
   };
 
+  const handleSearchContract = async () => {
+    if (!newDepense.numero_contrat) {
+      setContractSearchMessage('Veuillez saisir un numéro de contrat');
+      return;
+    }
+
+    setSearchingContract(true);
+    setContractSearchMessage('');
+
+    try {
+      const sessionDate = getSessionDate();
+
+      const { data, error } = await supabase
+        .from('rapport')
+        .select('numero_contrat, assure, created_at')
+        .eq('numero_contrat', newDepense.numero_contrat)
+        .gte('created_at', sessionDate)
+        .lt('created_at', sessionDate + 'T23:59:59')
+        .maybeSingle();
+
+      if (error) {
+        console.error('Erreur recherche contrat:', error);
+        setContractSearchMessage('❌ Erreur lors de la recherche');
+        setSearchingContract(false);
+        return;
+      }
+
+      if (data) {
+        setNewDepense(prev => ({
+          ...prev,
+          client: data.assure
+        }));
+        setContractSearchMessage('✅ Contrat trouvé: ' + data.assure);
+      } else {
+        setContractSearchMessage('❌ Aucun contrat trouvé pour ce numéro à la date de session actuelle');
+        setNewDepense(prev => ({
+          ...prev,
+          client: ''
+        }));
+      }
+    } catch (error) {
+      console.error('Erreur:', error);
+      setContractSearchMessage('❌ Erreur lors de la recherche');
+    }
+
+    setSearchingContract(false);
+    setTimeout(() => setContractSearchMessage(''), 5000);
+  };
+
+  const handleDeleteDepense = async (id: number) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette dépense ?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('depenses')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setMessage('✅ Dépense supprimée avec succès');
+      loadData();
+      loadAvailableMonths();
+    } catch (error) {
+      console.error('Erreur suppression:', error);
+      setMessage('❌ Erreur lors de la suppression');
+    }
+
+    setTimeout(() => setMessage(''), 3000);
+  };
+
   const handleSaveDepense = async () => {
     if (!newDepense.montant) {
       setMessage('Veuillez saisir un montant');
       return;
     }
 
+    if (newDepense.type_depense === 'Remise') {
+      if (!newDepense.numero_contrat || !newDepense.client) {
+        setMessage('Veuillez rechercher et valider un contrat pour la remise');
+        return;
+      }
+    }
+
     const depense: Depense = {
       type_depense: newDepense.type_depense,
       montant: parseFloat(newDepense.montant),
       date_depense: newDepense.date_depense,
-      cree_par: username
+      cree_par: username,
+      ...(newDepense.type_depense === 'Remise' && {
+        Numero_Contrat: newDepense.numero_contrat,
+        Client: newDepense.client
+      })
     };
 
     const success = await saveDepense(depense);
@@ -120,9 +253,13 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       setNewDepense({
         type_depense: 'Frais Bureau',
         montant: '',
-        date_depense: new Date().toISOString().split('T')[0]
+        date_depense: new Date().toISOString().split('T')[0],
+        numero_contrat: '',
+        client: ''
       });
+      setContractSearchMessage('');
       loadData();
+      loadAvailableMonths();
     } else {
       setMessage('❌ Erreur lors de l\'enregistrement de la dépense');
     }
@@ -267,6 +404,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
               <option value="A/S Islem">A/S Islem</option>
               <option value="Reprise sur Avance Client">Reprise sur Avance Client</option>
               <option value="Versement Bancaire">Versement Bancaire</option>
+              <option value="Remise">Remise</option>
             </select>
           </div>
           <div>
@@ -290,6 +428,56 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
             />
           </div>
         </div>
+
+        {/* Champs conditionnels pour Remise */}
+        {newDepense.type_depense === 'Remise' && (
+          <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h5 className="text-sm font-semibold text-blue-800 mb-3">Recherche de contrat</h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Numéro de contrat *</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newDepense.numero_contrat}
+                    onChange={(e) => setNewDepense({...newDepense, numero_contrat: e.target.value})}
+                    className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Ex: 12345"
+                  />
+                  <button
+                    onClick={handleSearchContract}
+                    disabled={searchingContract}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
+                  >
+                    {searchingContract ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <Search className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Client (Assuré)</label>
+                <input
+                  type="text"
+                  value={newDepense.client}
+                  readOnly
+                  className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50"
+                  placeholder="Rechercher d'abord le contrat"
+                />
+              </div>
+            </div>
+            {contractSearchMessage && (
+              <div className={`mt-3 text-sm p-2 rounded ${
+                contractSearchMessage.includes('✅') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              }`}>
+                {contractSearchMessage}
+              </div>
+            )}
+          </div>
+        )}
+
         <button
           onClick={handleSaveDepense}
           className="mt-4 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2"
@@ -297,6 +485,26 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
           <Save className="w-4 h-4" />
           <span>Enregistrer</span>
         </button>
+      </div>
+
+      {/* Filtre par mois */}
+      <div className="bg-white rounded-lg p-4 mb-4 border border-red-200">
+        <div className="flex items-center gap-3">
+          <Calendar className="w-5 h-5 text-red-600" />
+          <label className="text-sm font-medium text-gray-700">Filtrer par:</label>
+          <select
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
+            className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+          >
+            <option value="all">Session actuelle</option>
+            {availableMonths.map(month => (
+              <option key={month} value={month}>
+                {new Date(month + '-01').toLocaleDateString('fr-FR', { year: 'numeric', month: 'long' })}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Liste des dépenses */}
@@ -310,6 +518,9 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                 <th className="px-6 py-3 text-left text-xs font-medium text-red-600 uppercase tracking-wider">Montant (DT)</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-red-600 uppercase tracking-wider">Date</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-red-600 uppercase tracking-wider">Créé par</th>
+                {monthFilter === 'all' && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-red-600 uppercase tracking-wider">Action</th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -323,6 +534,17 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                     {depense.date_depense ? new Date(depense.date_depense).toLocaleDateString('fr-FR') : '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{depense.cree_par}</td>
+                  {monthFilter === 'all' && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <button
+                        onClick={() => handleDeleteDepense(depense.id!)}
+                        className="text-red-600 hover:text-red-800 transition-colors"
+                        title="Supprimer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

@@ -8,6 +8,8 @@ export interface Depense {
   date_depense?: string;
   cree_par: string;
   created_at?: string;
+  Numero_Contrat?: string;
+  Client?: string;
 }
 
 export interface RecetteExceptionnelle {
