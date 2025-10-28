@@ -113,7 +113,7 @@ export default function ChequesManagement() {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
     return new Intl.NumberFormat('fr-FR', {
       style: 'currency',
-      currency: 'DT'
+      currency: 'MAD'
     }).format(numAmount);
   };
 
