@@ -31,7 +31,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
   const [newDepense, setNewDepense] = useState({
     type_depense: 'Frais Bureau',
     montant: '',
-    date_depense: new Date().toISOString().split('T')[0],
+    date_depense: getSessionDate(),
     numero_contrat: '',
     client: ''
   });
@@ -45,7 +45,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
   const [newRecette, setNewRecette] = useState({
     type_recette: 'Hamza',
     montant: '',
-    date_recette: new Date().toISOString().split('T')[0]
+    date_recette: getSessionDate()
   });
 
   // États pour les ristournes
@@ -55,7 +55,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     client: '',
     montant_ristourne: '',
     date_ristourne: new Date().toISOString().split('T')[0],
-    date_paiement_ristourne: new Date().toISOString().split('T')[0],
+    date_paiement_ristourne: getSessionDate(),
     type_paiement: 'Espece' as 'Espece' | 'Cheque' | 'Banque'
   });
   const [ristourneDateFilter, setRistourneDateFilter] = useState({
@@ -72,7 +72,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     montant: '',
     client: '',
     date_sinistre: new Date().toISOString().split('T')[0],
-    date_paiement_sinistre: new Date().toISOString().split('T')[0]
+    date_paiement_sinistre: getSessionDate()
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -277,7 +277,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       setNewDepense({
         type_depense: 'Frais Bureau',
         montant: '',
-        date_depense: new Date().toISOString().split('T')[0],
+        date_depense: getSessionDate(),
         numero_contrat: '',
         client: ''
       });
@@ -309,7 +309,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       setNewRecette({
         type_recette: 'Hamza',
         montant: '',
-        date_recette: new Date().toISOString().split('T')[0]
+        date_recette: getSessionDate()
       });
       loadData();
     } else {
@@ -400,7 +400,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         client: '',
         montant_ristourne: '',
         date_ristourne: new Date().toISOString().split('T')[0],
-        date_paiement_ristourne: new Date().toISOString().split('T')[0],
+        date_paiement_ristourne: getSessionDate(),
         type_paiement: 'Espece'
       });
       setRistourneCheckMessage('');
@@ -443,7 +443,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         montant: '',
         client: '',
         date_sinistre: new Date().toISOString().split('T')[0],
-        date_paiement_sinistre: new Date().toISOString().split('T')[0]
+        date_paiement_sinistre: getSessionDate()
       });
       loadData();
     } else {
@@ -494,8 +494,8 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
             <input
               type="date"
               value={newDepense.date_depense}
-              onChange={(e) => setNewDepense({...newDepense, date_depense: e.target.value})}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              readOnly
+              className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
             />
           </div>
         </div>
@@ -665,8 +665,8 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
             <input
               type="date"
               value={newRecette.date_recette}
-              onChange={(e) => setNewRecette({...newRecette, date_recette: e.target.value})}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              readOnly
+              className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
             />
           </div>
         </div>
@@ -768,8 +768,8 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
             <input
               type="date"
               value={newRistourne.date_paiement_ristourne}
-              onChange={(e) => setNewRistourne({...newRistourne, date_paiement_ristourne: e.target.value})}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              readOnly
+              className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
             />
           </div>
           <div>
@@ -960,8 +960,8 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
             <input
               type="date"
               value={newSinistre.date_paiement_sinistre}
-              onChange={(e) => setNewSinistre({...newSinistre, date_paiement_sinistre: e.target.value})}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              readOnly
+              className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
             />
           </div>
         </div>
