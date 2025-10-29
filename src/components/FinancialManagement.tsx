@@ -281,31 +281,18 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         return;
       }
 
-      const sessionDate = getSessionDate();
-
-      const { data: termesData, error: termeError } = await supabase
+      const { data: termeData, error: termeError } = await supabase
         .from('rapport')
         .select('*')
         .eq('numero_contrat', newDepense.numero_contrat)
         .eq('echeance', echeanceDate)
-        .eq('type', 'Terme');
+        .eq('type', 'Terme')
+        .maybeSingle();
 
       if (termeError) throw termeError;
 
-      if (!termesData || termesData.length === 0) {
-        setAvanceSearchMessage('❌ Cette avance ne correspond à aucun terme payé aujourd\'hui');
-        setSearchingContract(false);
-        return;
-      }
-
-      const termePayeToday = termesData.find(terme => {
-        if (!terme.created_at) return false;
-        const createdDate = new Date(terme.created_at).toISOString().split('T')[0];
-        return createdDate === sessionDate;
-      });
-
-      if (!termePayeToday) {
-        setAvanceSearchMessage('❌ Cette avance ne correspond à aucun terme payé aujourd\'hui');
+      if (!termeData) {
+        setAvanceSearchMessage('❌ Cette avance ne correspond à aucun terme');
         setSearchingContract(false);
         return;
       }
