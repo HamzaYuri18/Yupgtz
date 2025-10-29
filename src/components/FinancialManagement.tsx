@@ -276,23 +276,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       if (avanceError) throw avanceError;
 
       if (!avance) {
-        setAvanceSearchMessage('❌ Aucune avance n\'est payée par ce terme');
-        setSearchingContract(false);
-        return;
-      }
-
-      const { data: termeData, error: termeError } = await supabase
-        .from('rapport')
-        .select('*')
-        .eq('numero_contrat', newDepense.numero_contrat)
-        .eq('echeance', echeanceDate)
-        .eq('type', 'Terme')
-        .maybeSingle();
-
-      if (termeError) throw termeError;
-
-      if (!termeData) {
-        setAvanceSearchMessage('❌ Cette avance ne correspond à aucun terme');
+        setAvanceSearchMessage('❌ Aucune avance trouvée pour ce contrat et cette échéance');
         setSearchingContract(false);
         return;
       }
@@ -327,6 +311,29 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     if (newDepense.type_depense === 'Reprise sur Avance Client') {
       if (!avanceData) {
         setMessage('Veuillez rechercher et valider l\'avance avant d\'enregistrer');
+        return;
+      }
+
+      try {
+        const { data: termeData, error: termeError } = await supabase
+          .from('rapport')
+          .select('*')
+          .eq('numero_contrat', newDepense.numero_contrat)
+          .eq('echeance', newDepense.date_depense)
+          .eq('type', 'Terme')
+          .maybeSingle();
+
+        if (termeError) throw termeError;
+
+        if (!termeData) {
+          setMessage('❌ Cette avance ne correspond à aucun terme dans la table rapport');
+          setTimeout(() => setMessage(''), 5000);
+          return;
+        }
+      } catch (error) {
+        console.error('Erreur lors de la vérification du terme:', error);
+        setMessage('❌ Erreur lors de la vérification du terme');
+        setTimeout(() => setMessage(''), 3000);
         return;
       }
     }
