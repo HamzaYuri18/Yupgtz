@@ -1024,14 +1024,14 @@ export const checkEncaissementAutreCodeExists = async (
 ): Promise<any> => {
   try {
     const { data, error } = await supabase
-      .from('Encaissement_autre_code')
+      .from('encaissement_autre_code')
       .select('*')
       .eq('numero_contrat', numeroContrat)
       .eq('echeance', echeance)
       .maybeSingle();
 
     if (error && error.code !== 'PGRST116') {
-      console.error('Erreur lors de la vérification dans Encaissement_autre_code:', error);
+      console.error('Erreur lors de la vérification dans encaissement_autre_code:', error);
       return null;
     }
 
@@ -1046,7 +1046,7 @@ export const checkEncaissementAutreCodeExists = async (
 export const saveEncaissementAutreCode = async (data: any): Promise<boolean> => {
   try {
     const { error } = await supabase
-      .from('Encaissement_autre_code')
+      .from('encaissement_autre_code')
       .insert({
         numero_contrat: data.contractNumber,
         assure: data.insuredName,
@@ -1057,7 +1057,7 @@ export const saveEncaissementAutreCode = async (data: any): Promise<boolean> => 
       });
 
     if (error) {
-      console.error('Erreur lors de la sauvegarde dans Encaissement_autre_code:', error);
+      console.error('Erreur lors de la sauvegarde dans encaissement_autre_code:', error);
       return false;
     }
 
