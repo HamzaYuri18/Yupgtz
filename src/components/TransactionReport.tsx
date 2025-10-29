@@ -629,11 +629,11 @@ const TransactionReport: React.FC = () => {
         </div>
       )}
 
-      {!loading && transactions.length === 0 && searchDate && (
+      {!loading && transactions.length === 0 && (dateFrom || dateTo) && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
           <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Aucune Transaction Trouvée</h3>
-          <p className="text-gray-600">Aucune transaction n'a été trouvée pour la date sélectionnée</p>
+          <p className="text-gray-600">Aucune transaction n'a été trouvée pour la période sélectionnée</p>
         </div>
       )}
     </div>
