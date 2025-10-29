@@ -719,10 +719,10 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 onChange={handleInputChange}
                 step="0.01"
                 min="0"
-                className={`w-full p-3 border ${isRetourTechniqueMode ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white`}
+                className={`w-full p-3 border ${(isRetourTechniqueMode || isRetourContentieuxMode) ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white`}
                 placeholder="0.00"
                 required
-                disabled={formData.type === 'Terme' && !isRetourTechniqueMode}
+                disabled={formData.type === 'Terme' && !isRetourTechniqueMode && !isRetourContentieuxMode}
               />
             </div>
 

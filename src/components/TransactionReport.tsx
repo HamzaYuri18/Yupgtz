@@ -17,6 +17,9 @@ interface Transaction {
   date_paiement_prevue: string | null;
   cree_par: string;
   created_at: string;
+  echeance?: string;
+  retour_type?: string | null;
+  prime_avant_retour?: number | null;
 }
 
 interface Statistics {
@@ -206,8 +209,32 @@ const TransactionReport: React.FC = () => {
 
       if (fetchError) throw fetchError;
 
-      setTransactions(data || []);
-      setStatistics(calculateStatistics(data || []));
+      // Enrichir les transactions de type "Terme" avec les informations de retour
+      const enrichedData = await Promise.all(
+        (data || []).map(async (transaction) => {
+          if (transaction.type === 'Terme' && transaction.numero_contrat && transaction.echeance) {
+            // Chercher dans la table terme pour obtenir les infos de retour
+            const { data: termeData } = await supabase
+              .from('terme')
+              .select('"Retour", "Prime avant retour"')
+              .eq('numero_contrat', transaction.numero_contrat)
+              .eq('echeance', transaction.echeance)
+              .maybeSingle();
+
+            if (termeData) {
+              return {
+                ...transaction,
+                retour_type: termeData.Retour,
+                prime_avant_retour: termeData['Prime avant retour']
+              };
+            }
+          }
+          return transaction;
+        })
+      );
+
+      setTransactions(enrichedData);
+      setStatistics(calculateStatistics(enrichedData));
     } catch (err) {
       console.error('Erreur lors de la recherche:', err);
       setError('Erreur lors de la recherche des transactions');
@@ -225,9 +252,11 @@ const TransactionReport: React.FC = () => {
     const exportData = transactions.map(t => ({
       'ID': t.id,
       'Type': t.type,
+      'Retour': t.retour_type ? (t.retour_type === 'Technique' ? 'RT' : 'RCX') : '',
       'Branche': t.branche,
       'Numéro Contrat': t.numero_contrat,
       'Prime': t.prime,
+      'Prime Avant Retour': t.prime_avant_retour || '',
       'Assuré': t.assure,
       'Mode Paiement': t.mode_paiement,
       'Type Paiement': t.type_paiement,
@@ -527,11 +556,22 @@ const TransactionReport: React.FC = () => {
                   <tr key={transaction.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 text-sm text-gray-900">{transaction.id}</td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        transaction.type === 'Terme' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
-                      }`}>
-                        {transaction.type}
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          transaction.type === 'Terme' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                        }`}>
+                          {transaction.type}
+                        </span>
+                        {transaction.retour_type && (
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                            transaction.retour_type === 'Technique'
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-orange-100 text-orange-700'
+                          }`}>
+                            {transaction.retour_type === 'Technique' ? 'RT' : 'RCX'}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">{transaction.branche}</td>
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">{transaction.numero_contrat}</td>
