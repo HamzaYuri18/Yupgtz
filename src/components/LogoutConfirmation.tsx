@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { LogOut, FileText, Download, AlertCircle } from 'lucide-react';
 import { printSessionReport } from '../utils/pdfGenerator';
+import { saveSessionData } from '../utils/sessionService';
+import { getSessionDate } from '../utils/auth';
 
 interface LogoutConfirmationProps {
   username: string;
@@ -24,11 +26,16 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
     setIsGeneratingPDF(false);
   };
 
-  const handleConfirmLogout = () => {
+  const handleConfirmLogout = async () => {
     if (!pdfGenerated) {
       alert('Veuillez d\'abord générer et télécharger la Fiche de Caisse');
       return;
     }
+
+    // Sauvegarder les données de session avant de se déconnecter
+    const dateSession = getSessionDate();
+    await saveSessionData(username, dateSession);
+
     onConfirm();
   };
 

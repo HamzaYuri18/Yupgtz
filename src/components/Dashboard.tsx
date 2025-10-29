@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, FileText, Upload, BarChart3, Clock, User, Search, Calendar, Receipt } from 'lucide-react';
+import { LogOut, FileText, Upload, BarChart3, Clock, User, Search, Calendar, Receipt, Building2 } from 'lucide-react';
 import { DollarSign } from 'lucide-react';
 import { getSession, clearSession, isAdmin } from '../utils/auth';
 import LogoutConfirmation from './LogoutConfirmation';
@@ -13,6 +13,7 @@ import CreditPayment from './CreditPayment';
 import TermeSearch from './TermeSearch';
 import TransactionReport from './TransactionReport';
 import ChequesManagement from './ChequesManagement';
+import VersementBancaire from './VersementBancaire';
 
 interface DashboardProps {
   username: string;
@@ -20,7 +21,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'contract' | 'xml' | 'reports' | 'credits' | 'financial' | 'payment' | 'terme' | 'transactions' | 'cheques'>('contract');
+  const [activeTab, setActiveTab] = useState<'contract' | 'xml' | 'reports' | 'credits' | 'financial' | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement'>('contract');
   const [sessionInfo, setSessionInfo] = useState<any>(null);
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false);
 
@@ -199,17 +200,30 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
               <span>Rapport Transactions</span>
             </button>
             {username.toLowerCase() === 'hamza' && (
-              <button
-                onClick={() => setActiveTab('cheques')}
-                className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
-                  activeTab === 'cheques'
-                    ? 'border-teal-500 text-teal-600 bg-teal-50/50'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <Receipt className="w-4 h-4" />
-                <span>Chèques</span>
-              </button>
+              <>
+                <button
+                  onClick={() => setActiveTab('cheques')}
+                  className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
+                    activeTab === 'cheques'
+                      ? 'border-teal-500 text-teal-600 bg-teal-50/50'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Receipt className="w-4 h-4" />
+                  <span>Chèques</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('versement')}
+                  className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
+                    activeTab === 'versement'
+                      ? 'border-green-500 text-green-600 bg-green-50/50'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Building2 className="w-4 h-4" />
+                  <span>Versement Bancaire</span>
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -226,6 +240,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
         {activeTab === 'terme' && <TermeSearch />}
         {activeTab === 'transactions' && <TransactionReport />}
         {activeTab === 'cheques' && username.toLowerCase() === 'hamza' && <ChequesManagement />}
+        {activeTab === 'versement' && username.toLowerCase() === 'hamza' && <VersementBancaire username={username} />}
       </main>
 
       {/* Modal de confirmation de déconnexion */}
