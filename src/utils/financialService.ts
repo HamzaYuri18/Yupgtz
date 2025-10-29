@@ -121,14 +121,26 @@ export const saveRecetteExceptionnelle = async (recette: RecetteExceptionnelle):
   try {
     console.log('💵 Sauvegarde de la recette exceptionnelle:', recette);
 
+    const insertData: any = {
+      type_recette: recette.type_recette,
+      montant: recette.montant,
+      date_recette: recette.date_recette || new Date().toISOString().split('T')[0],
+      cree_par: recette.cree_par
+    };
+
+    if (recette.Numero_Contrat) {
+      insertData.Numero_Contrat = recette.Numero_Contrat;
+    }
+    if (recette.Echeance) {
+      insertData.Echeance = recette.Echeance;
+    }
+    if (recette.Assure) {
+      insertData.Assure = recette.Assure;
+    }
+
     const { data, error } = await supabase
       .from('recettes_exceptionnelles')
-      .insert([{
-        type_recette: recette.type_recette,
-        montant: recette.montant,
-        date_recette: recette.date_recette || new Date().toISOString().split('T')[0],
-        cree_par: recette.cree_par
-      }])
+      .insert([insertData])
       .select();
 
     if (error) {
