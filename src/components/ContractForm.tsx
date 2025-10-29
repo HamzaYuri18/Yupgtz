@@ -386,6 +386,102 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
         }
       }
 
+      // VÉRIFICATIONS POUR ENCAISSEMENT POUR AUTRE CODE
+      if (contract.type === 'Encaissement pour autre code') {
+        const existing = await checkEncaissementAutreCodeExists(
+          contract.contractNumber,
+          formData.dateEcheance
+        );
+
+        if (existing) {
+          const datePaiement = new Date(existing.created_at).toLocaleDateString('fr-FR');
+          setMessage(`❌ Ce contrat est déjà payé le ${datePaiement}`);
+          setIsLoading(false);
+          setFormData({
+            type: 'Affaire',
+            branch: 'Auto',
+            contractNumber: '',
+            premiumAmount: '',
+            insuredName: '',
+            paymentMode: 'Espece',
+            paymentType: 'Au comptant',
+            creditAmount: '',
+            paymentDate: '',
+            numeroCheque: '',
+            banque: '',
+            dateEncaissementPrevue: '',
+            dateEcheance: ''
+          });
+          setXmlSearchResult(null);
+          setShowAutreCodeMessage(false);
+          return;
+        }
+
+        // Sauvegarder dans la table Encaissement_autre_code
+        const autreCodeSuccess = await saveEncaissementAutreCode({
+          contractNumber: contract.contractNumber,
+          insuredName: contract.insuredName,
+          premiumAmount: contract.premiumAmount,
+          dateEcheance: formData.dateEcheance,
+          paymentMode: contract.paymentMode,
+          createdBy: username
+        });
+
+        if (!autreCodeSuccess) {
+          setMessage('❌ Erreur lors de la sauvegarde dans Encaissement_autre_code');
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // VÉRIFICATIONS POUR AVENANT CHANGEMENT DE VÉHICULE
+      if (contract.type === 'Avenant changement de véhicule') {
+        const sessionDate = getSessionDate();
+        const existing = await checkAvenantChangementVehiculeExists(
+          contract.contractNumber,
+          sessionDate
+        );
+
+        if (existing) {
+          const dateCreation = new Date(existing.created_at).toLocaleDateString('fr-FR');
+          setMessage(`❌ Cet avenant est déjà effectué le ${dateCreation}`);
+          setIsLoading(false);
+          setFormData({
+            type: 'Affaire',
+            branch: 'Auto',
+            contractNumber: '',
+            premiumAmount: '',
+            insuredName: '',
+            paymentMode: 'Espece',
+            paymentType: 'Au comptant',
+            creditAmount: '',
+            paymentDate: '',
+            numeroCheque: '',
+            banque: '',
+            dateEncaissementPrevue: '',
+            dateEcheance: ''
+          });
+          setXmlSearchResult(null);
+          return;
+        }
+
+        // Sauvegarder dans la table Avenant_Changement_véhicule
+        const avenantSuccess = await saveAvenantChangementVehicule({
+          contractNumber: contract.contractNumber,
+          insuredName: contract.insuredName,
+          premiumAmount: contract.premiumAmount,
+          branch: contract.branch,
+          paymentMode: contract.paymentMode,
+          createdBy: username
+        });
+
+        if (!avenantSuccess) {
+          setMessage('❌ Erreur lors de la sauvegarde dans Avenant_Changement_véhicule');
+          setIsLoading(false);
+          return;
+        }
+      }
+
       // Sauvegarder localement
       saveContract(contract);
 
