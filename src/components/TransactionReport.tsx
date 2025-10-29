@@ -213,25 +213,41 @@ const TransactionReport: React.FC = () => {
       const enrichedData = await Promise.all(
         (data || []).map(async (transaction) => {
           if (transaction.type === 'Terme' && transaction.numero_contrat && transaction.echeance) {
-            // Chercher dans la table terme pour obtenir les infos de retour
-            const { data: termeData } = await supabase
-              .from('terme')
-              .select('"Retour", "Prime avant retour"')
-              .eq('numero_contrat', transaction.numero_contrat)
-              .eq('echeance', transaction.echeance)
-              .maybeSingle();
+            try {
+              // Normaliser la date d'échéance (format YYYY-MM-DD)
+              const echeanceDate = new Date(transaction.echeance);
+              const echeanceISO = echeanceDate.toISOString().split('T')[0];
 
-            if (termeData) {
-              return {
-                ...transaction,
-                retour_type: termeData.Retour,
-                prime_avant_retour: termeData['Prime avant retour']
-              };
+              // Chercher dans la table terme pour obtenir les infos de retour
+              const { data: termeData, error: termeError } = await supabase
+                .from('terme')
+                .select('"Retour", "Prime avant retour"')
+                .eq('numero_contrat', transaction.numero_contrat)
+                .eq('echeance', echeanceISO)
+                .maybeSingle();
+
+              if (termeError) {
+                console.error('Erreur lors de la récupération des infos de retour:', termeError);
+              }
+
+              if (termeData && termeData.Retour) {
+                console.log(`✅ Retour trouvé pour ${transaction.numero_contrat}:`, termeData);
+                return {
+                  ...transaction,
+                  retour_type: termeData.Retour,
+                  prime_avant_retour: termeData['Prime avant retour']
+                };
+              }
+            } catch (error) {
+              console.error('Erreur lors du traitement du retour:', error);
             }
           }
           return transaction;
         })
       );
+
+      const transactionsAvecRetour = enrichedData.filter(t => t.retour_type);
+      console.log(`📊 ${transactionsAvecRetour.length} transaction(s) avec retour:`, transactionsAvecRetour);
 
       setTransactions(enrichedData);
       setStatistics(calculateStatistics(enrichedData));
