@@ -147,6 +147,29 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     }
   };
 
+  const resetForm = () => {
+    setFormData({
+      type: 'Affaire',
+      branch: 'Auto',
+      contractNumber: '',
+      premiumAmount: '',
+      insuredName: '',
+      paymentMode: 'Espece',
+      paymentType: 'Au comptant',
+      creditAmount: '',
+      paymentDate: '',
+      numeroCheque: '',
+      banque: '',
+      dateEncaissementPrevue: '',
+      dateEcheance: ''
+    });
+    setXmlSearchResult(null);
+    setIsRetourTechniqueMode(false);
+    setIsRetourContentieuxMode(false);
+    setOriginalPremiumAmount('');
+    setShowAutreCodeMessage(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -270,23 +293,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           const datePaiement = new Date(existingInTerme.date_paiement).toLocaleDateString('fr-FR');
           setMessage(`❌ Le terme est déjà payé en date du ${datePaiement}`);
           setIsLoading(false);
-          setFormData({
-            type: 'Affaire',
-            branch: 'Auto',
-            contractNumber: '',
-            premiumAmount: '',
-            insuredName: '',
-            paymentMode: 'Espece',
-            paymentType: 'Au comptant',
-            creditAmount: '',
-            paymentDate: '',
-            numeroCheque: '',
-            banque: '',
-            dateEncaissementPrevue: ''
-          });
-          setXmlSearchResult(null);
-          setIsRetourTechniqueMode(false);
-          setOriginalPremiumAmount('');
+          resetForm();
           return;
         }
 
@@ -300,23 +307,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           const datePaiement = new Date(existingInRapport.created_at).toLocaleDateString('fr-FR');
           setMessage(`❌ Le terme est déjà payé en date du ${datePaiement}`);
           setIsLoading(false);
-          setFormData({
-            type: 'Affaire',
-            branch: 'Auto',
-            contractNumber: '',
-            premiumAmount: '',
-            insuredName: '',
-            paymentMode: 'Espece',
-            paymentType: 'Au comptant',
-            creditAmount: '',
-            paymentDate: '',
-            numeroCheque: '',
-            banque: '',
-            dateEncaissementPrevue: ''
-          });
-          setXmlSearchResult(null);
-          setIsRetourTechniqueMode(false);
-          setOriginalPremiumAmount('');
+          resetForm();
           return;
         }
       }
@@ -335,23 +326,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           const datePaiement = new Date(existingInAffaire.created_at).toLocaleDateString('fr-FR');
           setMessage(`❌ Ce contrat est déjà souscrit en date du ${datePaiement}`);
           setIsLoading(false);
-          setFormData({
-            type: 'Affaire',
-            branch: 'Auto',
-            contractNumber: '',
-            premiumAmount: '',
-            insuredName: '',
-            paymentMode: 'Espece',
-            paymentType: 'Au comptant',
-            creditAmount: '',
-            paymentDate: '',
-            numeroCheque: '',
-            banque: '',
-            dateEncaissementPrevue: ''
-          });
-          setXmlSearchResult(null);
-          setIsRetourTechniqueMode(false);
-          setOriginalPremiumAmount('');
+          resetForm();
           return;
         }
 
@@ -365,23 +340,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           const datePaiement = new Date(existingInRapport.created_at).toLocaleDateString('fr-FR');
           setMessage(`❌ Ce contrat est déjà souscrit en date du ${datePaiement}`);
           setIsLoading(false);
-          setFormData({
-            type: 'Affaire',
-            branch: 'Auto',
-            contractNumber: '',
-            premiumAmount: '',
-            insuredName: '',
-            paymentMode: 'Espece',
-            paymentType: 'Au comptant',
-            creditAmount: '',
-            paymentDate: '',
-            numeroCheque: '',
-            banque: '',
-            dateEncaissementPrevue: ''
-          });
-          setXmlSearchResult(null);
-          setIsRetourTechniqueMode(false);
-          setOriginalPremiumAmount('');
+          resetForm();
           return;
         }
       }
@@ -397,23 +356,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           const datePaiement = new Date(existing.created_at).toLocaleDateString('fr-FR');
           setMessage(`❌ Ce contrat est déjà payé le ${datePaiement}`);
           setIsLoading(false);
-          setFormData({
-            type: 'Affaire',
-            branch: 'Auto',
-            contractNumber: '',
-            premiumAmount: '',
-            insuredName: '',
-            paymentMode: 'Espece',
-            paymentType: 'Au comptant',
-            creditAmount: '',
-            paymentDate: '',
-            numeroCheque: '',
-            banque: '',
-            dateEncaissementPrevue: '',
-            dateEcheance: ''
-          });
-          setXmlSearchResult(null);
-          setShowAutreCodeMessage(false);
+          resetForm();
           return;
         }
 
@@ -446,22 +389,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           const dateCreation = new Date(existing.created_at).toLocaleDateString('fr-FR');
           setMessage(`❌ Cet avenant est déjà effectué le ${dateCreation}`);
           setIsLoading(false);
-          setFormData({
-            type: 'Affaire',
-            branch: 'Auto',
-            contractNumber: '',
-            premiumAmount: '',
-            insuredName: '',
-            paymentMode: 'Espece',
-            paymentType: 'Au comptant',
-            creditAmount: '',
-            paymentDate: '',
-            numeroCheque: '',
-            banque: '',
-            dateEncaissementPrevue: '',
-            dateEcheance: ''
-          });
-          setXmlSearchResult(null);
+          resetForm();
           return;
         }
 
@@ -517,7 +445,19 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       // SAUVEGARDES SPÉCIFIQUES
       if (contract.type === 'Terme' && xmlSearchResult) {
         try {
-          await saveTermeContract(contract);
+          // Déterminer le type de retour
+          let retourType: 'Technique' | 'Contentieux' | null = null;
+          let originalPrime: number | undefined = undefined;
+
+          if (isRetourTechniqueMode) {
+            retourType = 'Technique';
+            originalPrime = parseFloat(originalPremiumAmount);
+          } else if (isRetourContentieuxMode) {
+            retourType = 'Contentieux';
+            originalPrime = parseFloat(originalPremiumAmount);
+          }
+
+          await saveTermeContract(contract, retourType, originalPrime);
           setMessage(prev => prev + ' + Terme');
         } catch (termeError) {
           console.error('Erreur Terme:', termeError);
@@ -582,23 +522,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       }
       
       // Reset form
-      setFormData({
-        type: 'Affaire',
-        branch: 'Auto',
-        contractNumber: '',
-        premiumAmount: '',
-        insuredName: '',
-        paymentMode: 'Espece',
-        paymentType: 'Au comptant',
-        creditAmount: '',
-        paymentDate: '',
-        numeroCheque: '',
-        banque: '',
-        dateEncaissementPrevue: ''
-      });
-      setXmlSearchResult(null);
-      setIsRetourTechniqueMode(false);
-      setOriginalPremiumAmount('');
+      resetForm();
 
     } catch (error) {
       console.error('Erreur générale:', error);

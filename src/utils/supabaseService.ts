@@ -197,7 +197,11 @@ export const saveCreditContract = async (contractData: any): Promise<boolean> =>
 };
 
 // Fonction pour sauvegarder un contrat Terme
-export const saveTermeContract = async (contractData: any): Promise<boolean> => {
+export const saveTermeContract = async (
+  contractData: any,
+  retourType?: 'Technique' | 'Contentieux' | null,
+  originalPrimeAmount?: number
+): Promise<boolean> => {
   try {
     console.log('📝 Sauvegarde du contrat Terme...');
 
@@ -209,7 +213,7 @@ export const saveTermeContract = async (contractData: any): Promise<boolean> => 
 
     const echeanceISO = convertExcelDateToISO(contractData.xmlData?.maturity || contractData.echeance);
 
-    const insertData = {
+    const insertData: any = {
       numero_contrat: contractData.contractNumber || '',
       prime: primeValue,
       assure: contractData.insuredName || '',
@@ -218,6 +222,15 @@ export const saveTermeContract = async (contractData: any): Promise<boolean> => 
       date_paiement: new Date().toISOString().split('T')[0],
       cree_par: contractData.createdBy || 'Système'
     };
+
+    // Ajouter les informations de retour si applicable
+    if (retourType) {
+      insertData.Retour = retourType;
+      if (originalPrimeAmount) {
+        insertData['Prime avant retour'] = originalPrimeAmount;
+      }
+      console.log(`🔄 Retour ${retourType} détecté - Prime avant retour: ${originalPrimeAmount}, Prime actuelle: ${primeValue}`);
+    }
 
     const { data, error } = await supabase
       .from('terme')
