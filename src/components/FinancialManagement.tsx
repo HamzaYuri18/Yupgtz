@@ -39,13 +39,18 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [searchingContract, setSearchingContract] = useState(false);
   const [contractSearchMessage, setContractSearchMessage] = useState('');
+  const [avanceData, setAvanceData] = useState<any>(null);
+  const [avanceSearchMessage, setAvanceSearchMessage] = useState('');
 
   // États pour les recettes exceptionnelles
   const [recettes, setRecettes] = useState<RecetteExceptionnelle[]>([]);
   const [newRecette, setNewRecette] = useState({
     type_recette: 'Hamza',
     montant: '',
-    date_recette: getSessionDate()
+    date_recette: getSessionDate(),
+    numero_contrat: '',
+    echeance: '',
+    assure: ''
   });
 
   // États pour les ristournes
@@ -247,6 +252,73 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     setTimeout(() => setMessage(''), 3000);
   };
 
+  const handleSearchAvance = async () => {
+    if (!newDepense.numero_contrat) {
+      setAvanceSearchMessage('Veuillez saisir un numéro de contrat');
+      return;
+    }
+
+    setSearchingContract(true);
+    setAvanceSearchMessage('');
+    setAvanceData(null);
+
+    try {
+      const echeanceDate = newDepense.date_depense;
+
+      const { data: avance, error: avanceError } = await supabase
+        .from('recettes_exceptionnelles')
+        .select('*')
+        .eq('Numero_Contrat', newDepense.numero_contrat)
+        .eq('Echeance', echeanceDate)
+        .eq('type_recette', 'Avance Client')
+        .maybeSingle();
+
+      if (avanceError) throw avanceError;
+
+      if (!avance) {
+        setAvanceSearchMessage('❌ Aucune avance n\'est payée par ce terme');
+        setSearchingContract(false);
+        return;
+      }
+
+      const sessionDate = getSessionDate();
+      const startOfDay = new Date(sessionDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(sessionDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const { data: termePayeToday, error: termeError } = await supabase
+        .from('rapport')
+        .select('*')
+        .eq('numero_contrat', newDepense.numero_contrat)
+        .eq('echeance', echeanceDate)
+        .eq('type', 'Terme')
+        .gte('created_at', startOfDay.toISOString())
+        .lte('created_at', endOfDay.toISOString())
+        .maybeSingle();
+
+      if (termeError) throw termeError;
+
+      if (!termePayeToday) {
+        setAvanceSearchMessage('❌ Cette avance ne correspond à aucun terme payé aujourd\'hui');
+        setSearchingContract(false);
+        return;
+      }
+
+      setAvanceData(avance);
+      setNewDepense({
+        ...newDepense,
+        client: avance.Assure || ''
+      });
+      setAvanceSearchMessage(`✅ Avance trouvée: ${avance.Assure} - ${avance.montant} DT`);
+    } catch (error) {
+      console.error('Erreur lors de la recherche de l\'avance:', error);
+      setAvanceSearchMessage('❌ Erreur lors de la recherche');
+    } finally {
+      setSearchingContract(false);
+    }
+  };
+
   const handleSaveDepense = async () => {
     if (!newDepense.montant) {
       setMessage('Veuillez saisir un montant');
@@ -260,12 +332,19 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       }
     }
 
+    if (newDepense.type_depense === 'Reprise sur Avance Client') {
+      if (!avanceData) {
+        setMessage('Veuillez rechercher et valider l\'avance avant d\'enregistrer');
+        return;
+      }
+    }
+
     const depense: Depense = {
       type_depense: newDepense.type_depense,
       montant: parseFloat(newDepense.montant),
       date_depense: newDepense.date_depense,
       cree_par: username,
-      ...(newDepense.type_depense === 'Remise' && {
+      ...((newDepense.type_depense === 'Remise' || newDepense.type_depense === 'Reprise sur Avance Client') && {
         Numero_Contrat: newDepense.numero_contrat,
         Client: newDepense.client
       })
@@ -282,6 +361,8 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         client: ''
       });
       setContractSearchMessage('');
+      setAvanceSearchMessage('');
+      setAvanceData(null);
       loadData();
       loadAvailableMonths();
     } else {
@@ -296,11 +377,23 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       return;
     }
 
+    if (newRecette.type_recette === 'Avance Client') {
+      if (!newRecette.numero_contrat || !newRecette.echeance || !newRecette.assure) {
+        setMessage('Veuillez saisir le numéro de contrat, l\'échéance et l\'assuré pour une avance client');
+        return;
+      }
+    }
+
     const recette: RecetteExceptionnelle = {
       type_recette: newRecette.type_recette,
       montant: parseFloat(newRecette.montant),
       date_recette: newRecette.date_recette,
-      cree_par: username
+      cree_par: username,
+      ...(newRecette.type_recette === 'Avance Client' && {
+        Numero_Contrat: newRecette.numero_contrat,
+        Echeance: newRecette.echeance,
+        Assure: newRecette.assure
+      })
     };
 
     const success = await saveRecetteExceptionnelle(recette);
@@ -309,7 +402,10 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       setNewRecette({
         type_recette: 'Hamza',
         montant: '',
-        date_recette: getSessionDate()
+        date_recette: getSessionDate(),
+        numero_contrat: '',
+        echeance: '',
+        assure: ''
       });
       loadData();
     } else {
@@ -549,6 +645,63 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
           </div>
         )}
 
+        {/* Champs conditionnels pour Reprise sur Avance Client */}
+        {newDepense.type_depense === 'Reprise sur Avance Client' && (
+          <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+            <h5 className="text-sm font-semibold text-purple-800 mb-3">Validation de l'avance client</h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Numéro de contrat *</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newDepense.numero_contrat}
+                    onChange={(e) => setNewDepense({...newDepense, numero_contrat: e.target.value})}
+                    className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Ex: CI..."
+                  />
+                  <button
+                    onClick={handleSearchAvance}
+                    disabled={searchingContract}
+                    className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
+                  >
+                    {searchingContract ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <Search className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Client (Assuré)</label>
+                <input
+                  type="text"
+                  value={newDepense.client}
+                  readOnly
+                  className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50"
+                  placeholder="Rechercher d'abord l'avance"
+                />
+              </div>
+            </div>
+            {avanceSearchMessage && (
+              <div className={`mt-3 text-sm p-2 rounded ${
+                avanceSearchMessage.includes('✅') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              }`}>
+                {avanceSearchMessage}
+              </div>
+            )}
+            <div className="mt-2 text-xs text-purple-700">
+              <p>💡 Cette fonction vérifie que :</p>
+              <ul className="list-disc ml-5 mt-1">
+                <li>Une avance client existe pour ce contrat</li>
+                <li>L'échéance correspond à la date du jour</li>
+                <li>Un terme a été payé aujourd'hui pour ce contrat</li>
+              </ul>
+            </div>
+          </div>
+        )}
+
         <button
           onClick={handleSaveDepense}
           className="mt-4 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2"
@@ -670,6 +823,41 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
             />
           </div>
         </div>
+
+        {newRecette.type_recette === 'Avance Client' && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 p-4 bg-blue-50 rounded-lg">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Numéro de contrat</label>
+              <input
+                type="text"
+                value={newRecette.numero_contrat}
+                onChange={(e) => setNewRecette({...newRecette, numero_contrat: e.target.value})}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="CI..."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Échéance</label>
+              <input
+                type="date"
+                value={newRecette.echeance}
+                onChange={(e) => setNewRecette({...newRecette, echeance: e.target.value})}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nom de l'assuré</label>
+              <input
+                type="text"
+                value={newRecette.assure}
+                onChange={(e) => setNewRecette({...newRecette, assure: e.target.value})}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="Nom de l'assuré"
+              />
+            </div>
+          </div>
+        )}
+
         <button
           onClick={handleSaveRecette}
           className="mt-4 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2"

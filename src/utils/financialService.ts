@@ -19,6 +19,9 @@ export interface RecetteExceptionnelle {
   date_recette?: string;
   cree_par: string;
   created_at?: string;
+  Numero_Contrat?: string;
+  Echeance?: string;
+  Assure?: string;
 }
 
 export interface Ristourne {
