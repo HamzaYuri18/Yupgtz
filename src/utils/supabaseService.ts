@@ -34,10 +34,16 @@ export const saveContractToRapport = async (contractData: any): Promise<boolean>
       console.log('💰 Montant crédit calculé:', montantCreditValue);
     }
 
+    // Mapper les types de contrat pour la table rapport
+    let rapportType = contractData.type;
+    if (contractData.type === 'Avenant changement de véhicule') {
+      rapportType = 'Avenant';
+    }
+
     // Préparer les données avec la nouvelle logique
     const insertData = {
       // Colonnes principales
-      type: contractData.type || null,
+      type: rapportType || null,
       branche: contractData.branch || null,
       numero_contrat: contractData.contractNumber || '',
       prime: primeValue, // ✅ TOUJOURS LE MONTANT COMPLET DE LA PRIME
