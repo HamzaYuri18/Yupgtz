@@ -263,20 +263,23 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     setAvanceData(null);
 
     try {
-      const echeanceDate = newDepense.date_depense;
-
       const { data: avance, error: avanceError } = await supabase
         .from('recettes_exceptionnelles')
         .select('*')
         .eq('Numero_Contrat', newDepense.numero_contrat)
-        .eq('Echeance', echeanceDate)
         .eq('type_recette', 'Avance Client')
         .maybeSingle();
 
       if (avanceError) throw avanceError;
 
       if (!avance) {
-        setAvanceSearchMessage('❌ Aucune avance trouvée pour ce contrat et cette échéance');
+        setAvanceSearchMessage('❌ Aucune avance trouvée pour ce contrat');
+        setSearchingContract(false);
+        return;
+      }
+
+      if (avance.Statut === 'Liquidée') {
+        setAvanceSearchMessage('❌ Cette avance est déjà liquidée');
         setSearchingContract(false);
         return;
       }
@@ -286,7 +289,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         ...newDepense,
         client: avance.Assure || ''
       });
-      setAvanceSearchMessage(`✅ Avance trouvée: ${avance.Assure} - ${avance.montant} DT`);
+      setAvanceSearchMessage(`✅ Avance trouvée: ${avance.Assure} - ${avance.montant} DT - Échéance: ${avance.Echeance}`);
     } catch (error) {
       console.error('Erreur lors de la recherche de l\'avance:', error);
       setAvanceSearchMessage('❌ Erreur lors de la recherche');
@@ -330,6 +333,13 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
           setTimeout(() => setMessage(''), 5000);
           return;
         }
+
+        const { error: updateError } = await supabase
+          .from('recettes_exceptionnelles')
+          .update({ Statut: 'Liquidée' })
+          .eq('id', avanceData.id);
+
+        if (updateError) throw updateError;
       } catch (error) {
         console.error('Erreur lors de la vérification du terme:', error);
         setMessage('❌ Erreur lors de la vérification du terme');
