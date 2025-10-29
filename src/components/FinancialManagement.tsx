@@ -318,8 +318,8 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         const { data: termeData, error: termeError } = await supabase
           .from('rapport')
           .select('*')
-          .eq('numero_contrat', newDepense.numero_contrat)
-          .eq('echeance', newDepense.date_depense)
+          .eq('numero_contrat', avanceData.Numero_Contrat)
+          .eq('echeance', avanceData.Echeance)
           .eq('type', 'Terme')
           .maybeSingle();
 
