@@ -1011,6 +1011,109 @@ export const getFilteredDataForExport = async (
   }
 };
 
+// Vérifier si un encaissement pour autre code existe
+export const checkEncaissementAutreCodeExists = async (
+  numeroContrat: string,
+  echeance: string
+): Promise<any> => {
+  try {
+    const { data, error } = await supabase
+      .from('Encaissement_autre_code')
+      .select('*')
+      .eq('numero_contrat', numeroContrat)
+      .eq('echeance', echeance)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Erreur lors de la vérification dans Encaissement_autre_code:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Erreur dans checkEncaissementAutreCodeExists:', error);
+    return null;
+  }
+};
+
+// Sauvegarder un encaissement pour autre code
+export const saveEncaissementAutreCode = async (data: any): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('Encaissement_autre_code')
+      .insert({
+        numero_contrat: data.contractNumber,
+        assure: data.insuredName,
+        prime: data.premiumAmount,
+        echeance: data.dateEcheance,
+        mode_paiement: data.paymentMode,
+        cree_par: data.createdBy
+      });
+
+    if (error) {
+      console.error('Erreur lors de la sauvegarde dans Encaissement_autre_code:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Erreur dans saveEncaissementAutreCode:', error);
+    return false;
+  }
+};
+
+// Vérifier si un avenant changement véhicule existe
+export const checkAvenantChangementVehiculeExists = async (
+  numeroContrat: string,
+  dateSession: string
+): Promise<any> => {
+  try {
+    const { data, error } = await supabase
+      .from('Avenant_Changement_véhicule')
+      .select('*')
+      .eq('numero_contrat', numeroContrat)
+      .gte('created_at', dateSession)
+      .lt('created_at', dateSession + 'T23:59:59')
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Erreur lors de la vérification dans Avenant_Changement_véhicule:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Erreur dans checkAvenantChangementVehiculeExists:', error);
+    return null;
+  }
+};
+
+// Sauvegarder un avenant changement véhicule
+export const saveAvenantChangementVehicule = async (data: any): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('Avenant_Changement_véhicule')
+      .insert({
+        numero_contrat: data.contractNumber,
+        assure: data.insuredName,
+        prime: data.premiumAmount,
+        branche: data.branch,
+        mode_paiement: data.paymentMode,
+        cree_par: data.createdBy
+      });
+
+    if (error) {
+      console.error('Erreur lors de la sauvegarde dans Avenant_Changement_véhicule:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Erreur dans saveAvenantChangementVehicule:', error);
+    return false;
+  }
+};
+
 export default {
   saveContractToRapport,
   saveAffaireContract,
@@ -1032,5 +1135,9 @@ export default {
   insertContractsToTable,
   searchCreditByContractNumber,
   getFilteredDataForExport,
-  saveCheque
+  saveCheque,
+  checkEncaissementAutreCodeExists,
+  saveEncaissementAutreCode,
+  checkAvenantChangementVehiculeExists,
+  saveAvenantChangementVehicule
 };

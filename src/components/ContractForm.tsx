@@ -3,7 +3,7 @@ import { Save, FileText, DollarSign, Calendar, Search, CreditCard, User, Hash, B
 import { Contract } from '../types';
 import { saveContract, generateContractId, getXMLContracts } from '../utils/storage';
 import { findContractInXLSX } from '../utils/xlsxParser';
-import { searchContractInTable, getAvailableMonths, saveAffaireContract, saveCreditContract, saveContractToRapport, checkTermeContractExists, saveTermeContract,checkAffaireContractExists,checkAffaireInRapport,checkTermeInRapport, saveCheque} from '../utils/supabaseService';
+import { searchContractInTable, getAvailableMonths, saveAffaireContract, saveCreditContract, saveContractToRapport, checkTermeContractExists, saveTermeContract,checkAffaireContractExists,checkAffaireInRapport,checkTermeInRapport, saveCheque, checkEncaissementAutreCodeExists, saveEncaissementAutreCode, checkAvenantChangementVehiculeExists, saveAvenantChangementVehicule} from '../utils/supabaseService';
 import { getSessionDate } from '../utils/auth';
 
 interface ContractFormProps {
@@ -12,7 +12,7 @@ interface ContractFormProps {
 
 const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const [formData, setFormData] = useState({
-    type: 'Affaire' as 'Terme' | 'Affaire',
+    type: 'Affaire' as 'Terme' | 'Affaire' | 'Avenant changement de véhicule' | 'Encaissement pour autre code',
     branch: 'Auto' as 'Auto' | 'Vie' | 'Santé' | 'IRDS',
     contractNumber: '',
     premiumAmount: '',
@@ -23,7 +23,8 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     paymentDate: '',
     numeroCheque: '',
     banque: '',
-    dateEncaissementPrevue: ''
+    dateEncaissementPrevue: '',
+    dateEcheance: ''
   });
 
   const [xmlSearchResult, setXmlSearchResult] = useState<any>(null);
@@ -32,7 +33,9 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [isRetourTechniqueMode, setIsRetourTechniqueMode] = useState(false);
+  const [isRetourContentieuxMode, setIsRetourContentieuxMode] = useState(false);
   const [originalPremiumAmount, setOriginalPremiumAmount] = useState('');
+  const [showAutreCodeMessage, setShowAutreCodeMessage] = useState(false);
 
   React.useEffect(() => {
     loadAvailableMonths();
@@ -129,6 +132,19 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       setOriginalPremiumAmount(formData.premiumAmount);
     }
     setIsRetourTechniqueMode(!isRetourTechniqueMode);
+    if (isRetourContentieuxMode) {
+      setIsRetourContentieuxMode(false);
+    }
+  };
+
+  const handleRetourContentieuxClick = () => {
+    if (!isRetourContentieuxMode) {
+      setOriginalPremiumAmount(formData.premiumAmount);
+    }
+    setIsRetourContentieuxMode(!isRetourContentieuxMode);
+    if (isRetourTechniqueMode) {
+      setIsRetourTechniqueMode(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -518,12 +534,21 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               <select
                 name="type"
                 value={formData.type}
-                onChange={handleInputChange}
+                onChange={(e) => {
+                  handleInputChange(e);
+                  if (e.target.value === 'Encaissement pour autre code') {
+                    setShowAutreCodeMessage(true);
+                  } else {
+                    setShowAutreCodeMessage(false);
+                  }
+                }}
                 className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 required
               >
                 <option value="Affaire">Affaire</option>
                 <option value="Terme">Terme</option>
+                <option value="Avenant changement de véhicule">Avenant changement de véhicule</option>
+                <option value="Encaissement pour autre code">Encaissement pour autre code</option>
               </select>
             </div>
 
@@ -597,6 +622,36 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               )}
             </div>
           </div>
+
+          {/* Champ Date d'échéance pour Encaissement autre code */}
+          {formData.type === 'Encaissement pour autre code' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                <Calendar className="w-4 h-4 mr-2" />
+                Date d'échéance *
+              </label>
+              <input
+                type="date"
+                name="dateEcheance"
+                value={formData.dateEcheance}
+                onChange={handleInputChange}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
+                required
+              />
+            </div>
+          )}
+
+          {/* Message pour Encaissement autre code */}
+          {showAutreCodeMessage && (
+            <div className="bg-blue-50 border border-blue-300 rounded-lg p-4">
+              <p className="text-sm text-blue-800 font-medium">
+                📢 Veuillez proposer au client le transfert de son contrat chez notre agence pour proximité de service!!!
+              </p>
+              <p className="text-sm text-blue-700 mt-2">
+                S'il est d'accord lui faire signer une demande de résiliation à échéance et envoyez à l'E-mail contrat individuel.
+              </p>
+            </div>
+          )}
 
           {/* Résultats de recherche */}
           {xmlSearchResult && (
@@ -836,9 +891,9 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             </div>
           )}
 
-          {/* Bouton Retour Technique (conditionnel) */}
+          {/* Boutons Retour Technique et Contentieux (conditionnels) */}
           {formData.type === 'Terme' && (
-            <div className="flex justify-start">
+            <div className="flex justify-start space-x-4">
               <button
                 type="button"
                 onClick={handleRetourTechniqueClick}
@@ -846,6 +901,15 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>{isRetourTechniqueMode ? 'Annuler Modification' : 'Retour Technique'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRetourContentieuxClick}
+                className={`px-4 py-2 bg-gradient-to-r ${isRetourContentieuxMode ? 'from-red-600 to-red-700 hover:from-red-700 hover:to-red-800' : 'from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800'} text-white rounded-lg transition-all duration-200 flex items-center space-x-2 shadow-md hover:shadow-lg`}
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>{isRetourContentieuxMode ? 'Annuler Modification' : 'Retour Contentieux'}</span>
               </button>
             </div>
           )}
