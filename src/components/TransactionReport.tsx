@@ -50,7 +50,8 @@ interface Statistics {
 }
 
 const TransactionReport: React.FC = () => {
-  const [searchDate, setSearchDate] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [loading, setLoading] = useState(false);
@@ -185,8 +186,13 @@ const TransactionReport: React.FC = () => {
   };
 
   const handleSearch = async () => {
-    if (!searchDate) {
-      setError('Veuillez saisir une date de recherche');
+    if (!dateFrom || !dateTo) {
+      setError('Veuillez saisir les dates de début et de fin');
+      return;
+    }
+
+    if (new Date(dateFrom) > new Date(dateTo)) {
+      setError('La date de début doit être antérieure à la date de fin');
       return;
     }
 
@@ -194,10 +200,10 @@ const TransactionReport: React.FC = () => {
     setError('');
 
     try {
-      const startDate = new Date(searchDate);
+      const startDate = new Date(dateFrom);
       startDate.setHours(0, 0, 0, 0);
 
-      const endDate = new Date(searchDate);
+      const endDate = new Date(dateTo);
       endDate.setHours(23, 59, 59, 999);
 
       const { data, error: fetchError } = await supabase
@@ -287,7 +293,7 @@ const TransactionReport: React.FC = () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
 
-    const fileName = `rapport_transactions_${searchDate}.xlsx`;
+    const fileName = `rapport_transactions_${dateFrom}_au_${dateTo}.xlsx`;
     XLSX.writeFile(wb, fileName);
   };
 
@@ -316,12 +322,23 @@ const TransactionReport: React.FC = () => {
         <div className="flex gap-4 items-end">
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Date de Recherche
+              Date du
             </label>
             <input
               type="date"
-              value={searchDate}
-              onChange={(e) => setSearchDate(e.target.value)}
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Date au
+            </label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
