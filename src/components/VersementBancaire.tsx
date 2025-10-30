@@ -1,3 +1,5 @@
+
+import { useState, useEffect } from 'react';
 import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp } from 'lucide-react';
 import { getRecentSessions, getSessionsByDateRange, updateSessionVersement, getMonthlyStats } from '../utils/sessionService';
 import * as XLSX from 'xlsx';
