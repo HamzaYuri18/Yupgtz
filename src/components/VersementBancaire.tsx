@@ -1,4 +1,3 @@
-import React, { useState, useEffect } from 'react';
 import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp } from 'lucide-react';
 import { getRecentSessions, getSessionsByDateRange, updateSessionVersement, getMonthlyStats } from '../utils/sessionService';
 import * as XLSX from 'xlsx';
@@ -19,6 +18,12 @@ interface SessionData {
   cree_par: string;
 }
 
+interface QuinzaineStats {
+  premiere: number;
+  deuxieme: number;
+  total: number;
+}
+
 const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [filteredSessions, setFilteredSessions] = useState<SessionData[]>([]);
@@ -28,6 +33,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [monthlyStats, setMonthlyStats] = useState<any>(null);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [quinzaineStats, setQuinzaineStats] = useState<QuinzaineStats>({ premiere: 0, deuxieme: 0, total: 0 });
 
   const [formData, setFormData] = useState({
     sessionId: '',
@@ -43,6 +49,10 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     loadMonthlyStats();
   }, [selectedMonth, selectedYear]);
 
+  useEffect(() => {
+    calculateQuinzaineStats();
+  }, [filteredSessions, selectedMonth, selectedYear]);
+
   const loadSessions = async () => {
     const data = await getRecentSessions(10);
     setSessions(data);
@@ -52,6 +62,48 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const loadMonthlyStats = async () => {
     const stats = await getMonthlyStats(selectedMonth, selectedYear);
     setMonthlyStats(stats);
+  };
+
+  const calculateQuinzaineStats = () => {
+    const currentMonthSessions = filteredSessions.filter(session => {
+      const sessionDate = new Date(session.date_session);
+      return sessionDate.getMonth() + 1 === selectedMonth && 
+             sessionDate.getFullYear() === selectedYear;
+    });
+
+    let premiereQuinzaine = 0;
+    let deuxiemeQuinzaine = 0;
+
+    currentMonthSessions.forEach(session => {
+      const sessionDate = new Date(session.date_session);
+      const day = sessionDate.getDate();
+      
+      if (day <= 15) {
+        premiereQuinzaine += session.charges;
+      } else {
+        deuxiemeQuinzaine += session.charges;
+      }
+    });
+
+    const total = premiereQuinzaine + deuxiemeQuinzaine;
+    
+    setQuinzaineStats({
+      premiere: premiereQuinzaine,
+      deuxieme: deuxiemeQuinzaine,
+      total: total
+    });
+  };
+
+  const getQuinzaineDates = () => {
+    const monthNames = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
+    
+    return {
+      premiere: `1-15 ${monthNames[selectedMonth - 1]} ${selectedYear}`,
+      deuxieme: `16-${new Date(selectedYear, selectedMonth, 0).getDate()} ${monthNames[selectedMonth - 1]} ${selectedYear}`
+    };
   };
 
   const handleFilter = async () => {
@@ -136,10 +188,12 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     XLSX.writeFile(wb, `sessions_${dateDebut || 'toutes'}_${dateFin || 'dates'}.xlsx`);
   };
 
+  const quinzaineDates = getQuinzaineDates();
+
   return (
     <div className="space-y-6">
       {monthlyStats && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg shadow-lg p-6">
             <div className="flex items-center space-x-3 mb-3">
               <TrendingUp className="w-6 h-6 text-orange-600" />
@@ -182,10 +236,19 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow-lg p-6">
             <div className="flex items-center space-x-3 mb-3">
               <Building2 className="w-6 h-6 text-blue-600" />
-              <h3 className="text-lg font-bold text-blue-900">Total Charges</h3>
+              <h3 className="text-lg font-bold text-blue-900">Charges 1ère Quinzaine</h3>
             </div>
-            <p className="text-3xl font-bold text-blue-700">{monthlyStats.totalCharges.toFixed(2)} DT</p>
-            <p className="text-sm text-blue-600">Mensuel</p>
+            <p className="text-3xl font-bold text-blue-700">{quinzaineStats.premiere.toFixed(2)} DT</p>
+            <p className="text-sm text-blue-600">{quinzaineDates.premiere}</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg shadow-lg p-6">
+            <div className="flex items-center space-x-3 mb-3">
+              <Building2 className="w-6 h-6 text-purple-600" />
+              <h3 className="text-lg font-bold text-purple-900">Charges 2ème Quinzaine</h3>
+            </div>
+            <p className="text-3xl font-bold text-purple-700">{quinzaineStats.deuxieme.toFixed(2)} DT</p>
+            <p className="text-sm text-purple-600">{quinzaineDates.deuxieme}</p>
           </div>
         </div>
       )}
