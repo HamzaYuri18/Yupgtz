@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Calendar, Building2, Download, FileSpreadsheet } from 'lucide-react';
-import { getRecentSessions, getSessionsByDateRange, updateSessionVersement } from '../utils/sessionService';
+import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp } from 'lucide-react';
+import { getRecentSessions, getSessionsByDateRange, updateSessionVersement, getMonthlyStats } from '../utils/sessionService';
 import * as XLSX from 'xlsx';
 
 interface VersementBancaireProps {
@@ -25,6 +25,9 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [message, setMessage] = useState('');
+  const [monthlyStats, setMonthlyStats] = useState<any>(null);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   const [formData, setFormData] = useState({
     sessionId: '',
@@ -37,12 +40,18 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
 
   useEffect(() => {
     loadSessions();
-  }, []);
+    loadMonthlyStats();
+  }, [selectedMonth, selectedYear]);
 
   const loadSessions = async () => {
     const data = await getRecentSessions(10);
     setSessions(data);
     setFilteredSessions(data);
+  };
+
+  const loadMonthlyStats = async () => {
+    const stats = await getMonthlyStats(selectedMonth, selectedYear);
+    setMonthlyStats(stats);
   };
 
   const handleFilter = async () => {
@@ -129,6 +138,58 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
 
   return (
     <div className="space-y-6">
+      {monthlyStats && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg shadow-lg p-6">
+            <div className="flex items-center space-x-3 mb-3">
+              <TrendingUp className="w-6 h-6 text-orange-600" />
+              <h3 className="text-lg font-bold text-orange-900">Sessions Non Versées</h3>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                  className="px-3 py-1 border border-orange-300 rounded-lg text-sm"
+                >
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <option key={i + 1} value={i + 1}>
+                      {new Date(2024, i, 1).toLocaleDateString('fr-FR', { month: 'long' })}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  className="w-20 px-3 py-1 border border-orange-300 rounded-lg text-sm"
+                />
+              </div>
+              <p className="text-3xl font-bold text-orange-700">{monthlyStats.nonVersees.count}</p>
+              <p className="text-sm text-orange-600">Total: {monthlyStats.nonVersees.total.toFixed(2)} DT</p>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg shadow-lg p-6">
+            <div className="flex items-center space-x-3 mb-3">
+              <DollarSign className="w-6 h-6 text-green-600" />
+              <h3 className="text-lg font-bold text-green-900">Sessions Versées</h3>
+            </div>
+            <p className="text-3xl font-bold text-green-700">{monthlyStats.versees.count}</p>
+            <p className="text-sm text-green-600">Total: {monthlyStats.versees.total.toFixed(2)} DT</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow-lg p-6">
+            <div className="flex items-center space-x-3 mb-3">
+              <Building2 className="w-6 h-6 text-blue-600" />
+              <h3 className="text-lg font-bold text-blue-900">Total Charges</h3>
+            </div>
+            <p className="text-3xl font-bold text-blue-700">{monthlyStats.totalCharges.toFixed(2)} DT</p>
+            <p className="text-sm text-blue-600">Mensuel</p>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow-lg p-6">
         <div className="flex items-center space-x-3 mb-6">
           <div className="p-2 bg-green-100 rounded-lg">

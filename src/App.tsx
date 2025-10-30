@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import LoginForm from './components/LoginForm';
 import Dashboard from './components/Dashboard';
-import { getSession } from './utils/auth';
+import { getSession, getSessionDate, isAdmin } from './utils/auth';
+import { isSessionClosed } from './utils/sessionService';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -10,12 +11,25 @@ function App() {
 
   useEffect(() => {
     // Vérifier s'il y a une session active au démarrage
-    const session = getSession();
-    if (session) {
-      setIsAuthenticated(true);
-      setCurrentUser(session.username);
-    }
-    setIsLoading(false);
+    const checkSession = async () => {
+      const session = getSession();
+      if (session) {
+        const dateSession = getSessionDate();
+        const sessionClosed = await isSessionClosed(dateSession);
+
+        // Si la session est fermée et l'utilisateur n'est pas admin, déconnecter
+        if (sessionClosed && !isAdmin(session.username)) {
+          setIsAuthenticated(false);
+          setCurrentUser('');
+        } else {
+          setIsAuthenticated(true);
+          setCurrentUser(session.username);
+        }
+      }
+      setIsLoading(false);
+    };
+
+    checkSession();
   }, []);
 
   const handleLogin = (username: string) => {

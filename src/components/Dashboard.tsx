@@ -30,7 +30,18 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
     if (session) {
       setSessionInfo(session);
     }
-  }, []);
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      clearSession();
+      onLogout();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [onLogout]);
 
   const handleLogout = () => {
     if (shouldShowLogoutConfirmation(username)) {
