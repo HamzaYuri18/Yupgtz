@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LogOut, FileText, Download, AlertCircle } from 'lucide-react';
+import { LogOut, FileText, Download, AlertCircle, X } from 'lucide-react';
 import { printSessionReport } from '../utils/pdfGenerator';
 import { saveSessionData } from '../utils/sessionService';
 import { getSessionDate } from '../utils/auth';
@@ -95,6 +95,13 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
           </button>
 
           <div className="flex space-x-3">
+            <button
+              onClick={onCancel}
+              className="flex-1 flex items-center justify-center space-x-2 py-2 px-4 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold transition-all duration-200"
+            >
+              <X className="w-4 h-4" />
+              <span>Annuler</span>
+            </button>
             
             <button
               onClick={handleConfirmLogout}
