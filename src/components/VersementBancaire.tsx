@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from 'react';
-import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp } from 'lucide-react';
-import { getRecentSessions, getSessionsByDateRange, updateSessionVersement, getMonthlyStats } from '../utils/sessionService';
+import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw } from 'lucide-react';
+import { getRecentSessions, getSessionsByDateRange, updateSessionVersement, getMonthlyStats, verifyAndSyncSessionTotals, calculateTotalEspeceFromRapport } from '../utils/sessionService';
 import * as XLSX from 'xlsx';
 
 interface VersementBancaireProps {
@@ -36,6 +35,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [quinzaineStats, setQuinzaineStats] = useState<QuinzaineStats>({ premiere: 0, deuxieme: 0, total: 0 });
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const [formData, setFormData] = useState({
     sessionId: '',
@@ -107,6 +107,87 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       deuxieme: `16-${new Date(selectedYear, selectedMonth, 0).getDate()} ${monthNames[selectedMonth - 1]} ${selectedYear}`
     };
   };
+
+  // Fonction pour vérifier et synchroniser tous les totaux espèce
+  const verifySessionTotals = async () => {
+    setIsVerifying(true);
+    setMessage('🔍 Vérification des totaux espèce en cours...');
+    
+    try {
+      await verifyAndSyncSessionTotals();
+      
+      // Recharger les sessions après vérification
+      await loadSessions();
+      
+      setMessage('✅ Vérification des totaux terminée - Sessions mises à jour');
+    } catch (error) {
+      setMessage('❌ Erreur lors de la vérification des totaux');
+      console.error('Erreur vérification totaux:', error);
+    } finally {
+      setIsVerifying(false);
+      setTimeout(() => setMessage(''), 5000);
+    }
+  };
+
+  // Fonction pour vérifier une session spécifique
+  const verifySingleSessionTotal = async (sessionId: number, dateSession: string) => {
+    try {
+      const calculatedTotal = await calculateTotalEspeceFromRapport(dateSession);
+      
+      // Récupérer le total actuel de la session
+      const session = sessions.find(s => s.id === sessionId);
+      if (!session) return;
+
+      const difference = Math.abs(calculatedTotal - session.total_espece);
+      
+      if (difference > 0.01) {
+        console.warn(`⚠️ Session ${sessionId}: Incohérence détectée!`);
+        console.log(`   Table sessions: ${session.total_espece} DT`);
+        console.log(`   Table rapport: ${calculatedTotal} DT`);
+        console.log(`   Différence: ${difference.toFixed(2)} DT`);
+        
+        setMessage(`⚠️ Incohérence détectée pour la session du ${dateSession}`);
+        return {
+          sessionId,
+          dateSession,
+          currentTotal: session.total_espece,
+          calculatedTotal,
+          difference
+        };
+      } else {
+        console.log(`✅ Session ${sessionId}: Total cohérent (${session.total_espece} DT)`);
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Erreur vérification session:', error);
+      return null;
+    }
+  };
+
+  // Vérification automatique au chargement
+  useEffect(() => {
+    const verifyAllSessionsOnLoad = async () => {
+      if (filteredSessions.length > 0) {
+        console.log('🔍 Vérification automatique des totaux au chargement...');
+        const inconsistencies = [];
+        
+        for (const session of filteredSessions) {
+          const result = await verifySingleSessionTotal(session.id, session.date_session);
+          if (result) {
+            inconsistencies.push(result);
+          }
+        }
+        
+        if (inconsistencies.length > 0) {
+          console.log(`⚠️ ${inconsistencies.length} incohérences détectées`);
+          setMessage(`⚠️ ${inconsistencies.length} incohérences détectées - Cliquez sur "Vérifier les Totaux" pour corriger`);
+          setTimeout(() => setMessage(''), 7000);
+        }
+      }
+    };
+
+    verifyAllSessionsOnLoad();
+  }, [filteredSessions]);
 
   const handleFilter = async () => {
     if (!dateDebut || !dateFin) {
@@ -264,7 +345,11 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
         </div>
 
         {message && (
-          <div className={`mb-4 p-3 rounded-lg ${message.includes('succès') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+          <div className={`mb-4 p-3 rounded-lg ${
+            message.includes('✅') || message.includes('succès') ? 'bg-green-100 text-green-800' : 
+            message.includes('⚠️') || message.includes('Incohérence') ? 'bg-yellow-100 text-yellow-800' :
+            'bg-red-100 text-red-800'
+          }`}>
             {message}
           </div>
         )}
@@ -353,13 +438,24 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       <div className="bg-white rounded-lg shadow-lg p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-xl font-bold text-gray-800">Liste des Sessions</h3>
-          <button
-            onClick={exportToExcel}
-            className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2"
-          >
-            <FileSpreadsheet className="w-5 h-5" />
-            <span>Exporter Excel</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={verifySessionTotals}
+              disabled={isVerifying}
+              className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-yellow-400 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2"
+              title="Vérifier la cohérence des totaux espèce avec la table rapport"
+            >
+              <RefreshCw className={`w-5 h-5 ${isVerifying ? 'animate-spin' : ''}`} />
+              <span>{isVerifying ? 'Vérification...' : 'Vérifier les Totaux'}</span>
+            </button>
+            <button
+              onClick={exportToExcel}
+              className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2"
+            >
+              <FileSpreadsheet className="w-5 h-5" />
+              <span>Exporter Excel</span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
