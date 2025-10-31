@@ -13,15 +13,18 @@ interface LogoutConfirmationProps {
 const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onConfirm, onCancel }) => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [pdfGenerated, setPdfGenerated] = useState(false);
+  const [isCancelLocked, setIsCancelLocked] = useState(false);
 
   const handleGeneratePDF = async () => {
     setIsGeneratingPDF(true);
+    setIsCancelLocked(true); // Verrouiller le bouton Annuler
     try {
       await printSessionReport(username);
       setPdfGenerated(true);
     } catch (error) {
       console.error('Erreur génération PDF:', error);
       alert('Erreur lors de la génération du PDF');
+      setIsCancelLocked(false); // Déverrouiller en cas d'erreur
     }
     setIsGeneratingPDF(false);
   };
@@ -37,6 +40,12 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
     await saveSessionData(username, dateSession);
 
     onConfirm();
+  };
+
+  const handleCancel = () => {
+    if (!isCancelLocked) {
+      onCancel();
+    }
   };
 
   return (
@@ -96,8 +105,13 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
 
           <div className="flex space-x-3">
             <button
-              onClick={onCancel}
-              className="flex-1 flex items-center justify-center space-x-2 py-2 px-4 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold transition-all duration-200"
+              onClick={handleCancel}
+              disabled={isCancelLocked}
+              className={`flex-1 flex items-center justify-center space-x-2 py-2 px-4 rounded-lg font-semibold transition-all duration-200 ${
+                isCancelLocked
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-600 hover:bg-gray-700 text-white'
+              }`}
             >
               <X className="w-4 h-4" />
               <span>Annuler</span>
