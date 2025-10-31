@@ -152,3 +152,113 @@ export const updateSessionVersement = async (
     return false;
   }
 };
+// Fonction pour calculer le total espèce depuis la table rapport
+export const calculateTotalEspeceFromRapport = async (dateSession: string): Promise<number> => {
+  try {
+    console.log('🔍 Calcul du total espèce depuis rapport pour la date:', dateSession);
+    
+    // Convertir la date de session en format Date pour la comparaison
+    const sessionDate = new Date(dateSession);
+    const startDate = new Date(sessionDate);
+    const endDate = new Date(sessionDate);
+    endDate.setDate(endDate.getDate() + 1); // Jour suivant à minuit
+
+    const { data, error } = await supabase
+      .from('rapport')
+      .select('montant, created_at')
+      .gte('created_at', startDate.toISOString())
+      .lt('created_at', endDate.toISOString());
+
+    if (error) {
+      console.error('❌ Erreur lors du calcul du total espèce:', error);
+      return 0;
+    }
+
+    const total = data?.reduce((sum, record) => sum + (record.montant || 0), 0) || 0;
+    
+    console.log(`✅ Total espèce calculé: ${total} DT pour ${dateSession}`);
+    console.log(`📊 ${data?.length || 0} enregistrements trouvés`);
+    
+    return total;
+  } catch (error) {
+    console.error('❌ Erreur générale lors du calcul du total espèce:', error);
+    return 0;
+  }
+};
+
+// Fonction pour vérifier et synchroniser tous les totaux espèce
+export const verifyAndSyncSessionTotals = async (): Promise<void> => {
+  try {
+    console.log('🔄 Vérification et synchronisation des totaux espèce...');
+    
+    // Récupérer toutes les sessions
+    const { data: sessions, error: sessionsError } = await supabase
+      .from('sessions')
+      .select('id, date_session, total_espece');
+
+    if (sessionsError) {
+      console.error('❌ Erreur récupération sessions:', sessionsError);
+      return;
+    }
+
+    console.log(`🔍 ${sessions?.length || 0} sessions à vérifier`);
+
+    for (const session of sessions || []) {
+      const calculatedTotal = await calculateTotalEspeceFromRapport(session.date_session);
+      
+      // Vérifier si le total calculé diffère du total enregistré
+      if (Math.abs(calculatedTotal - session.total_espece) > 0.01) {
+        console.log(`🔄 Correction session ${session.id}: ${session.total_espece} → ${calculatedTotal} DT`);
+        
+        // Mettre à jour le total espèce dans la table sessions
+        const { error: updateError } = await supabase
+          .from('sessions')
+          .update({ total_espece: calculatedTotal })
+          .eq('id', session.id);
+
+        if (updateError) {
+          console.error(`❌ Erreur mise à jour session ${session.id}:`, updateError);
+        } else {
+          console.log(`✅ Session ${session.id} corrigée`);
+        }
+      }
+    }
+    
+    console.log('✅ Synchronisation des totaux espèce terminée');
+  } catch (error) {
+    console.error('❌ Erreur générale lors de la synchronisation:', error);
+  }
+};
+
+// Fonction pour créer une session avec vérification du total espèce
+export const createSessionWithVerifiedTotal = async (dateSession: string, createdBy: string): Promise<boolean> => {
+  try {
+    console.log('📅 Création de session avec vérification du total...');
+    
+    // Calculer le total espèce depuis la table rapport
+    const totalEspece = await calculateTotalEspeceFromRapport(dateSession);
+    
+    const { data, error } = await supabase
+      .from('sessions')
+      .insert([{
+        date_session: dateSession,
+        total_espece: totalEspece,
+        versement: 0,
+        charges: 0,
+        statut: 'Non Versé',
+        cree_par: createdBy
+      }])
+      .select();
+
+    if (error) {
+      console.error('❌ Erreur création session:', error);
+      return false;
+    }
+
+    console.log(`✅ Session créée avec total espèce: ${totalEspece} DT`);
+    return true;
+  } catch (error) {
+    console.error('❌ Erreur générale création session:', error);
+    return false;
+  }
+};
