@@ -56,7 +56,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   }, [filteredSessions, selectedMonth, selectedYear]);
 
   const loadSessions = async () => {
-    const data = await getRecentSessions(10);
+    const data = await getRecentSessions(15);
     setSessions(data);
     setFilteredSessions(data);
   };
