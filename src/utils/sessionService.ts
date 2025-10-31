@@ -2,10 +2,12 @@ import { supabase } from '../lib/supabase';
 
 export const calculateTotalEspece = async (dateSession: string): Promise<number> => {
   // Calculer le total de la colonne montant de la table rapport pour la date de session
+  // UNIQUEMENT pour les transactions avec mode_paiement = 'Espece'
   const { data: rapportData } = await supabase
     .from('rapport')
-    .select('montant')
-    .eq('date_operation', dateSession);
+    .select('montant, mode_paiement')
+    .eq('date_operation', dateSession)
+    .eq('mode_paiement', 'Espece');
 
   const rapportTotal = rapportData?.reduce((sum, item) => sum + (parseFloat(item.montant) || 0), 0) || 0;
 
@@ -152,7 +154,9 @@ export const updateSessionVersement = async (
     return false;
   }
 };
+
 // Fonction pour calculer le total espèce depuis la table rapport
+// UNIQUEMENT pour les transactions avec mode_paiement = 'Espece'
 export const calculateTotalEspeceFromRapport = async (dateSession: string): Promise<number> => {
   try {
     console.log('🔍 Calcul du total espèce depuis rapport pour la date:', dateSession);
@@ -165,9 +169,10 @@ export const calculateTotalEspeceFromRapport = async (dateSession: string): Prom
 
     const { data, error } = await supabase
       .from('rapport')
-      .select('montant, created_at')
+      .select('montant, mode_paiement, created_at')
       .gte('created_at', startDate.toISOString())
-      .lt('created_at', endDate.toISOString());
+      .lt('created_at', endDate.toISOString())
+      .eq('mode_paiement', 'Espece'); // FILTRE IMPORTANT : seulement les paiements en espèces
 
     if (error) {
       console.error('❌ Erreur lors du calcul du total espèce:', error);
@@ -177,7 +182,15 @@ export const calculateTotalEspeceFromRapport = async (dateSession: string): Prom
     const total = data?.reduce((sum, record) => sum + (record.montant || 0), 0) || 0;
     
     console.log(`✅ Total espèce calculé: ${total} DT pour ${dateSession}`);
-    console.log(`📊 ${data?.length || 0} enregistrements trouvés`);
+    console.log(`📊 ${data?.length || 0} transactions en espèces trouvées`);
+    
+    // Log détaillé pour le débogage
+    if (data && data.length > 0) {
+      console.log('📋 Détail des transactions en espèces:');
+      data.forEach((record, index) => {
+        console.log(`   ${index + 1}. Montant: ${record.montant} DT, Mode: ${record.mode_paiement}`);
+      });
+    }
     
     return total;
   } catch (error) {
@@ -221,6 +234,8 @@ export const verifyAndSyncSessionTotals = async (): Promise<void> => {
         } else {
           console.log(`✅ Session ${session.id} corrigée`);
         }
+      } else {
+        console.log(`✅ Session ${session.id}: Total cohérent (${session.total_espece} DT)`);
       }
     }
     
@@ -235,7 +250,7 @@ export const createSessionWithVerifiedTotal = async (dateSession: string, create
   try {
     console.log('📅 Création de session avec vérification du total...');
     
-    // Calculer le total espèce depuis la table rapport
+    // Calculer le total espèce depuis la table rapport (uniquement espèces)
     const totalEspece = await calculateTotalEspeceFromRapport(dateSession);
     
     const { data, error } = await supabase
@@ -260,5 +275,67 @@ export const createSessionWithVerifiedTotal = async (dateSession: string, create
   } catch (error) {
     console.error('❌ Erreur générale création session:', error);
     return false;
+  }
+};
+
+// Fonction utilitaire pour obtenir le détail des transactions
+export const getSessionTransactionsDetail = async (dateSession: string) => {
+  try {
+    console.log('🔍 Récupération du détail des transactions pour:', dateSession);
+    
+    const sessionDate = new Date(dateSession);
+    const startDate = new Date(sessionDate);
+    const endDate = new Date(sessionDate);
+    endDate.setDate(endDate.getDate() + 1);
+
+    const { data, error } = await supabase
+      .from('rapport')
+      .select('montant, mode_paiement, type, created_at')
+      .gte('created_at', startDate.toISOString())
+      .lt('created_at', endDate.toISOString())
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('❌ Erreur récupération détail transactions:', error);
+      return [];
+    }
+
+    // Calculer les totaux par mode de paiement
+    const totalEspece = data
+      ?.filter(record => record.mode_paiement === 'Espece')
+      .reduce((sum, record) => sum + (record.montant || 0), 0) || 0;
+
+    const totalCheque = data
+      ?.filter(record => record.mode_paiement === 'Cheque')
+      .reduce((sum, record) => sum + (record.montant || 0), 0) || 0;
+
+    const totalCarte = data
+      ?.filter(record => record.mode_paiement === 'Carte Bancaire')
+      .reduce((sum, record) => sum + (record.montant || 0), 0) || 0;
+
+    const totalVirement = data
+      ?.filter(record => record.mode_paiement === 'Virement')
+      .reduce((sum, record) => sum + (record.montant || 0), 0) || 0;
+
+    console.log('📊 Détail des transactions:');
+    console.log(`   💵 Espèces: ${totalEspece} DT`);
+    console.log(`   📄 Chèques: ${totalCheque} DT`);
+    console.log(`   💳 Cartes: ${totalCarte} DT`);
+    console.log(`   🏦 Virements: ${totalVirement} DT`);
+    console.log(`   📋 Total transactions: ${data?.length || 0}`);
+
+    return {
+      transactions: data || [],
+      totals: {
+        espece: totalEspece,
+        cheque: totalCheque,
+        carte: totalCarte,
+        virement: totalVirement,
+        totalGeneral: (data?.reduce((sum, record) => sum + (record.montant || 0), 0) || 0)
+      }
+    };
+  } catch (error) {
+    console.error('❌ Erreur générale récupération détail:', error);
+    return { transactions: [], totals: { espece: 0, cheque: 0, carte: 0, virement: 0, totalGeneral: 0 } };
   }
 };
