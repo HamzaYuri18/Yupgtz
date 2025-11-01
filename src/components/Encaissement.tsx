@@ -222,7 +222,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-600">Prime</label>
-              <p className="text-lg font-bold text-green-700">{termeData.prime.toLocaleString()} DZD</p>
+              <p className="text-lg font-bold text-green-700">{termeData.prime.toLocaleString()} TND </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-600">Assuré</label>
@@ -264,19 +264,19 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
           <div className="text-center p-4 bg-white rounded-lg shadow">
             <p className="text-sm text-gray-600">Encaissements</p>
             <p className="text-xl font-bold text-blue-600">
-              {sessionStats.total_encaissements.toLocaleString()} DZD
+              {sessionStats.total_encaissements.toLocaleString()} TND
             </p>
           </div>
           <div className="text-center p-4 bg-white rounded-lg shadow">
             <p className="text-sm text-gray-600">Paiements</p>
             <p className="text-xl font-bold text-orange-600">
-              {sessionStats.total_paiements.toLocaleString()} DZD
+              {sessionStats.total_paiements.toLocaleString()} TND
             </p>
           </div>
           <div className="text-center p-4 bg-white rounded-lg shadow">
             <p className="text-sm text-gray-600">Différence</p>
             <p className="text-xl font-bold">
-              {sessionStats.difference.toLocaleString()} DZD
+              {sessionStats.difference.toLocaleString()} TND
             </p>
           </div>
           <div className={`text-center p-4 rounded-lg shadow ${
@@ -287,7 +287,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
               sessionStats.session_montant >= 0 ? 'text-green-600' : 'text-red-600'
             }`}>
               {sessionStats.session_montant >= 0 ? 'Report ' : 'Rapport '}
-              {Math.abs(sessionStats.session_montant).toLocaleString()} DZD
+              {Math.abs(sessionStats.session_montant).toLocaleString()} TND
             </p>
           </div>
         </div>
