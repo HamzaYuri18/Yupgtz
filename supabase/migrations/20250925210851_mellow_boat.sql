@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS depenses (
     'A/S Islem', 
     'Reprise sur Avance Client', 
     'Versement Bancaire'
+    'Remise'
   )),
   montant DECIMAL(10,2) NOT NULL DEFAULT 0,
   date_depense DATE DEFAULT CURRENT_DATE,
