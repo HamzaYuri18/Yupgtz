@@ -15,18 +15,6 @@ interface TermeData {
   statut: string;
 }
 
-interface EncaissementData {
-  id?: string;
-  numero_contrat: string;
-  echeance: string;
-  prime: number;
-  assure: string;
-  statut: string;
-  montant_encaissement: number;
-  created_at?: string;
-  session_id: string;
-}
-
 interface SessionStats {
   total_encaissements: number;
   total_paiements: number;
@@ -41,7 +29,6 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   const [termeData, setTermeData] = useState<TermeData | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [sessionId] = useState(`session_${Date.now()}`);
   const [sessionStats, setSessionStats] = useState<SessionStats>({
     total_encaissements: 0,
     total_paiements: 0,
@@ -94,19 +81,20 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     setLoading(true);
 
     try {
-      const encaissementData: EncaissementData = {
-        numero_contrat: termeData.numero_contrat,
-        echeance: termeData.echeance,
-        prime: termeData.prime,
-        assure: termeData.assure,
-        statut: termeData.statut,
-        montant_encaissement: termeData.prime,
-        session_id: sessionId
-      };
-
+      const sessionId = `session_${Date.now()}`;
+      
       const { error } = await supabase
         .from('Encaissement')
-        .insert([encaissementData]);
+        .insert([{
+          numero_contrat: termeData.numero_contrat,
+          echeance: termeData.echeance,
+          prime: termeData.prime,
+          assure: termeData.assure,
+          statut: 'encaissé',
+          montant_encaissement: termeData.prime,
+          session_id: sessionId,
+          created_at: new Date().toISOString()
+        }]);
 
       if (error) {
         setMessage('Erreur lors de l\'enregistrement de l\'encaissement');
@@ -114,15 +102,11 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       }
 
       // Mettre à jour le statut dans la table terme
-      const { error: updateError } = await supabase
+      await supabase
         .from('terme')
         .update({ statut: 'encaissé' })
         .eq('numero_contrat', termeData.numero_contrat)
         .eq('echeance', termeData.echeance);
-
-      if (updateError) {
-        console.error('Erreur mise à jour statut:', updateError);
-      }
 
       setMessage('Encaissement enregistré avec succès!');
       setTermeData(null);
@@ -157,66 +141,25 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         .gte('created_at', today.toISOString())
         .or('type_paiement.eq.terme,type_paiement.eq.paiement credit terme');
 
-      // 3. Cumul des sessions précédentes depuis la table RD
-      const { data: rdData, error: rdError } = await supabase
-        .from('RD')
-        .select('montant_session')
-        .lt('created_at', today.toISOString());
-
-      if (encError || payError || rdError) {
-        console.error('Erreur chargement stats:', encError, payError, rdError);
+      if (encError || payError) {
+        console.error('Erreur chargement stats:', encError, payError);
         return;
       }
 
       const totalEncaissements = encaissements?.reduce((sum, item) => sum + (item.montant_encaissement || 0), 0) || 0;
       const totalPaiements = paiements?.reduce((sum, item) => sum + (item.montant || 0), 0) || 0;
       const difference = totalEncaissements - totalPaiements;
-      const cumulSessions = rdData?.reduce((sum, item) => sum + (item.montant_session || 0), 0) || 0;
 
       setSessionStats({
         total_encaissements: totalEncaissements,
         total_paiements: totalPaiements,
         difference: difference,
         session_montant: difference,
-        cumul_sessions: cumulSessions
+        cumul_sessions: 0 // À adapter selon votre logique métier
       });
 
-      // Enregistrer dans la table RD si ce n'est pas déjà fait pour aujourd'hui
-      await saveToRD(difference);
     } catch (error) {
       console.error('Erreur calcul stats:', error);
-    }
-  };
-
-  const saveToRD = async (montantSession: number) => {
-    try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      // Vérifier si un enregistrement existe déjà pour aujourd'hui
-      const { data: existingRecord } = await supabase
-        .from('RD')
-        .select('id')
-        .gte('created_at', today.toISOString())
-        .single();
-
-      if (!existingRecord) {
-        const { error } = await supabase
-          .from('RD')
-          .insert([{
-            montant_session: montantSession,
-            total_encaissements: sessionStats.total_encaissements,
-            total_paiements: sessionStats.total_paiements,
-            session_id: sessionId,
-            created_at: new Date().toISOString()
-          }]);
-
-        if (error) {
-          console.error('Erreur enregistrement RD:', error);
-        }
-      }
-    } catch (error) {
-      console.error('Erreur sauvegarde RD:', error);
     }
   };
 
@@ -225,7 +168,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-gray-800 mb-2 flex items-center">
           <DollarSign className="w-6 h-6 mr-2 text-green-600" />
-          Encaissement
+          Encaissement - {username}
         </h2>
         <p className="text-gray-600">Saisie des encaissements par numéro de contrat et échéance</p>
       </div>
@@ -317,7 +260,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       {/* Statistiques de session */}
       <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Statistiques de la Session</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="text-center p-4 bg-white rounded-lg shadow">
             <p className="text-sm text-gray-600">Encaissements</p>
             <p className="text-xl font-bold text-blue-600">
@@ -345,12 +288,6 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
             }`}>
               {sessionStats.session_montant >= 0 ? 'Report ' : 'Rapport '}
               {Math.abs(sessionStats.session_montant).toLocaleString()} DZD
-            </p>
-          </div>
-          <div className="text-center p-4 bg-purple-100 rounded-lg shadow">
-            <p className="text-sm text-gray-600">Cumul Sessions</p>
-            <p className="text-xl font-bold text-purple-600">
-              {sessionStats.cumul_sessions.toLocaleString()} DZD
             </p>
           </div>
         </div>
