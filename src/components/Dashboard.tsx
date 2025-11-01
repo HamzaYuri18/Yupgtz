@@ -14,7 +14,7 @@ import TermeSearch from './TermeSearch';
 import TransactionReport from './TransactionReport';
 import ChequesManagement from './ChequesManagement';
 import VersementBancaire from './VersementBancaire';
-
+import Encaissement from './Encaissement';
 interface DashboardProps {
   username: string;
   onLogout: () => void;
@@ -265,5 +265,24 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
     </div>
   );
 };
+// Dans la navigation du Dashboard, ajoutez ce bouton (visible seulement pour Hamza)
+{username.toLowerCase() === 'hamza' && (
+  <button
+    onClick={() => setActiveTab('encaissement')}
+    className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
+      activeTab === 'encaissement'
+        ? 'border-green-500 text-green-600 bg-green-50/50'
+        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+    }`}
+  >
+    <DollarSign className="w-4 h-4" />
+    <span>Encaissement</span>
+  </button>
+)}
+
+// Dans le contenu principal du Dashboard
+{activeTab === 'encaissement' && username.toLowerCase() === 'hamza' && (
+  <Encaissement username={username} />
+)}
 
 export default Dashboard;
