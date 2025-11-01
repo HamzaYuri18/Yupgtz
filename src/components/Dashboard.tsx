@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, FileText, Upload, BarChart3, Clock, User, Search, Calendar, Receipt, Building2 } from 'lucide-react';
-import { DollarSign } from 'lucide-react';
+import { LogOut, FileText, Upload, BarChart3, Clock, User, Search, Calendar, Receipt, Building2, DollarSign } from 'lucide-react';
 import { getSession, clearSession, isAdmin } from '../utils/auth';
 import LogoutConfirmation from './LogoutConfirmation';
 import { shouldShowLogoutConfirmation } from '../utils/auth';
@@ -14,14 +13,15 @@ import TermeSearch from './TermeSearch';
 import TransactionReport from './TransactionReport';
 import ChequesManagement from './ChequesManagement';
 import VersementBancaire from './VersementBancaire';
-import Encaissement from './Encaissement';
+import Encaissement from './Encaissement'; // Ajouter cet import
+
 interface DashboardProps {
   username: string;
   onLogout: () => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'contract' | 'xml' | 'reports' | 'credits' | 'financial' | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement'>('contract');
+  const [activeTab, setActiveTab] = useState<'contract' | 'xml' | 'reports' | 'credits' | 'financial' | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement' | 'encaissement'>('contract');
   const [sessionInfo, setSessionInfo] = useState<any>(null);
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false);
 
@@ -188,6 +188,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
               <DollarSign className="w-4 h-4" />
               <span>Paiement Crédit</span>
             </button>
+
             <button
               onClick={() => setActiveTab('terme')}
               className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center space-x-2 ${
@@ -199,6 +200,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
               <Search className="w-4 h-4" />
               <span>Terme</span>
             </button>
+
             <button
               onClick={() => setActiveTab('transactions')}
               className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center space-x-2 ${
@@ -210,6 +212,8 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
               <Calendar className="w-4 h-4" />
               <span>Rapport Transactions</span>
             </button>
+
+            {/* Section réservée à Hamza */}
             {username.toLowerCase() === 'hamza' && (
               <>
                 <button
@@ -223,6 +227,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
                   <Receipt className="w-4 h-4" />
                   <span>Chèques</span>
                 </button>
+
                 <button
                   onClick={() => setActiveTab('versement')}
                   className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
@@ -233,6 +238,18 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
                 >
                   <Building2 className="w-4 h-4" />
                   <span>Versement Bancaire</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('encaissement')}
+                  className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
+                    activeTab === 'encaissement'
+                      ? 'border-green-500 text-green-600 bg-green-50/50'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <DollarSign className="w-4 h-4" />
+                  <span>Encaissement</span>
                 </button>
               </>
             )}
@@ -252,6 +269,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
         {activeTab === 'transactions' && <TransactionReport />}
         {activeTab === 'cheques' && username.toLowerCase() === 'hamza' && <ChequesManagement />}
         {activeTab === 'versement' && username.toLowerCase() === 'hamza' && <VersementBancaire username={username} />}
+        {activeTab === 'encaissement' && username.toLowerCase() === 'hamza' && <Encaissement username={username} />}
       </main>
 
       {/* Modal de confirmation de déconnexion */}
@@ -265,24 +283,5 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
     </div>
   );
 };
-// Dans la navigation du Dashboard, ajoutez ce bouton (visible seulement pour Hamza)
-{username.toLowerCase() === 'hamza' && (
-  <button
-    onClick={() => setActiveTab('encaissement')}
-    className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
-      activeTab === 'encaissement'
-        ? 'border-green-500 text-green-600 bg-green-50/50'
-        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-    }`}
-  >
-    <DollarSign className="w-4 h-4" />
-    <span>Encaissement</span>
-  </button>
-)}
-
-// Dans le contenu principal du Dashboard
-{activeTab === 'encaissement' && username.toLowerCase() === 'hamza' && (
-  <Encaissement username={username} />
-)}
 
 export default Dashboard;
