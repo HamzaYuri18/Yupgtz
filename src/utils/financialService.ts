@@ -54,6 +54,36 @@ export const saveDepense = async (depense: Depense): Promise<boolean> => {
   try {
     console.log('💰 Sauvegarde de la dépense:', depense);
 
+    // LOGIQUE SPÉCIALE POUR REMISE: ne pas sauvegarder dans la table depenses
+    if (depense.type_depense === 'Remise') {
+      console.log('📝 Remise détectée - sauvegarde uniquement dans rapport');
+
+      // Sauvegarder uniquement dans la table rapport (en négatif)
+      try {
+        await saveToRapport({
+          type: 'Remise',
+          branche: 'Financier',
+          numero_contrat: depense.Numero_Contrat || 'REMISE',
+          montant: -Math.abs(depense.montant), // Négatif pour les remises
+          assure: depense.Client || depense.type_depense,
+          mode_paiement: 'Espece',
+          type_paiement: 'Au comptant',
+          cree_par: depense.cree_par
+        }, {
+          date_depense: depense.date_depense,
+          type_depense: depense.type_depense,
+          client: depense.Client
+        });
+
+        console.log('✅ Remise sauvegardée dans rapport avec succès (montant négatif)');
+        return true;
+      } catch (rapportError) {
+        console.error('❌ Erreur lors de la sauvegarde de la remise dans rapport:', rapportError);
+        return false;
+      }
+    }
+
+    // LOGIQUE NORMALE POUR LES AUTRES DÉPENSES
     const { data, error } = await supabase
       .from('depenses')
       .insert([{
@@ -61,7 +91,7 @@ export const saveDepense = async (depense: Depense): Promise<boolean> => {
         montant: depense.montant,
         date_depense: depense.date_depense || new Date().toISOString().split('T')[0],
         cree_par: depense.cree_par,
-   
+
       }])
       .select();
 
@@ -71,7 +101,7 @@ export const saveDepense = async (depense: Depense): Promise<boolean> => {
     }
 
     console.log('✅ Dépense sauvegardée avec succès:', data);
-    
+
     // Sauvegarder aussi dans la table rapport
     try {
       await saveToRapport({
@@ -90,7 +120,7 @@ export const saveDepense = async (depense: Depense): Promise<boolean> => {
     } catch (rapportError) {
       console.error('⚠️ Erreur lors de la sauvegarde dans rapport:', rapportError);
     }
-    
+
     return true;
   } catch (error) {
     console.error('❌ Erreur générale lors de la sauvegarde de la dépense:', error);
