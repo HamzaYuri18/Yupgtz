@@ -72,7 +72,7 @@ export const saveDepense = async (depense: Depense): Promise<boolean> => {
         }, {
           date_depense: depense.date_depense,
           type_depense: depense.type_depense,
-          client: depense.Client
+          client: depense.client
         });
 
         console.log('✅ Remise sauvegardée dans rapport avec succès (montant négatif)');
