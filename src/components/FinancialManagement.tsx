@@ -309,6 +309,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         setMessage('Veuillez rechercher et valider un contrat pour la remise');
         return;
       }
+      console.log('📝 Tentative d\'enregistrement d\'une remise:', newDepense);
     }
 
     if (newDepense.type_depense === 'Reprise sur Avance Client') {
@@ -362,6 +363,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     const success = await saveDepense(depense);
     if (success) {
       setMessage('✅ Dépense enregistrée avec succès');
+      console.log('✅ Dépense enregistrée avec succès, type:', depense.type_depense);
       setNewDepense({
         type_depense: 'Frais Bureau',
         montant: '',
@@ -376,6 +378,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       loadAvailableMonths();
     } else {
       setMessage('❌ Erreur lors de l\'enregistrement de la dépense');
+      console.error('❌ Erreur lors de l\'enregistrement de la dépense, type:', depense.type_depense);
     }
     setTimeout(() => setMessage(''), 3000);
   };
