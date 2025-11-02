@@ -35,6 +35,17 @@ export interface Ristourne {
   cree_par: string;
   created_at?: string;
 }
+export interface Remise {
+  id?: number;
+  numero_contrat: string;
+  client: string;
+  montant_ristourne: number;
+  date_ristourne?: string;
+  date_paiement_ristourne?: string;
+  type_paiement?: 'Espece' | 'Cheque' | 'Banque';
+  cree_par: string;
+  created_at?: string;
+}
 
 export interface Sinistre {
   id?: number;
