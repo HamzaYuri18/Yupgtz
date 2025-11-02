@@ -35,17 +35,7 @@ export interface Ristourne {
   cree_par: string;
   created_at?: string;
 }
-export interface Remise {
-  id?: number;
-  numero_contrat: string;
-  client: string;
-  montant_ristourne: number;
-  date_ristourne?: string;
-  date_paiement_ristourne?: string;
-  type_paiement?: 'Espece' | 'Cheque' | 'Banque';
-  cree_par: string;
-  created_at?: string;
-}
+
 
 export interface Sinistre {
   id?: number;
@@ -71,8 +61,7 @@ export const saveDepense = async (depense: Depense): Promise<boolean> => {
         montant: depense.montant,
         date_depense: depense.date_depense || new Date().toISOString().split('T')[0],
         cree_par: depense.cree_par,
-        Client:depense.client,
-    Numero_Contrat:depense.numero_contrat
+   
       }])
       .select();
 
