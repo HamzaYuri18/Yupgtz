@@ -36,7 +36,6 @@ export interface Ristourne {
   created_at?: string;
 }
 
-
 export interface Sinistre {
   id?: number;
   numero_sinistre: string;
@@ -58,21 +57,29 @@ export const saveDepense = async (depense: Depense): Promise<boolean> => {
     if (depense.type_depense === 'Remise') {
       console.log('📝 Remise détectée - sauvegarde uniquement dans rapport');
 
+      // Vérifier que les champs requis sont présents
+      if (!depense.Numero_Contrat || !depense.Client) {
+        console.error('❌ Champs manquants pour la remise:', {
+          numero_contrat: depense.Numero_Contrat,
+          client: depense.Client
+        });
+        return false;
+      }
+
       // Sauvegarder uniquement dans la table rapport (en négatif)
       try {
         await saveToRapport({
           type: 'Remise',
           branche: 'Financier',
-          numero_contrat: depense.numero_contrat || 'REMISE',
+          numero_contrat: depense.Numero_Contrat,
           montant: -Math.abs(depense.montant), // Négatif pour les remises
-          assure: depense.client || depense.type_depense,
+          assure: depense.Client,
           mode_paiement: 'Espece',
           type_paiement: 'Au comptant',
           cree_par: depense.cree_par
         }, {
           date_depense: depense.date_depense,
-          type_depense: depense.type_depense,
-          client: depense.client
+          type_depense: depense.type_depense
         });
 
         console.log('✅ Remise sauvegardée dans rapport avec succès (montant négatif)');
@@ -91,7 +98,8 @@ export const saveDepense = async (depense: Depense): Promise<boolean> => {
         montant: depense.montant,
         date_depense: depense.date_depense || new Date().toISOString().split('T')[0],
         cree_par: depense.cree_par,
-
+        ...(depense.Numero_Contrat && { numero_contrat: depense.Numero_Contrat }),
+        ...(depense.Client && { client: depense.Client })
       }])
       .select();
 
@@ -102,23 +110,26 @@ export const saveDepense = async (depense: Depense): Promise<boolean> => {
 
     console.log('✅ Dépense sauvegardée avec succès:', data);
 
-    // Sauvegarder aussi dans la table rapport
-    try {
-      await saveToRapport({
-        type: 'Dépense',
-        branche: 'Financier',
-        numero_contrat: `DEP-${data[0].id}`,
-        montant: -Math.abs(depense.montant), // Négatif pour les dépenses
-        assure: depense.type_depense,
-        mode_paiement: 'Espece',
-        type_paiement: 'Au comptant',
-        cree_par: depense.cree_par
-      }, {
-        date_depense: depense.date_depense,
-        type_depense: depense.type_depense
-      });
-    } catch (rapportError) {
-      console.error('⚠️ Erreur lors de la sauvegarde dans rapport:', rapportError);
+    // Sauvegarder aussi dans la table rapport (uniquement pour les dépenses normales)
+    if (depense.type_depense !== 'Remise') {
+      try {
+        await saveToRapport({
+          type: 'Dépense',
+          branche: 'Financier',
+          numero_contrat: `DEP-${data[0].id}`,
+          montant: -Math.abs(depense.montant), // Négatif pour les dépenses
+          assure: depense.type_depense,
+          mode_paiement: 'Espece',
+          type_paiement: 'Au comptant',
+          cree_par: depense.cree_par
+        }, {
+          date_depense: depense.date_depense,
+          type_depense: depense.type_depense
+        });
+      } catch (rapportError) {
+        console.error('⚠️ Erreur lors de la sauvegarde dans rapport:', rapportError);
+        // Ne pas retourner false ici car la dépense principale est déjà sauvegardée
+      }
     }
 
     return true;
@@ -229,20 +240,12 @@ export const getRecettesExceptionnelles = async (): Promise<RecetteExceptionnell
 
 // ===== FONCTIONS POUR LES RISTOURNES =====
 
-export const checkRistourneExists = async (
-  numeroContrat: string,
-  dateRistourne: string,
-  montantRistourne: number,
-  client: string
-): Promise<boolean> => {
+export const checkRistourneExists = async (numeroContrat: string): Promise<boolean> => {
   try {
     const { data, error } = await supabase
       .from('ristournes')
       .select('id')
       .eq('numero_contrat', numeroContrat)
-      .eq('date_ristourne', dateRistourne)
-      .eq('montant_ristourne', montantRistourne)
-      .eq('client', client)
       .maybeSingle();
 
     if (error) {
@@ -262,12 +265,7 @@ export const saveRistourne = async (ristourne: Ristourne): Promise<boolean> => {
     console.log('🎁 Sauvegarde de la ristourne:', ristourne);
 
     // Vérifier si la ristourne existe déjà
-    const exists = await checkRistourneExists(
-      ristourne.numero_contrat,
-      ristourne.date_ristourne || new Date().toISOString().split('T')[0],
-      ristourne.montant_ristourne,
-      ristourne.client
-    );
+    const exists = await checkRistourneExists(ristourne.numero_contrat);
 
     if (exists) {
       console.log('⚠️ Cette ristourne existe déjà');
@@ -281,7 +279,8 @@ export const saveRistourne = async (ristourne: Ristourne): Promise<boolean> => {
         client: ristourne.client,
         montant_ristourne: ristourne.montant_ristourne,
         date_ristourne: ristourne.date_ristourne || new Date().toISOString().split('T')[0],
-        created_at: new Date().toISOString().split('T')[0], // Date courante
+        date_paiement_ristourne: ristourne.date_paiement_ristourne || new Date().toISOString().split('T')[0],
+        type_paiement: ristourne.type_paiement || 'Espece',
         cree_par: ristourne.cree_par
       }])
       .select();
@@ -380,7 +379,7 @@ export const saveSinistre = async (sinistre: Sinistre): Promise<boolean> => {
         montant: sinistre.montant,
         client: sinistre.client,
         date_sinistre: sinistre.date_sinistre || new Date().toISOString().split('T')[0],
-        created_at: new Date().toISOString().split('T')[0], // Date courante
+        date_paiement_sinistre: sinistre.date_paiement_sinistre || new Date().toISOString().split('T')[0],
         cree_par: sinistre.cree_par
       }])
       .select();
@@ -445,50 +444,38 @@ const saveToRapport = async (baseData: any, additionalData?: any): Promise<void>
   console.log('📋 Données de base:', baseData);
   console.log('📋 Données additionnelles:', additionalData);
   
-  // Préparer les données avec TOUTES les colonnes explicitement définies
-  const rapportData = {
-    // Colonnes de base (obligatoires)
-    type: baseData.type,
-    branche: baseData.branche,
-    numero_contrat: baseData.numero_contrat,
-    prime: baseData.montant || 0, // Utiliser montant pour prime aussi
-    montant: baseData.montant, // Colonne unifiée pour tous les montants
-    assure: baseData.assure,
-    mode_paiement: baseData.mode_paiement,
-    type_paiement: baseData.type_paiement,
-    cree_par: baseData.cree_par,
+  try {
+    // Préparer les données de base pour rapport
+    const rapportData = {
+      type: baseData.type,
+      branche: baseData.branche,
+      numero_contrat: baseData.numero_contrat,
+      montant: baseData.montant,
+      assure: baseData.assure,
+      mode_paiement: baseData.mode_paiement,
+      type_paiement: baseData.type_paiement,
+      cree_par: baseData.cree_par,
+      created_at: new Date().toISOString(),
+      
+      // Ajouter les données additionnelles si elles existent
+      ...(additionalData || {})
+    };
     
-    // Colonnes optionnelles des contrats
-    montant_credit: null,
-    date_paiement_prevue: null,
-    echeance: null,
+    console.log('📊 Données finales pour rapport:', rapportData);
     
-    // Colonnes financières (toutes à null par défaut)
-    date_depense: null,
-    type_depense: null,
-    date_recette: null,
-    type_recette: null,
-    date_ristourne: null,
-    date_paiement_ristourne: null,
-    client: null,
-    date_sinistre: null,
-    date_paiement_sinistre: null,
-    numero_sinistre: null,
-    
-    // Fusionner avec les données additionnelles (écrase les valeurs null si nécessaire)
-    ...additionalData
-  };
-  
-  console.log('📊 Données finales pour rapport:', rapportData);
-  
-  const { error } = await supabase
-    .from('rapport')
-    .insert([rapportData]);
+    const { error } = await supabase
+      .from('rapport')
+      .insert([rapportData]);
 
-  if (error) {
-    console.error('❌ Erreur lors de la sauvegarde dans rapport:', error);
+    if (error) {
+      console.error('❌ Erreur lors de la sauvegarde dans rapport:', error);
+      console.error('Détails de l\'erreur:', error.details, error.hint, error.message);
+      throw error;
+    }
+    
+    console.log('✅ Données sauvegardées dans rapport avec succès');
+  } catch (error) {
+    console.error('❌ Erreur générale dans saveToRapport:', error);
     throw error;
   }
-  
-  console.log('✅ Données sauvegardées dans rapport avec succès');
 };
