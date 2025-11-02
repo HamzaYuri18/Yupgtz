@@ -63,9 +63,9 @@ export const saveDepense = async (depense: Depense): Promise<boolean> => {
         await saveToRapport({
           type: 'Remise',
           branche: 'Financier',
-          numero_contrat: depense.Numero_Contrat || 'REMISE',
+          numero_contrat: depense.numero_contrat || 'REMISE',
           montant: -Math.abs(depense.montant), // Négatif pour les remises
-          assure: depense.Client || depense.type_depense,
+          assure: depense.client || depense.type_depense,
           mode_paiement: 'Espece',
           type_paiement: 'Au comptant',
           cree_par: depense.cree_par
