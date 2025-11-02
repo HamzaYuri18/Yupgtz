@@ -59,7 +59,9 @@ export const saveDepense = async (depense: Depense): Promise<boolean> => {
         type_depense: depense.type_depense,
         montant: depense.montant,
         date_depense: depense.date_depense || new Date().toISOString().split('T')[0],
-        cree_par: depense.cree_par
+        cree_par: depense.cree_par,
+        Client:depense.Cient,
+    Numero_Contrat:depense.Numero_Contrat
       }])
       .select();
 
