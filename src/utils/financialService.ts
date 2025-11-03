@@ -1,481 +1,175 @@
 import { supabase } from '../lib/supabase';
 
-// Types pour les données financières
-export interface Depense {
+export interface Session {
   id?: number;
-  type_depense: string;
-  montant: number;
-  date_depense?: string;
-  cree_par: string;
+  date_session: string;
+  statut: 'ouverte' | 'fermee';
   created_at?: string;
-  Numero_Contrat?: string;
-  Client?: string;
+  updated_at?: string;
 }
 
-export interface RecetteExceptionnelle {
-  id?: number;
-  type_recette: string;
-  montant: number;
-  date_recette?: string;
-  cree_par: string;
-  created_at?: string;
-  Numero_Contrat?: string;
-  Echeance?: string;
-  Assure?: string;
-}
-
-export interface Ristourne {
-  id?: number;
-  numero_contrat: string;
-  client: string;
-  montant_ristourne: number;
-  date_ristourne?: string;
-  date_paiement_ristourne?: string;
-  type_paiement?: 'Espece' | 'Cheque' | 'Banque';
-  cree_par: string;
-  created_at?: string;
-}
-
-export interface Sinistre {
-  id?: number;
-  numero_sinistre: string;
-  montant: number;
-  client: string;
-  date_sinistre?: string;
-  date_paiement_sinistre?: string;
-  cree_par: string;
-  created_at?: string;
-}
-
-// ===== FONCTIONS POUR LES DÉPENSES =====
-
-export const saveDepense = async (depense: Depense): Promise<boolean> => {
-  try {
-    console.log('💰 Sauvegarde de la dépense:', depense);
-
-    // LOGIQUE SPÉCIALE POUR REMISE: ne pas sauvegarder dans la table depenses
-    if (depense.type_depense === 'Remise') {
-      console.log('📝 Remise détectée - sauvegarde uniquement dans rapport');
-
-      // Vérifier que les champs requis sont présents
-      if (!depense.Numero_Contrat || !depense.Client) {
-        console.error('❌ Champs manquants pour la remise:', {
-          numero_contrat: depense.Numero_Contrat,
-          client: depense.Client
-        });
-        return false;
-      }
-
-      // Sauvegarder uniquement dans la table rapport (en négatif)
-      try {
-        await saveToRapport({
-          type: 'Remise',
-          branche: 'Financier',
-          numero_contrat: depense.Numero_Contrat,
-          montant: -Math.abs(depense.montant), // Négatif pour les remises
-          assure: depense.Client,
-          mode_paiement: 'Espece',
-          type_paiement: 'Au comptant',
-          cree_par: depense.cree_par
-        }, {
-          date_depense: depense.date_depense,
-          type_depense: depense.type_depense
-        });
-
-        console.log('✅ Remise sauvegardée dans rapport avec succès (montant négatif)');
-        return true;
-      } catch (rapportError) {
-        console.error('❌ Erreur lors de la sauvegarde de la remise dans rapport:', rapportError);
-        return false;
-      }
-    }
-
-    // LOGIQUE NORMALE POUR LES AUTRES DÉPENSES
-    const { data, error } = await supabase
-      .from('depenses')
-      .insert([{
-        type_depense: depense.type_depense,
-        montant: depense.montant,
-        date_depense: depense.date_depense || new Date().toISOString().split('T')[0],
-        cree_par: depense.cree_par,
-        ...(depense.Numero_Contrat && { numero_contrat: depense.Numero_Contrat }),
-        ...(depense.Client && { client: depense.Client })
-      }])
-      .select();
-
-    if (error) {
-      console.error('❌ Erreur lors de la sauvegarde de la dépense:', error);
-      return false;
-    }
-
-    console.log('✅ Dépense sauvegardée avec succès:', data);
-
-    // Sauvegarder aussi dans la table rapport (uniquement pour les dépenses normales)
-    if (depense.type_depense !== 'Remise') {
-      try {
-        await saveToRapport({
-          type: 'Dépense',
-          branche: 'Financier',
-          numero_contrat: `DEP-${data[0].id}`,
-          montant: -Math.abs(depense.montant), // Négatif pour les dépenses
-          assure: depense.type_depense,
-          mode_paiement: 'Espece',
-          type_paiement: 'Au comptant',
-          cree_par: depense.cree_par
-        }, {
-          date_depense: depense.date_depense,
-          type_depense: depense.type_depense
-        });
-      } catch (rapportError) {
-        console.error('⚠️ Erreur lors de la sauvegarde dans rapport:', rapportError);
-        // Ne pas retourner false ici car la dépense principale est déjà sauvegardée
-      }
-    }
-
-    return true;
-  } catch (error) {
-    console.error('❌ Erreur générale lors de la sauvegarde de la dépense:', error);
-    return false;
-  }
+// Fonction pour obtenir la date de session actuelle
+export const getSessionDate = (): string => {
+  return new Date().toISOString().split('T')[0];
 };
 
-export const getDepenses = async (): Promise<Depense[]> => {
+// Vérifier si une session existe pour la date actuelle
+export const checkSessionExists = async (): Promise<Session | null> => {
   try {
-    const { data, error } = await supabase
-      .from('depenses')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('❌ Erreur lors de la récupération des dépenses:', error);
-      return [];
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error('❌ Erreur générale lors de la récupération des dépenses:', error);
-    return [];
-  }
-};
-
-// ===== FONCTIONS POUR LES RECETTES EXCEPTIONNELLES =====
-
-export const saveRecetteExceptionnelle = async (recette: RecetteExceptionnelle): Promise<boolean> => {
-  try {
-    console.log('💵 Sauvegarde de la recette exceptionnelle:', recette);
-
-    const insertData: any = {
-      type_recette: recette.type_recette,
-      montant: recette.montant,
-      date_recette: recette.date_recette || new Date().toISOString().split('T')[0],
-      cree_par: recette.cree_par
-    };
-
-    if (recette.Numero_Contrat) {
-      insertData.Numero_Contrat = recette.Numero_Contrat;
-    }
-    if (recette.Echeance) {
-      insertData.Echeance = recette.Echeance;
-    }
-    if (recette.Assure) {
-      insertData.Assure = recette.Assure;
-    }
-
-    const { data, error } = await supabase
-      .from('recettes_exceptionnelles')
-      .insert([insertData])
-      .select();
-
-    if (error) {
-      console.error('❌ Erreur lors de la sauvegarde de la recette:', error);
-      return false;
-    }
-
-    console.log('✅ Recette exceptionnelle sauvegardée avec succès:', data);
+    const today = getSessionDate();
     
-    // Sauvegarder aussi dans la table rapport
-    try {
-      await saveToRapport({
-        type: 'Recette Exceptionnelle',
-        branche: 'Financier',
-        numero_contrat: `REC-${data[0].id}`,
-        montant: recette.montant, // Positif pour les recettes
-        assure: recette.type_recette,
-        mode_paiement: 'Espece',
-        type_paiement: 'Au comptant',
-        cree_par: recette.cree_par
-      }, {
-        date_recette: recette.date_recette,
-        type_recette: recette.type_recette
-      });
-    } catch (rapportError) {
-      console.error('⚠️ Erreur lors de la sauvegarde dans rapport:', rapportError);
-    }
-    
-    return true;
-  } catch (error) {
-    console.error('❌ Erreur générale lors de la sauvegarde de la recette:', error);
-    return false;
-  }
-};
-
-export const getRecettesExceptionnelles = async (): Promise<RecetteExceptionnelle[]> => {
-  try {
     const { data, error } = await supabase
-      .from('recettes_exceptionnelles')
+      .from('sessions')
       .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('❌ Erreur lors de la récupération des recettes:', error);
-      return [];
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error('❌ Erreur générale lors de la récupération des recettes:', error);
-    return [];
-  }
-};
-
-// ===== FONCTIONS POUR LES RISTOURNES =====
-
-export const checkRistourneExists = async (numeroContrat: string): Promise<boolean> => {
-  try {
-    const { data, error } = await supabase
-      .from('ristournes')
-      .select('id')
-      .eq('numero_contrat', numeroContrat)
+      .eq('date_session', today)
       .maybeSingle();
 
     if (error) {
-      console.error('❌ Erreur lors de la vérification de la ristourne:', error);
-      return false;
+      console.error('❌ Erreur lors de la vérification de la session:', error);
+      return null;
     }
 
-    return data !== null;
+    return data;
   } catch (error) {
-    console.error('❌ Erreur générale lors de la vérification de la ristourne:', error);
-    return false;
+    console.error('❌ Erreur générale lors de la vérification de la session:', error);
+    return null;
   }
 };
 
-export const saveRistourne = async (ristourne: Ristourne): Promise<boolean> => {
+// Créer une nouvelle session
+export const createSession = async (): Promise<Session | null> => {
   try {
-    console.log('🎁 Sauvegarde de la ristourne:', ristourne);
-
-    // Vérifier si la ristourne existe déjà
-    const exists = await checkRistourneExists(ristourne.numero_contrat);
-
-    if (exists) {
-      console.log('⚠️ Cette ristourne existe déjà');
-      return false;
-    }
-
+    const today = getSessionDate();
+    
     const { data, error } = await supabase
-      .from('ristournes')
+      .from('sessions')
       .insert([{
-        numero_contrat: ristourne.numero_contrat,
-        client: ristourne.client,
-        montant_ristourne: ristourne.montant_ristourne,
-        date_ristourne: ristourne.date_ristourne || new Date().toISOString().split('T')[0],
-        date_paiement_ristourne: ristourne.date_paiement_ristourne || new Date().toISOString().split('T')[0],
-        type_paiement: ristourne.type_paiement || 'Espece',
-        cree_par: ristourne.cree_par
+        date_session: today,
+        statut: 'ouverte'
       }])
-      .select();
+      .select()
+      .single();
 
     if (error) {
-      console.error('❌ Erreur lors de la sauvegarde de la ristourne:', error);
-      return false;
+      console.error('❌ Erreur lors de la création de la session:', error);
+      return null;
     }
 
-    console.log('✅ Ristourne sauvegardée avec succès:', data);
-    
-    // Sauvegarder aussi dans la table rapport
-    try {
-      await saveToRapport({
-        type: 'Ristourne',
-        branche: 'Financier',
-        numero_contrat: ristourne.numero_contrat,
-        montant: -Math.abs(ristourne.montant_ristourne), // Négatif pour les ristournes
-        assure: ristourne.client,
-        mode_paiement: 'Espece',
-        type_paiement: 'Au comptant',
-        cree_par: ristourne.cree_par
-      }, {
-        date_ristourne: ristourne.date_ristourne,
-        date_paiement_ristourne: data[0].date_paiement_ristourne,
-        client: ristourne.client
-      });
-    } catch (rapportError) {
-      console.error('⚠️ Erreur lors de la sauvegarde dans rapport:', rapportError);
-    }
-    
-    return true;
+    console.log('✅ Nouvelle session créée:', data);
+    return data;
   } catch (error) {
-    console.error('❌ Erreur générale lors de la sauvegarde de la ristourne:', error);
-    return false;
+    console.error('❌ Erreur générale lors de la création de la session:', error);
+    return null;
   }
 };
 
-export const getRistournes = async (): Promise<Ristourne[]> => {
+// Fermer une session
+export const closeSession = async (sessionId: number): Promise<boolean> => {
   try {
-    const { data, error } = await supabase
-      .from('ristournes')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('❌ Erreur lors de la récupération des ristournes:', error);
-      return [];
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error('❌ Erreur générale lors de la récupération des ristournes:', error);
-    return [];
-  }
-};
-
-// ===== FONCTIONS POUR LES SINISTRES =====
-
-export const checkSinistreExists = async (numeroSinistre: string): Promise<boolean> => {
-  try {
-    const { data, error } = await supabase
-      .from('sinistres')
-      .select('id')
-      .eq('numero_sinistre', numeroSinistre)
-      .maybeSingle();
-
-    if (error) {
-      console.error('❌ Erreur lors de la vérification du sinistre:', error);
-      return false;
-    }
-
-    return data !== null;
-  } catch (error) {
-    console.error('❌ Erreur générale lors de la vérification du sinistre:', error);
-    return false;
-  }
-};
-
-export const saveSinistre = async (sinistre: Sinistre): Promise<boolean> => {
-  try {
-    console.log('🚨 Sauvegarde du sinistre:', sinistre);
-
-    // Vérifier si le sinistre existe déjà
-    const exists = await checkSinistreExists(sinistre.numero_sinistre);
-
-    if (exists) {
-      console.log('⚠️ Ce numéro de sinistre existe déjà');
-      return false;
-    }
-
-    const { data, error } = await supabase
-      .from('sinistres')
-      .insert([{
-        numero_sinistre: sinistre.numero_sinistre,
-        montant: sinistre.montant,
-        client: sinistre.client,
-        date_sinistre: sinistre.date_sinistre || new Date().toISOString().split('T')[0],
-        date_paiement_sinistre: sinistre.date_paiement_sinistre || new Date().toISOString().split('T')[0],
-        cree_par: sinistre.cree_par
-      }])
-      .select();
-
-    if (error) {
-      console.error('❌ Erreur lors de la sauvegarde du sinistre:', error);
-      return false;
-    }
-
-    console.log('✅ Sinistre sauvegardé avec succès:', data);
-    
-    // Sauvegarder aussi dans la table rapport
-    try {
-      await saveToRapport({
-        type: 'Sinistre',
-        branche: 'Financier',
-        numero_contrat: sinistre.numero_sinistre,
-        montant: -Math.abs(sinistre.montant), // Négatif pour les sinistres
-        assure: sinistre.client,
-        mode_paiement: 'Espece',
-        type_paiement: 'Au comptant',
-        cree_par: sinistre.cree_par
-      }, {
-        date_sinistre: sinistre.date_sinistre,
-        date_paiement_sinistre: data[0].date_paiement_sinistre,
-        numero_sinistre: sinistre.numero_sinistre,
-        client: sinistre.client
-      });
-    } catch (rapportError) {
-      console.error('⚠️ Erreur lors de la sauvegarde dans rapport:', rapportError);
-    }
-    
-    return true;
-  } catch (error) {
-    console.error('❌ Erreur générale lors de la sauvegarde du sinistre:', error);
-    return false;
-  }
-};
-
-export const getSinistres = async (): Promise<Sinistre[]> => {
-  try {
-    const { data, error } = await supabase
-      .from('sinistres')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('❌ Erreur lors de la récupération des sinistres:', error);
-      return [];
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error('❌ Erreur générale lors de la récupération des sinistres:', error);
-    return [];
-  }
-};
-
-// Fonction pour sauvegarder dans la table rapport
-const saveToRapport = async (baseData: any, additionalData?: any): Promise<void> => {
-  console.log('📊 Sauvegarde dans la table rapport...');
-  console.log('📋 Données de base:', baseData);
-  console.log('📋 Données additionnelles:', additionalData);
-  
-  try {
-    // Préparer les données de base pour rapport
-    const rapportData = {
-      type: baseData.type,
-      branche: baseData.branche,
-      numero_contrat: baseData.numero_contrat,
-      montant: baseData.montant,
-      assure: baseData.assure,
-      mode_paiement: baseData.mode_paiement,
-      type_paiement: baseData.type_paiement,
-      cree_par: baseData.cree_par,
-      created_at: new Date().toISOString(),
-      
-      // Ajouter les données additionnelles si elles existent
-      ...(additionalData || {})
-    };
-    
-    console.log('📊 Données finales pour rapport:', rapportData);
-    
     const { error } = await supabase
-      .from('rapport')
-      .insert([rapportData]);
+      .from('sessions')
+      .update({
+        statut: 'fermee',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', sessionId);
 
     if (error) {
-      console.error('❌ Erreur lors de la sauvegarde dans rapport:', error);
-      console.error('Détails de l\'erreur:', error.details, error.hint, error.message);
-      throw error;
+      console.error('❌ Erreur lors de la fermeture de la session:', error);
+      return false;
     }
-    
-    console.log('✅ Données sauvegardées dans rapport avec succès');
+
+    console.log('✅ Session fermée avec succès');
+    return true;
   } catch (error) {
-    console.error('❌ Erreur générale dans saveToRapport:', error);
-    throw error;
+    console.error('❌ Erreur générale lors de la fermeture de la session:', error);
+    return false;
+  }
+};
+
+// Fonction principale pour gérer la session au login
+export const handleSessionOnLogin = async (username: string): Promise<boolean> => {
+  try {
+    console.log('🔐 Gestion de la session pour:', username);
+    
+    // Vérifier si une session existe pour aujourd'hui
+    const existingSession = await checkSessionExists();
+    
+    if (existingSession) {
+      if (existingSession.statut === 'fermee') {
+        // Si la session est fermée, seul Hamza peut se reconnecter
+        if (username.toLowerCase() !== 'hamza') {
+          console.log('❌ Session fermée - Accès refusé pour:', username);
+          return false;
+        }
+        // Hamza peut se reconnecter même si la session est fermée
+        console.log('✅ Hamza autorisé à se reconnecter sur session fermée');
+        return true;
+      }
+      // Session ouverte - tout le monde peut se connecter
+      console.log('✅ Session ouverte existante - Connexion autorisée');
+      return true;
+    } else {
+      // Aucune session existante - créer une nouvelle session
+      console.log('📅 Aucune session trouvée - création d\'une nouvelle session');
+      const newSession = await createSession();
+      return newSession !== null;
+    }
+  } catch (error) {
+    console.error('❌ Erreur lors de la gestion de la session:', error);
+    return false;
+  }
+};
+
+// Fonction pour fermer la session au logout
+export const handleSessionOnLogout = async (): Promise<boolean> => {
+  try {
+    const today = getSessionDate();
+    
+    // Fermer la session du jour
+    const { data: session, error: findError } = await supabase
+      .from('sessions')
+      .select('id')
+      .eq('date_session', today)
+      .eq('statut', 'ouverte')
+      .maybeSingle();
+
+    if (findError) {
+      console.error('❌ Erreur lors de la recherche de la session:', findError);
+      return false;
+    }
+
+    if (!session) {
+      console.log('ℹ️ Aucune session ouverte trouvée pour aujourd\'hui');
+      return true;
+    }
+
+    // Fermer la session
+    return await closeSession(session.id);
+  } catch (error) {
+    console.error('❌ Erreur lors de la fermeture de la session:', error);
+    return false;
+  }
+};
+
+// Fonction pour vérifier périodiquement l'état de la session
+export const checkSessionStatus = async (username: string): Promise<boolean> => {
+  try {
+    const session = await checkSessionExists();
+    
+    if (!session) {
+      console.log('❌ Aucune session trouvée');
+      return false;
+    }
+
+    if (session.statut === 'fermee' && username.toLowerCase() !== 'hamza') {
+      console.log('❌ Session fermée - Accès refusé');
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('❌ Erreur lors de la vérification du statut de la session:', error);
+    return false;
   }
 };
