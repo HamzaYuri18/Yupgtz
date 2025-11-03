@@ -29,18 +29,22 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
     setIsGeneratingPDF(false);
   };
 
-  const handleConfirmLogout = async () => {
-    if (!pdfGenerated) {
-      alert('Veuillez d\'abord générer et télécharger la Fiche de Caisse');
-      return;
-    }
+// Dans LogoutConfirmation.tsx
+const handleConfirmLogout = async () => {
+  if (!pdfGenerated) {
+    alert('Veuillez d\'abord générer et télécharger la Fiche de Caisse');
+    return;
+  }
 
-    // Sauvegarder les données de session avant de se déconnecter
-    const dateSession = getSessionDate();
-    await saveSessionData(username, dateSession);
+  // Sauvegarder les données de session avant de se déconnecter
+  const dateSession = getSessionDate();
+  await saveSessionData(username, dateSession);
+  
+  // Fermer la session utilisateur
+  await closeUserSession(username, dateSession);
 
-    onConfirm();
-  };
+  onConfirm();
+};
 
   const handleCancel = () => {
     if (!isCancelLocked) {
