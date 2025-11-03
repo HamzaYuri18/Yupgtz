@@ -1,24 +1,54 @@
 import { supabase } from '../lib/supabase';
 
+// Interface pour les données de session
+export interface SessionData {
+  id?: number;
+  date_session: string;
+  total_espece: number;
+  versement: number;
+  date_versement: string | null;
+  charges: number;
+  banque: string | null;
+  statut: string;
+  cree_par: string;
+  created_at?: string;
+  session_fermee: boolean;
+}
+
+// Calculer le total espèce depuis la table rapport
 export const calculateTotalEspece = async (dateSession: string): Promise<number> => {
-  // Calculer le total de la colonne montant de la table rapport pour la date de session
-  // UNIQUEMENT pour les transactions avec mode_paiement = 'Espece'
-  const { data: rapportData } = await supabase
-    .from('rapport')
-    .select('montant, mode_paiement')
-    .eq('date_operation', dateSession)
-    .eq('mode_paiement', 'Espece');
+  try {
+    console.log('🔍 Calcul du total espèce pour la date:', dateSession);
+    
+    const { data: rapportData, error } = await supabase
+      .from('rapport')
+      .select('montant, mode_paiement')
+      .eq('date_operation', dateSession)
+      .eq('mode_paiement', 'Espece');
 
-  const rapportTotal = rapportData?.reduce((sum, item) => sum + (parseFloat(item.montant) || 0), 0) || 0;
+    if (error) {
+      console.error('❌ Erreur lors du calcul du total espèce:', error);
+      return 0;
+    }
 
-  return rapportTotal;
+    const rapportTotal = rapportData?.reduce((sum, item) => sum + (parseFloat(item.montant.toString()) || 0), 0) || 0;
+    
+    console.log(`✅ Total espèce calculé: ${rapportTotal} DT pour ${dateSession}`);
+    console.log(`📊 ${rapportData?.length || 0} transactions en espèces trouvées`);
+    
+    return rapportTotal;
+  } catch (error) {
+    console.error('❌ Erreur générale lors du calcul du total espèce:', error);
+    return 0;
+  }
 };
 
+// Sauvegarder les données de session (fermeture de session)
 export const saveSessionData = async (username: string, dateSession: string): Promise<boolean> => {
   try {
     const totalEspece = await calculateTotalEspece(dateSession);
 
-    // Vérifier si la session existe déjà pour cette date (peu importe l'utilisateur)
+    // Vérifier si la session existe déjà pour cette date
     const { data: existingSession } = await supabase
       .from('sessions')
       .select('*')
@@ -31,11 +61,18 @@ export const saveSessionData = async (username: string, dateSession: string): Pr
         .from('sessions')
         .update({
           total_espece: totalEspece,
-          session_fermee: true
+          session_fermee: true,
+          cree_par: username // Mettre à jour avec l'utilisateur qui ferme
         })
         .eq('id', existingSession.id);
 
-      return !error;
+      if (error) {
+        console.error('❌ Erreur mise à jour session:', error);
+        return false;
+      }
+
+      console.log(`✅ Session mise à jour et fermée pour ${dateSession}`);
+      return true;
     } else {
       // Créer une nouvelle session fermée
       const { error } = await supabase
@@ -43,92 +80,132 @@ export const saveSessionData = async (username: string, dateSession: string): Pr
         .insert({
           date_session: dateSession,
           total_espece: totalEspece,
-          cree_par: username,
+          versement: 0,
+          date_versement: null,
+          charges: 0,
+          banque: null,
           statut: 'Non versé',
+          cree_par: username,
           session_fermee: true
         });
 
-      return !error;
+      if (error) {
+        console.error('❌ Erreur création session:', error);
+        return false;
+      }
+
+      console.log(`✅ Nouvelle session créée et fermée pour ${dateSession}`);
+      return true;
     }
   } catch (error) {
-    console.error('Erreur lors de l\'enregistrement de la session:', error);
+    console.error('❌ Erreur lors de l\'enregistrement de la session:', error);
     return false;
   }
 };
 
+// Vérifier si une session est fermée
 export const isSessionClosed = async (dateSession: string): Promise<boolean> => {
-  const { data } = await supabase
-    .from('sessions')
-    .select('session_fermee')
-    .eq('date_session', dateSession)
-    .maybeSingle();
+  try {
+    const { data, error } = await supabase
+      .from('sessions')
+      .select('session_fermee')
+      .eq('date_session', dateSession)
+      .maybeSingle();
 
-  return data?.session_fermee || false;
+    if (error) {
+      console.error('❌ Erreur vérification session:', error);
+      return true; // Par défaut, considérer comme fermée en cas d'erreur
+    }
+
+    return data?.session_fermee || true; // Si pas de session, considérer comme fermée
+  } catch (error) {
+    console.error('❌ Erreur générale vérification session:', error);
+    return true;
+  }
 };
 
+// Obtenir les statistiques mensuelles
 export const getMonthlyStats = async (month: number, year: number) => {
-  const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-  const endDate = new Date(year, month, 0);
-  const endDateStr = `${year}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+  try {
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = new Date(year, month, 0);
+    const endDateStr = `${year}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
-  const { data, error } = await supabase
-    .from('sessions')
-    .select('*')
-    .gte('date_session', startDate)
-    .lte('date_session', endDateStr);
+    const { data, error } = await supabase
+      .from('sessions')
+      .select('*')
+      .gte('date_session', startDate)
+      .lte('date_session', endDateStr);
 
-  if (error) {
-    console.error('Erreur lors de la récupération des stats mensuelles:', error);
+    if (error) {
+      console.error('❌ Erreur récupération stats mensuelles:', error);
+      return null;
+    }
+
+    const nonVersees = data?.filter(s => s.statut === 'Non versé') || [];
+    const versees = data?.filter(s => s.statut === 'Versé') || [];
+
+    return {
+      nonVersees: {
+        count: nonVersees.length,
+        total: nonVersees.reduce((sum, s) => sum + parseFloat(s.total_espece?.toString() || '0'), 0)
+      },
+      versees: {
+        count: versees.length,
+        total: versees.reduce((sum, s) => sum + parseFloat(s.versement?.toString() || '0'), 0)
+      },
+      totalCharges: data?.reduce((sum, s) => sum + parseFloat(s.charges?.toString() || '0'), 0) || 0
+    };
+  } catch (error) {
+    console.error('❌ Erreur générale stats mensuelles:', error);
     return null;
   }
-
-  const nonVersees = data?.filter(s => s.statut === 'Non versé') || [];
-  const versees = data?.filter(s => s.statut === 'Versé') || [];
-
-  return {
-    nonVersees: {
-      count: nonVersees.length,
-      total: nonVersees.reduce((sum, s) => sum + parseFloat(s.total_espece || 0), 0)
-    },
-    versees: {
-      count: versees.length,
-      total: versees.reduce((sum, s) => sum + parseFloat(s.versement || 0), 0)
-    },
-    totalCharges: data?.reduce((sum, s) => sum + parseFloat(s.charges || 0), 0) || 0
-  };
 };
 
-export const getRecentSessions = async (limit: number = 10) => {
-  const { data, error } = await supabase
-    .from('sessions')
-    .select('*')
-    .order('date_session', { ascending: false })
-    .limit(limit);
+// Obtenir les sessions récentes
+export const getRecentSessions = async (limit: number = 10): Promise<SessionData[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('sessions')
+      .select('*')
+      .order('date_session', { ascending: false })
+      .limit(limit);
 
-  if (error) {
-    console.error('Erreur lors de la récupération des sessions:', error);
+    if (error) {
+      console.error('❌ Erreur récupération sessions récentes:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('❌ Erreur générale récupération sessions:', error);
     return [];
   }
-
-  return data || [];
 };
 
-export const getSessionsByDateRange = async (dateDebut: string, dateFin: string) => {
-  const { data, error } = await supabase
-    .from('sessions')
-    .select('*')
-    .gte('date_session', dateDebut)
-    .lte('date_session', dateFin)
-    .order('date_session', { ascending: false });
+// Obtenir les sessions par plage de dates
+export const getSessionsByDateRange = async (dateDebut: string, dateFin: string): Promise<SessionData[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('sessions')
+      .select('*')
+      .gte('date_session', dateDebut)
+      .lte('date_session', dateFin)
+      .order('date_session', { ascending: false });
 
-  if (error) {
-    console.error('Erreur lors de la récupération des sessions:', error);
+    if (error) {
+      console.error('❌ Erreur récupération sessions par date:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('❌ Erreur générale récupération sessions par date:', error);
     return [];
   }
-
-  return data || [];
 };
 
+// Mettre à jour le versement d'une session
 export const updateSessionVersement = async (
   id: number,
   versement: number,
@@ -148,15 +225,20 @@ export const updateSessionVersement = async (
       })
       .eq('id', id);
 
-    return !error;
+    if (error) {
+      console.error('❌ Erreur mise à jour versement:', error);
+      return false;
+    }
+
+    console.log(`✅ Versement mis à jour pour la session ${id}`);
+    return true;
   } catch (error) {
-    console.error('Erreur lors de la mise à jour du versement:', error);
+    console.error('❌ Erreur générale mise à jour versement:', error);
     return false;
   }
 };
 
-// Fonction pour calculer le total espèce depuis la table rapport
-// UNIQUEMENT pour les transactions avec mode_paiement = 'Espece'
+// Calculer le total espèce depuis la table rapport (version améliorée)
 export const calculateTotalEspeceFromRapport = async (dateSession: string): Promise<number> => {
   try {
     console.log('🔍 Calcul du total espèce depuis rapport pour la date:', dateSession);
@@ -172,14 +254,14 @@ export const calculateTotalEspeceFromRapport = async (dateSession: string): Prom
       .select('montant, mode_paiement, created_at')
       .gte('created_at', startDate.toISOString())
       .lt('created_at', endDate.toISOString())
-      .eq('mode_paiement', 'Espece'); // FILTRE IMPORTANT : seulement les paiements en espèces
+      .eq('mode_paiement', 'Espece');
 
     if (error) {
       console.error('❌ Erreur lors du calcul du total espèce:', error);
       return 0;
     }
 
-    const total = data?.reduce((sum, record) => sum + (record.montant || 0), 0) || 0;
+    const total = data?.reduce((sum, record) => sum + (parseFloat(record.montant?.toString()) || 0), 0) || 0;
     
     console.log(`✅ Total espèce calculé: ${total} DT pour ${dateSession}`);
     console.log(`📊 ${data?.length || 0} transactions en espèces trouvées`);
@@ -199,7 +281,7 @@ export const calculateTotalEspeceFromRapport = async (dateSession: string): Prom
   }
 };
 
-// Fonction pour vérifier et synchroniser tous les totaux espèce
+// Vérifier et synchroniser tous les totaux espèce
 export const verifyAndSyncSessionTotals = async (): Promise<void> => {
   try {
     console.log('🔄 Vérification et synchronisation des totaux espèce...');
@@ -245,7 +327,7 @@ export const verifyAndSyncSessionTotals = async (): Promise<void> => {
   }
 };
 
-// Fonction pour créer une session avec vérification du total espèce
+// Créer une session avec vérification du total espèce
 export const createSessionWithVerifiedTotal = async (dateSession: string, createdBy: string): Promise<boolean> => {
   try {
     console.log('📅 Création de session avec vérification du total...');
@@ -260,8 +342,11 @@ export const createSessionWithVerifiedTotal = async (dateSession: string, create
         total_espece: totalEspece,
         versement: 0,
         charges: 0,
-        statut: 'Non Versé',
-        cree_par: createdBy
+        banque: null,
+        date_versement: null,
+        statut: 'Non versé',
+        cree_par: createdBy,
+        session_fermee: false
       }])
       .select();
 
@@ -278,7 +363,7 @@ export const createSessionWithVerifiedTotal = async (dateSession: string, create
   }
 };
 
-// Fonction utilitaire pour obtenir le détail des transactions
+// Obtenir le détail des transactions pour une session
 export const getSessionTransactionsDetail = async (dateSession: string) => {
   try {
     console.log('🔍 Récupération du détail des transactions pour:', dateSession);
@@ -297,25 +382,25 @@ export const getSessionTransactionsDetail = async (dateSession: string) => {
 
     if (error) {
       console.error('❌ Erreur récupération détail transactions:', error);
-      return [];
+      return { transactions: [], totals: { espece: 0, cheque: 0, carte: 0, virement: 0, totalGeneral: 0 } };
     }
 
     // Calculer les totaux par mode de paiement
     const totalEspece = data
       ?.filter(record => record.mode_paiement === 'Espece')
-      .reduce((sum, record) => sum + (record.montant || 0), 0) || 0;
+      .reduce((sum, record) => sum + (parseFloat(record.montant?.toString()) || 0), 0) || 0;
 
     const totalCheque = data
       ?.filter(record => record.mode_paiement === 'Cheque')
-      .reduce((sum, record) => sum + (record.montant || 0), 0) || 0;
+      .reduce((sum, record) => sum + (parseFloat(record.montant?.toString()) || 0), 0) || 0;
 
     const totalCarte = data
       ?.filter(record => record.mode_paiement === 'Carte Bancaire')
-      .reduce((sum, record) => sum + (record.montant || 0), 0) || 0;
+      .reduce((sum, record) => sum + (parseFloat(record.montant?.toString()) || 0), 0) || 0;
 
     const totalVirement = data
       ?.filter(record => record.mode_paiement === 'Virement')
-      .reduce((sum, record) => sum + (record.montant || 0), 0) || 0;
+      .reduce((sum, record) => sum + (parseFloat(record.montant?.toString()) || 0), 0) || 0;
 
     console.log('📊 Détail des transactions:');
     console.log(`   💵 Espèces: ${totalEspece} DT`);
@@ -331,7 +416,7 @@ export const getSessionTransactionsDetail = async (dateSession: string) => {
         cheque: totalCheque,
         carte: totalCarte,
         virement: totalVirement,
-        totalGeneral: (data?.reduce((sum, record) => sum + (record.montant || 0), 0) || 0)
+        totalGeneral: (data?.reduce((sum, record) => sum + (parseFloat(record.montant?.toString()) || 0), 0) || 0)
       }
     };
   } catch (error) {
@@ -339,214 +424,79 @@ export const getSessionTransactionsDetail = async (dateSession: string) => {
     return { transactions: [], totals: { espece: 0, cheque: 0, carte: 0, virement: 0, totalGeneral: 0 } };
   }
 };
-// Dans sessionService.ts
-export const closeUserSession = async (username: string, dateSession: string): Promise<boolean> => {
+
+// Obtenir la session du jour
+export const getTodaySession = async (): Promise<SessionData | null> => {
   try {
-    // Pour Hamza, ne pas fermer la session globale
-    if (username === 'Hamza') {
-      console.log('🛡️ Hamza se déconnecte - session globale maintenue');
-      return true;
-    }
-
-    // Pour les autres utilisateurs, fermer leur session
-    const { error } = await supabase
-      .from('sessions')
-      .update({
-        session_fermee: true,
-        fermee_a: new Date().toISOString()
-      })
-      .eq('date_session', dateSession)
-      .eq('cree_par', username);
-
-    if (error) {
-      console.error('Erreur fermeture session utilisateur:', error);
-      return false;
-    }
-
-    console.log(`✅ Session fermée pour ${username}`);
-    return true;
-  } catch (error) {
-    console.error('Erreur fermeture session:', error);
-    return false;
-  }
-};
-// Vérifier si une session existe pour une date donnée et son statut
-export const checkSessionStatus = async (dateSession: string): Promise<{ exists: boolean; isClosed: boolean; openedBy?: string }> => {
-  try {
+    const today = new Date().toISOString().split('T')[0];
+    
     const { data, error } = await supabase
       .from('sessions')
-      .select('id, session_fermee, cree_par')
-      .eq('date_session', dateSession)
-      .single();
-
-    if (error && error.code !== 'PGRST116') {
-      console.error('Erreur vérification session:', error);
-      return { exists: false, isClosed: true };
-    }
-
-    if (!data) {
-      return { exists: false, isClosed: true };
-    }
-
-    return { 
-      exists: true, 
-      isClosed: data.session_fermee,
-      openedBy: data.cree_par
-    };
-  } catch (error) {
-    console.error('Erreur vérification session:', error);
-    return { exists: false, isClosed: true };
-  }
-};
-
-// Créer une nouvelle session ouverte
-export const createNewSession = async (dateSession: string, username: string): Promise<boolean> => {
-  try {
-    const totalEspece = await calculateTotalEspeceFromRapport(dateSession);
-    
-    const { error } = await supabase
-      .from('sessions')
-      .insert({
-        date_session: dateSession,
-        total_espece: totalEspece,
-        cree_par: username,
-        statut: 'Non versé',
-        session_fermee: false, // Session ouverte
-        session_ouverte_par: username
-      });
+      .select('*')
+      .eq('date_session', today)
+      .maybeSingle();
 
     if (error) {
-      console.error('Erreur création session:', error);
-      return false;
+      console.error('❌ Erreur récupération session du jour:', error);
+      return null;
     }
 
-    console.log(`✅ Nouvelle session créée pour ${dateSession} par ${username}`);
-    return true;
+    return data;
   } catch (error) {
-    console.error('Erreur création session:', error);
-    return false;
+    console.error('❌ Erreur générale récupération session du jour:', error);
+    return null;
   }
 };
 
-// Fermer toutes les sessions de la date
-export const closeAllSessionsForDate = async (dateSession: string): Promise<boolean> => {
+// Fermer la session du jour
+export const closeTodaySession = async (): Promise<boolean> => {
   try {
+    const today = new Date().toISOString().split('T')[0];
+    
     const { error } = await supabase
       .from('sessions')
       .update({
-        session_fermee: true,
-        fermee_a: new Date().toISOString()
+        session_fermee: true
       })
-      .eq('date_session', dateSession)
-      .eq('session_fermee', false);
+      .eq('date_session', today);
 
     if (error) {
-      console.error('Erreur fermeture sessions:', error);
+      console.error('❌ Erreur fermeture session du jour:', error);
       return false;
     }
 
-    console.log(`✅ Toutes les sessions fermées pour ${dateSession}`);
+    console.log(`✅ Session du ${today} fermée`);
     return true;
   } catch (error) {
-    console.error('Erreur fermeture sessions:', error);
+    console.error('❌ Erreur générale fermeture session:', error);
     return false;
   }
 };
 
-// Vérifier et fermer automatiquement les sessions à minuit
-export const checkAndCloseExpiredSessions = async (): Promise<void> => {
+// Vérifier si la session du jour existe et est ouverte
+export const isTodaySessionOpen = async (): Promise<boolean> => {
   try {
     const today = new Date().toISOString().split('T')[0];
     
-    // Fermer toutes les sessions des jours précédents qui sont encore ouvertes
-    const { data: openSessions, error } = await supabase
+    const { data, error } = await supabase
       .from('sessions')
-      .select('id, date_session')
-      .eq('session_fermee', false)
-      .lt('date_session', today);
+      .select('session_fermee')
+      .eq('date_session', today)
+      .maybeSingle();
 
     if (error) {
-      console.error('Erreur récupération sessions ouvertes:', error);
-      return;
+      console.error('❌ Erreur vérification session du jour:', error);
+      return false;
     }
 
-    if (openSessions && openSessions.length > 0) {
-      console.log(`🔍 ${openSessions.length} sessions à fermer automatiquement`);
-      
-      for (const session of openSessions) {
-        await closeAllSessionsForDate(session.date_session);
-      }
-      
-      console.log('✅ Fermeture automatique des sessions terminée');
+    // Si pas de session pour aujourd'hui, considérer comme fermée
+    if (!data) {
+      return false;
     }
+
+    return !data.session_fermee;
   } catch (error) {
-    console.error('Erreur fermeture automatique:', error);
-  }
-};
-
-// Vérifier si un utilisateur peut se connecter
-export const canUserLogin = async (username: string, dateSession: string): Promise<{ 
-  canLogin: boolean; 
-  message: string; 
-  sessionExists: boolean;
-  isSessionClosed: boolean;
-}> => {
-  try {
-    const today = new Date().toISOString().split('T')[0];
-    
-    // Vérifier si c'est Hamza (admin) - peut toujours se connecter
-    if (username === 'Hamza') {
-      return { 
-        canLogin: true, 
-        message: 'Bienvenue Hamza (Admin)',
-        sessionExists: false,
-        isSessionClosed: false
-      };
-    }
-
-    // Vérifier si la session du jour est fermée
-    const sessionStatus = await checkSessionStatus(today);
-    
-    if (sessionStatus.isClosed) {
-      return { 
-        canLogin: false, 
-        message: 'Session fermée pour aujourd\'hui. Veuillez réessayer demain.',
-        sessionExists: sessionStatus.exists,
-        isSessionClosed: true
-      };
-    }
-
-    // Si session ouverte, vérifier si l'utilisateur a déjà une session
-    const { data: userSession } = await supabase
-      .from('sessions')
-      .select('id')
-      .eq('date_session', today)
-      .eq('cree_par', username)
-      .single();
-
-    if (userSession) {
-      return { 
-        canLogin: true, 
-        message: 'Bienvenue - Session déjà ouverte',
-        sessionExists: true,
-        isSessionClosed: false
-      };
-    }
-
-    // Nouvel utilisateur pour la session du jour
-    return { 
-      canLogin: true, 
-      message: 'Bienvenue - Nouvelle session créée',
-      sessionExists: false,
-      isSessionClosed: false
-    };
-  } catch (error) {
-    console.error('Erreur vérification connexion:', error);
-    return { 
-      canLogin: false, 
-      message: 'Erreur de vérification',
-      sessionExists: false,
-      isSessionClosed: true
-    };
+    console.error('❌ Erreur générale vérification session du jour:', error);
+    return false;
   }
 };
