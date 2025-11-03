@@ -443,26 +443,27 @@ const saveToRapport = async (baseData: any, additionalData?: any): Promise<void>
   console.log('📊 Sauvegarde dans la table rapport...');
   console.log('📋 Données de base:', baseData);
   console.log('📋 Données additionnelles:', additionalData);
-  
+
   try {
     // Préparer les données de base pour rapport
     const rapportData = {
       type: baseData.type,
       branche: baseData.branche,
       numero_contrat: baseData.numero_contrat,
-      montant: baseData.montant,
+      prime: Math.abs(baseData.montant), // La prime est toujours en valeur absolue
+      montant: baseData.montant, // Le montant garde son signe (positif/negatif)
       assure: baseData.assure,
       mode_paiement: baseData.mode_paiement,
       type_paiement: baseData.type_paiement,
       cree_par: baseData.cree_par,
       created_at: new Date().toISOString(),
-      
+
       // Ajouter les données additionnelles si elles existent
       ...(additionalData || {})
     };
-    
+
     console.log('📊 Données finales pour rapport:', rapportData);
-    
+
     const { error } = await supabase
       .from('rapport')
       .insert([rapportData]);
@@ -472,7 +473,7 @@ const saveToRapport = async (baseData: any, additionalData?: any): Promise<void>
       console.error('Détails de l\'erreur:', error.details, error.hint, error.message);
       throw error;
     }
-    
+
     console.log('✅ Données sauvegardées dans rapport avec succès');
   } catch (error) {
     console.error('❌ Erreur générale dans saveToRapport:', error);
