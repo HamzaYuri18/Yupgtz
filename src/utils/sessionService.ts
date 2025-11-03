@@ -339,3 +339,34 @@ export const getSessionTransactionsDetail = async (dateSession: string) => {
     return { transactions: [], totals: { espece: 0, cheque: 0, carte: 0, virement: 0, totalGeneral: 0 } };
   }
 };
+// Dans sessionService.ts
+export const closeUserSession = async (username: string, dateSession: string): Promise<boolean> => {
+  try {
+    // Pour Hamza, ne pas fermer la session globale
+    if (username === 'Hamza') {
+      console.log('🛡️ Hamza se déconnecte - session globale maintenue');
+      return true;
+    }
+
+    // Pour les autres utilisateurs, fermer leur session
+    const { error } = await supabase
+      .from('sessions')
+      .update({
+        session_fermee: true,
+        fermee_a: new Date().toISOString()
+      })
+      .eq('date_session', dateSession)
+      .eq('cree_par', username);
+
+    if (error) {
+      console.error('Erreur fermeture session utilisateur:', error);
+      return false;
+    }
+
+    console.log(`✅ Session fermée pour ${username}`);
+    return true;
+  } catch (error) {
+    console.error('Erreur fermeture session:', error);
+    return false;
+  }
+};
