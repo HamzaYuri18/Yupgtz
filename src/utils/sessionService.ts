@@ -370,3 +370,183 @@ export const closeUserSession = async (username: string, dateSession: string): P
     return false;
   }
 };
+// Vérifier si une session existe pour une date donnée et son statut
+export const checkSessionStatus = async (dateSession: string): Promise<{ exists: boolean; isClosed: boolean; openedBy?: string }> => {
+  try {
+    const { data, error } = await supabase
+      .from('sessions')
+      .select('id, session_fermee, cree_par')
+      .eq('date_session', dateSession)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Erreur vérification session:', error);
+      return { exists: false, isClosed: true };
+    }
+
+    if (!data) {
+      return { exists: false, isClosed: true };
+    }
+
+    return { 
+      exists: true, 
+      isClosed: data.session_fermee,
+      openedBy: data.cree_par
+    };
+  } catch (error) {
+    console.error('Erreur vérification session:', error);
+    return { exists: false, isClosed: true };
+  }
+};
+
+// Créer une nouvelle session ouverte
+export const createNewSession = async (dateSession: string, username: string): Promise<boolean> => {
+  try {
+    const totalEspece = await calculateTotalEspeceFromRapport(dateSession);
+    
+    const { error } = await supabase
+      .from('sessions')
+      .insert({
+        date_session: dateSession,
+        total_espece: totalEspece,
+        cree_par: username,
+        statut: 'Non versé',
+        session_fermee: false, // Session ouverte
+        session_ouverte_par: username
+      });
+
+    if (error) {
+      console.error('Erreur création session:', error);
+      return false;
+    }
+
+    console.log(`✅ Nouvelle session créée pour ${dateSession} par ${username}`);
+    return true;
+  } catch (error) {
+    console.error('Erreur création session:', error);
+    return false;
+  }
+};
+
+// Fermer toutes les sessions de la date
+export const closeAllSessionsForDate = async (dateSession: string): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('sessions')
+      .update({
+        session_fermee: true,
+        fermee_a: new Date().toISOString()
+      })
+      .eq('date_session', dateSession)
+      .eq('session_fermee', false);
+
+    if (error) {
+      console.error('Erreur fermeture sessions:', error);
+      return false;
+    }
+
+    console.log(`✅ Toutes les sessions fermées pour ${dateSession}`);
+    return true;
+  } catch (error) {
+    console.error('Erreur fermeture sessions:', error);
+    return false;
+  }
+};
+
+// Vérifier et fermer automatiquement les sessions à minuit
+export const checkAndCloseExpiredSessions = async (): Promise<void> => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Fermer toutes les sessions des jours précédents qui sont encore ouvertes
+    const { data: openSessions, error } = await supabase
+      .from('sessions')
+      .select('id, date_session')
+      .eq('session_fermee', false)
+      .lt('date_session', today);
+
+    if (error) {
+      console.error('Erreur récupération sessions ouvertes:', error);
+      return;
+    }
+
+    if (openSessions && openSessions.length > 0) {
+      console.log(`🔍 ${openSessions.length} sessions à fermer automatiquement`);
+      
+      for (const session of openSessions) {
+        await closeAllSessionsForDate(session.date_session);
+      }
+      
+      console.log('✅ Fermeture automatique des sessions terminée');
+    }
+  } catch (error) {
+    console.error('Erreur fermeture automatique:', error);
+  }
+};
+
+// Vérifier si un utilisateur peut se connecter
+export const canUserLogin = async (username: string, dateSession: string): Promise<{ 
+  canLogin: boolean; 
+  message: string; 
+  sessionExists: boolean;
+  isSessionClosed: boolean;
+}> => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Vérifier si c'est Hamza (admin) - peut toujours se connecter
+    if (username === 'Hamza') {
+      return { 
+        canLogin: true, 
+        message: 'Bienvenue Hamza (Admin)',
+        sessionExists: false,
+        isSessionClosed: false
+      };
+    }
+
+    // Vérifier si la session du jour est fermée
+    const sessionStatus = await checkSessionStatus(today);
+    
+    if (sessionStatus.isClosed) {
+      return { 
+        canLogin: false, 
+        message: 'Session fermée pour aujourd\'hui. Veuillez réessayer demain.',
+        sessionExists: sessionStatus.exists,
+        isSessionClosed: true
+      };
+    }
+
+    // Si session ouverte, vérifier si l'utilisateur a déjà une session
+    const { data: userSession } = await supabase
+      .from('sessions')
+      .select('id')
+      .eq('date_session', today)
+      .eq('cree_par', username)
+      .single();
+
+    if (userSession) {
+      return { 
+        canLogin: true, 
+        message: 'Bienvenue - Session déjà ouverte',
+        sessionExists: true,
+        isSessionClosed: false
+      };
+    }
+
+    // Nouvel utilisateur pour la session du jour
+    return { 
+      canLogin: true, 
+      message: 'Bienvenue - Nouvelle session créée',
+      sessionExists: false,
+      isSessionClosed: false
+    };
+  } catch (error) {
+    console.error('Erreur vérification connexion:', error);
+    return { 
+      canLogin: false, 
+      message: 'Erreur de vérification',
+      sessionExists: false,
+      isSessionClosed: true
+    };
+  }
+};
