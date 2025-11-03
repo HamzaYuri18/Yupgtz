@@ -3,7 +3,7 @@ import LoginForm from './components/LoginForm';
 import Dashboard from './components/Dashboard';
 import { getSession, getSessionDate, isAdmin } from './utils/auth';
 import { isSessionClosed } from './utils/sessionService';
-
+import { initializeSessionCleanup, startSessionCleanupInterval } from './utils/sessionCleanup';
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<string>('');
@@ -63,5 +63,12 @@ function App() {
     </div>
   );
 }
+// Au chargement de l'application
+useEffect(() => {
+  initializeSessionCleanup();
+  const interval = startSessionCleanupInterval();
+  
+  return () => clearInterval(interval);
+}, []);
 
 export default App;
