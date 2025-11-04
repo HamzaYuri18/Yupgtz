@@ -170,6 +170,17 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     setShowAutreCodeMessage(false);
   };
 
+  // Fonction pour déterminer si les champs doivent être verrouillés
+  const isFieldLocked = (fieldName: string): boolean => {
+    if (formData.type === 'Terme') {
+      // Pour les champs "Nom de l'assuré" et "Montant de la prime", verrouiller sauf en mode retour
+      if (fieldName === 'insuredName' || fieldName === 'premiumAmount') {
+        return !isRetourTechniqueMode && !isRetourContentieuxMode;
+      }
+    }
+    return false;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -711,6 +722,9 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     (Original: {originalPremiumAmount} DT)
                   </span>
                 )}
+                {formData.type === 'Terme' && isFieldLocked('premiumAmount') && (
+                  <span className="text-xs text-blue-600 ml-2">(Verrouillé - Auto-rempli)</span>
+                )}
               </label>
               <input
                 type="number"
@@ -719,10 +733,15 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 onChange={handleInputChange}
                 step="0.01"
                 min="0"
-                className={`w-full p-3 border ${(isRetourTechniqueMode || isRetourContentieuxMode) ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white`}
+                className={`w-full p-3 border ${
+                  (isRetourTechniqueMode || isRetourContentieuxMode) ? 'border-red-500' : 
+                  isFieldLocked('premiumAmount') ? 'border-gray-400 bg-gray-100 text-gray-600' : 'border-gray-300'
+                } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 ${
+                  isFieldLocked('premiumAmount') ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
+                }`}
                 placeholder="0.00"
                 required
-                disabled={formData.type === 'Terme' && !isRetourTechniqueMode && !isRetourContentieuxMode}
+                disabled={isFieldLocked('premiumAmount')}
               />
             </div>
 
@@ -730,15 +749,23 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
                 <User className="w-4 h-4 mr-2" />
                 Nom de l'assuré *
+                {formData.type === 'Terme' && isFieldLocked('insuredName') && (
+                  <span className="text-xs text-blue-600 ml-2">(Verrouillé - Auto-rempli)</span>
+                )}
               </label>
               <input
                 type="text"
                 name="insuredName"
                 value={formData.insuredName}
                 onChange={handleInputChange}
-                className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
+                className={`w-full p-2 sm:p-3 border ${
+                  isFieldLocked('insuredName') ? 'border-gray-400 bg-gray-100 text-gray-600' : 'border-gray-300'
+                } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 ${
+                  isFieldLocked('insuredName') ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
+                } text-sm sm:text-base`}
                 placeholder="Nom complet de l'assuré"
                 required
+                disabled={isFieldLocked('insuredName')}
               />
             </div>
           </div>
