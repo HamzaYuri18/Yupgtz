@@ -1,70 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import LoginForm from './components/LoginForm';
-import Dashboard from './components/Dashboard';
-import { getSession, initializeAuth } from './utils/auth';
+import { User, Session } from '../types';
 
-function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+export const users: User[] = [
+  { username: 'Hamza', password: '007H', isAdmin: true },
+  { username: 'Ahlem', password: '123', isAdmin: false },
+  { username: 'Islem', password: '456', isAdmin: false }
+];
 
-  useEffect(() => {
-    const initApp = async () => {
-      try {
-        console.log('🚀 Initialisation de l application...');
-        await initializeAuth();
-        
-        const session = getSession();
-        if (session) {
-          console.log('✅ Session trouvée:', session.username);
-          setIsAuthenticated(true);
-          setCurrentUser(session.username);
-        } else {
-          console.log('🔍 Aucune session trouvée');
-        }
-        
-        setIsLoading(false);
-      } catch (error) {
-        console.error('❌ Erreur initialisation:', error);
-        setIsLoading(false);
-      }
-    };
+export const authenticateUser = (username: string, password: string): User | null => {
+  return users.find(user => user.username === username && user.password === password) || null;
+};
 
-    initApp();
-  }, []);
-
-  const handleLogin = (username: string) => {
-    console.log('✅ Connexion réussie:', username);
-    setIsAuthenticated(true);
-    setCurrentUser(username);
+export const saveSession = (username: string): void => {
+  const session: Session = {
+    username,
+    loginTime: Date.now(),
+    isActive: true
   };
+  localStorage.setItem('session', JSON.stringify(session));
+};
 
-  const handleLogout = () => {
-    console.log('🚪 Déconnexion');
-    setIsAuthenticated(false);
-    setCurrentUser('');
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Chargement...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="App">
-      {isAuthenticated ? (
-        <Dashboard username={currentUser} onLogout={handleLogout} />
-      ) : (
-        <LoginForm onLogin={handleLogin} />
-      )}
-    </div>
-  );
-}
-
-export default App;
+export const getSession = (): Session | null => {
+  const sessionData = localStorage.getItem('session');
+  if (!sessionData) return null;
+  
+  const session: Session = JSON.parse(sessionData);
+  const now = new Date();
