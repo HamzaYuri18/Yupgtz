@@ -3,7 +3,7 @@ import LoginForm from './components/LoginForm';
 import Dashboard from './components/Dashboard';
 import { getSession, initializeAuth } from './utils/auth';
 
-const App = () => {
+function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -12,11 +12,8 @@ const App = () => {
     const initApp = async () => {
       try {
         console.log('🚀 Initialisation de l application...');
-        
-        // Initialiser l'authentification
         await initializeAuth();
         
-        // Vérifier la session existante
         const session = getSession();
         if (session) {
           console.log('✅ Session trouvée:', session.username);
@@ -68,6 +65,6 @@ const App = () => {
       )}
     </div>
   );
-};
+}
 
 export default App;
