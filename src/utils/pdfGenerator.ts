@@ -1,4 +1,4 @@
-import jsPDF from 'jspdf';
+DF from 'jspdf';
 import QRCode from 'qrcode';
 import { getRapportContracts } from './supabaseService';
 import { getSessionDate } from './auth';
