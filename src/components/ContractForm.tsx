@@ -10,6 +10,11 @@ interface ContractFormProps {
   username: string;
 }
 
+// Fonction de nettoyage des espaces
+const trimSpaces = (value: string): string => {
+  return value.trim();
+};
+
 const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const [formData, setFormData] = useState({
     type: 'Affaire' as 'Terme' | 'Affaire' | 'Avenant changement de véhicule' | 'Encaissement pour autre code',
@@ -49,9 +54,15 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     
+    // Nettoyer les espaces pour les champs spécifiques
+    let cleanedValue = value;
+    if (name === 'contractNumber' || name === 'insuredName') {
+      cleanedValue = trimSpaces(value);
+    }
+    
     let updatedData = {
       ...formData,
-      [name]: value
+      [name]: cleanedValue
     };
 
     // LOGIQUE AMÉLIORÉE POUR CRÉDIT
@@ -62,15 +73,15 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       }
     } else if (name === 'premiumAmount' && formData.paymentType === 'Crédit') {
       // Si la prime change en mode Crédit, ajuster le crédit si nécessaire
-      const newPremium = parseFloat(value) || 0;
+      const newPremium = parseFloat(cleanedValue) || 0;
       const currentCredit = parseFloat(updatedData.creditAmount) || 0;
       
       if (currentCredit > newPremium) {
-        updatedData.creditAmount = value; // Ajuster le crédit à la nouvelle prime
+        updatedData.creditAmount = cleanedValue; // Ajuster le crédit à la nouvelle prime
       }
     } else if (name === 'creditAmount' && formData.paymentType === 'Crédit') {
       // Valider que le crédit ne dépasse pas la prime
-      const creditValue = parseFloat(value) || 0;
+      const creditValue = parseFloat(cleanedValue) || 0;
       const premiumValue = parseFloat(formData.premiumAmount) || 0;
       
       if (creditValue > premiumValue) {
@@ -83,9 +94,18 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   };
 
   const searchInXML = async () => {
-    if (formData.type === 'Terme' && formData.contractNumber && selectedMonth) {
+    // Nettoyer le numéro de contrat avant la recherche
+    const cleanedContractNumber = trimSpaces(formData.contractNumber);
+    
+    if (formData.type === 'Terme' && cleanedContractNumber && selectedMonth) {
+      // Mettre à jour le formulaire avec la valeur nettoyée
+      setFormData(prev => ({
+        ...prev,
+        contractNumber: cleanedContractNumber
+      }));
+      
       // Rechercher d'abord dans Supabase
-      const supabaseResult = await searchContractInTable(selectedMonth, formData.contractNumber);
+      const supabaseResult = await searchContractInTable(selectedMonth, cleanedContractNumber);
       
       if (supabaseResult) {
         // Normaliser le résultat Supabase pour correspondre à l'interface XMLContract
@@ -108,7 +128,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
       // Si pas trouvé dans Supabase, chercher localement
       const xmlContracts = getXMLContracts();
-      const result = findContractInXLSX(xmlContracts, formData.contractNumber);
+      const result = findContractInXLSX(xmlContracts, cleanedContractNumber);
       
       if (result) {
         setXmlSearchResult(result);
@@ -184,16 +204,26 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Nettoyer les champs avant validation
+    const cleanedFormData = {
+      ...formData,
+      contractNumber: trimSpaces(formData.contractNumber),
+      insuredName: trimSpaces(formData.insuredName)
+    };
+
+    // Mettre à jour le state avec les valeurs nettoyées
+    setFormData(cleanedFormData);
+
     // VALIDATION POUR PAIEMENT PAR CHÈQUE
-    if (formData.paymentMode === 'Cheque') {
-      if (!formData.numeroCheque || !formData.banque || !formData.dateEncaissementPrevue) {
+    if (cleanedFormData.paymentMode === 'Cheque') {
+      if (!cleanedFormData.numeroCheque || !cleanedFormData.banque || !cleanedFormData.dateEncaissementPrevue) {
         setMessage('❌ Veuillez remplir tous les champs du chèque (numéro, banque, date d\'encaissement prévue)');
         setTimeout(() => setMessage(''), 5000);
         return;
       }
 
       // Validation de la date d'encaissement prévue
-      const dateEncaissement = new Date(formData.dateEncaissementPrevue);
+      const dateEncaissement = new Date(cleanedFormData.dateEncaissementPrevue);
       const dateActuelle = new Date();
       dateActuelle.setHours(0, 0, 0, 0);
 
@@ -214,9 +244,9 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     }
 
     // VALIDATION SPÉCIFIQUE POUR CRÉDIT
-    if (formData.paymentType === 'Crédit') {
-      const primeAmount = parseFloat(formData.premiumAmount);
-      const creditAmount = parseFloat(formData.creditAmount);
+    if (cleanedFormData.paymentType === 'Crédit') {
+      const primeAmount = parseFloat(cleanedFormData.premiumAmount);
+      const creditAmount = parseFloat(cleanedFormData.creditAmount);
       
       // Validation de la prime
       if (isNaN(primeAmount) || primeAmount <= 0) {
@@ -240,21 +270,21 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       }
       
       // Validation de la date pour crédit
-      if (!formData.paymentDate) {
+      if (!cleanedFormData.paymentDate) {
         setMessage('❌ Veuillez saisir une date de paiement prévue pour le crédit');
         setTimeout(() => setMessage(''), 5000);
         return;
       }
       
       const sessionDate = getSessionDate();
-      if (formData.paymentDate <= sessionDate) {
+      if (cleanedFormData.paymentDate <= sessionDate) {
         setMessage('❌ La date de paiement prévue doit être postérieure à la date de session actuelle');
         setTimeout(() => setMessage(''), 5000);
         return;
       }
     } else {
       // Validation pour paiement au comptant
-      const primeAmount = parseFloat(formData.premiumAmount);
+      const primeAmount = parseFloat(cleanedFormData.premiumAmount);
       if (isNaN(primeAmount) || primeAmount <= 0) {
         setMessage('❌ Veuillez saisir un montant de prime valide');
         setTimeout(() => setMessage(''), 5000);
@@ -263,25 +293,25 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     }
     
     console.log('🔍 Vérification avant sauvegarde (CRÉDIT):');
-    console.log('  - Type de paiement:', formData.paymentType);
-    console.log('  - Prime saisie:', formData.premiumAmount);
-    console.log('  - Crédit saisi:', formData.creditAmount);
-    console.log('  - Date paiement:', formData.paymentDate);
+    console.log('  - Type de paiement:', cleanedFormData.paymentType);
+    console.log('  - Prime saisie:', cleanedFormData.premiumAmount);
+    console.log('  - Crédit saisi:', cleanedFormData.creditAmount);
+    console.log('  - Date paiement:', cleanedFormData.paymentDate);
     
     setIsLoading(true);
 
     try {
       const contract: Contract = {
         id: generateContractId(),
-        type: formData.type,
-        branch: formData.branch,
-        contractNumber: formData.contractNumber,
-        premiumAmount: parseFloat(formData.premiumAmount),
-        insuredName: formData.insuredName,
-        paymentMode: formData.paymentMode,
-        paymentType: formData.paymentType,
-        creditAmount: formData.paymentType === 'Crédit' ? parseFloat(formData.creditAmount) : undefined,
-        paymentDate: formData.paymentDate || undefined,
+        type: cleanedFormData.type,
+        branch: cleanedFormData.branch,
+        contractNumber: cleanedFormData.contractNumber,
+        premiumAmount: parseFloat(cleanedFormData.premiumAmount),
+        insuredName: cleanedFormData.insuredName,
+        paymentMode: cleanedFormData.paymentMode,
+        paymentType: cleanedFormData.paymentType,
+        creditAmount: cleanedFormData.paymentType === 'Crédit' ? parseFloat(cleanedFormData.creditAmount) : undefined,
+        paymentDate: cleanedFormData.paymentDate || undefined,
         createdBy: username,
         createdAt: Date.now(),
         xmlData: xmlSearchResult || undefined
@@ -360,7 +390,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       if (contract.type === 'Encaissement pour autre code') {
         const existing = await checkEncaissementAutreCodeExists(
           contract.contractNumber,
-          formData.dateEcheance
+          cleanedFormData.dateEcheance
         );
 
         if (existing) {
@@ -376,7 +406,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           contractNumber: contract.contractNumber,
           insuredName: contract.insuredName,
           premiumAmount: contract.premiumAmount,
-          dateEcheance: formData.dateEcheance,
+          dateEcheance: cleanedFormData.dateEcheance,
           paymentMode: contract.paymentMode,
           createdBy: username
         });
@@ -500,20 +530,20 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       // SAUVEGARDE CHÈQUE
       console.log('🔍 Vérification sauvegarde chèque:');
       console.log('  - paymentMode:', contract.paymentMode);
-      console.log('  - numeroCheque:', formData.numeroCheque);
-      console.log('  - banque:', formData.banque);
-      console.log('  - dateEncaissementPrevue:', formData.dateEncaissementPrevue);
+      console.log('  - numeroCheque:', cleanedFormData.numeroCheque);
+      console.log('  - banque:', cleanedFormData.banque);
+      console.log('  - dateEncaissementPrevue:', cleanedFormData.dateEncaissementPrevue);
 
-      if (contract.paymentMode === 'Cheque' && formData.numeroCheque && formData.banque && formData.dateEncaissementPrevue) {
+      if (contract.paymentMode === 'Cheque' && cleanedFormData.numeroCheque && cleanedFormData.banque && cleanedFormData.dateEncaissementPrevue) {
         console.log('💳 Démarrage de la sauvegarde du chèque...');
         try {
           const chequeResult = await saveCheque({
             numeroContrat: contract.contractNumber,
             assure: contract.insuredName,
-            numeroCheque: formData.numeroCheque,
+            numeroCheque: cleanedFormData.numeroCheque,
             montant: contract.premiumAmount,
-            dateEncaissementPrevue: formData.dateEncaissementPrevue,
-            banque: formData.banque,
+            dateEncaissementPrevue: cleanedFormData.dateEncaissementPrevue,
+            banque: cleanedFormData.banque,
             creePar: username
           });
 
@@ -630,6 +660,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
               <Hash className="w-4 h-4 mr-2" />
               Numéro de contrat *
+              <span className="text-xs text-blue-600 ml-2">(Les espaces en début/fin seront automatiquement supprimés)</span>
             </label>
             <div className="flex space-x-2">
               <input
@@ -637,6 +668,13 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="contractNumber"
                 value={formData.contractNumber}
                 onChange={handleInputChange}
+                onBlur={(e) => {
+                  // Nettoyer aussi lors de la perte de focus
+                  const cleanedValue = trimSpaces(e.target.value);
+                  if (cleanedValue !== e.target.value) {
+                    setFormData(prev => ({ ...prev, contractNumber: cleanedValue }));
+                  }
+                }}
                 className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
                 placeholder="Entrez le numéro de contrat"
                 required
@@ -752,12 +790,20 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 {formData.type === 'Terme' && isFieldLocked('insuredName') && (
                   <span className="text-xs text-blue-600 ml-2">(Verrouillé - Auto-rempli)</span>
                 )}
+                <span className="text-xs text-blue-600 ml-2">(Les espaces en début/fin seront automatiquement supprimés)</span>
               </label>
               <input
                 type="text"
                 name="insuredName"
                 value={formData.insuredName}
                 onChange={handleInputChange}
+                onBlur={(e) => {
+                  // Nettoyer aussi lors de la perte de focus
+                  const cleanedValue = trimSpaces(e.target.value);
+                  if (cleanedValue !== e.target.value) {
+                    setFormData(prev => ({ ...prev, insuredName: cleanedValue }));
+                  }
+                }}
                 className={`w-full p-2 sm:p-3 border ${
                   isFieldLocked('insuredName') ? 'border-gray-400 bg-gray-100 text-gray-600' : 'border-gray-300'
                 } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 ${
