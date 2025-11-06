@@ -10,7 +10,7 @@ interface ContractFormProps {
   username: string;
 }
 
-// Fonction de nettoyage des espaces
+// Fonction de nettoyage des espaces pour le numéro de contrat uniquement
 const trimSpaces = (value: string): string => {
   return value.trim();
 };
@@ -54,9 +54,9 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     
-    // Nettoyer les espaces pour les champs spécifiques
+    // Nettoyer les espaces uniquement pour le numéro de contrat
     let cleanedValue = value;
-    if (name === 'contractNumber' || name === 'insuredName') {
+    if (name === 'contractNumber') {
       cleanedValue = trimSpaces(value);
     }
     
@@ -204,11 +204,11 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Nettoyer les champs avant validation
+    // Nettoyer uniquement le numéro de contrat avant validation
     const cleanedFormData = {
       ...formData,
-      contractNumber: trimSpaces(formData.contractNumber),
-      insuredName: trimSpaces(formData.insuredName)
+      contractNumber: trimSpaces(formData.contractNumber)
+      // Le nom de l'assuré garde ses espaces tels quels
     };
 
     // Mettre à jour le state avec les valeurs nettoyées
@@ -307,7 +307,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
         branch: cleanedFormData.branch,
         contractNumber: cleanedFormData.contractNumber,
         premiumAmount: parseFloat(cleanedFormData.premiumAmount),
-        insuredName: cleanedFormData.insuredName,
+        insuredName: cleanedFormData.insuredName, // Garde les espaces tels quels
         paymentMode: cleanedFormData.paymentMode,
         paymentType: cleanedFormData.paymentType,
         creditAmount: cleanedFormData.paymentType === 'Crédit' ? parseFloat(cleanedFormData.creditAmount) : undefined,
@@ -669,7 +669,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 value={formData.contractNumber}
                 onChange={handleInputChange}
                 onBlur={(e) => {
-                  // Nettoyer aussi lors de la perte de focus
+                  // Nettoyer aussi lors de la perte de focus (uniquement pour le numéro de contrat)
                   const cleanedValue = trimSpaces(e.target.value);
                   if (cleanedValue !== e.target.value) {
                     setFormData(prev => ({ ...prev, contractNumber: cleanedValue }));
@@ -790,20 +790,12 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 {formData.type === 'Terme' && isFieldLocked('insuredName') && (
                   <span className="text-xs text-blue-600 ml-2">(Verrouillé - Auto-rempli)</span>
                 )}
-                <span className="text-xs text-blue-600 ml-2">(Les espaces en début/fin seront automatiquement supprimés)</span>
               </label>
               <input
                 type="text"
                 name="insuredName"
                 value={formData.insuredName}
                 onChange={handleInputChange}
-                onBlur={(e) => {
-                  // Nettoyer aussi lors de la perte de focus
-                  const cleanedValue = trimSpaces(e.target.value);
-                  if (cleanedValue !== e.target.value) {
-                    setFormData(prev => ({ ...prev, insuredName: cleanedValue }));
-                  }
-                }}
                 className={`w-full p-2 sm:p-3 border ${
                   isFieldLocked('insuredName') ? 'border-gray-400 bg-gray-100 text-gray-600' : 'border-gray-300'
                 } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 ${
