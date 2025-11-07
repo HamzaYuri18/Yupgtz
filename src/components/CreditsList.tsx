@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, DollarSign, User } from 'lucide-react';
+import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, DollarSign, User, Download } from 'lucide-react';
 import { getCredits, updateCreditStatus } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
 
@@ -63,6 +63,53 @@ const CreditsList: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Fonction pour exporter les données en XLSX
+  const exportToExcel = () => {
+    // Créer un workbook et une worksheet
+    const XLSX = require('xlsx');
+    const workbook = XLSX.utils.book_new();
+    
+    // Préparer les données pour l'export
+    const exportData = filteredCredits.map(credit => ({
+      'Numéro Contrat': credit.numero_contrat,
+      'Assuré': credit.assure,
+      'Branche': credit.branche,
+      'Prime (DT)': credit.prime || 0,
+      'Montant Crédit (DT)': credit.montant_credit || 0,
+      'Paiement (DT)': credit.paiement || 0,
+      'Solde (DT)': credit.solde || 0,
+      'Date Crédit': credit.date_credit ? new Date(credit.date_credit).toLocaleDateString('fr-FR') : '-',
+      'Date Paiement Prévue': credit.date_paiement_prevue ? new Date(credit.date_paiement_prevue).toLocaleDateString('fr-FR') : '-',
+      'Statut': credit.statut,
+      'Date Paiement Effectif': credit.date_paiement_effectif ? new Date(credit.date_paiement_effectif).toLocaleDateString('fr-FR') : '-',
+      'Créé par': credit.cree_par
+    }));
+
+    // Créer la worksheet
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    
+    // Ajouter la worksheet au workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Credits');
+
+    // Générer le nom du fichier avec la date
+    const date = new Date().toISOString().slice(0, 10);
+    let fileName = '';
+    
+    if (activeFilter === 'echeances') {
+      fileName = `Credits_Echeances_7_Jours_${date}.xlsx`;
+    } else if (activeFilter === 'retard') {
+      fileName = `Credits_En_Retard_${date}.xlsx`;
+    } else if (viewMode === 'mois') {
+      const monthName = getMonthName(filters.mois).replace(' ', '_');
+      fileName = `Credits_${monthName}_${date}.xlsx`;
+    } else {
+      fileName = `Tous_Les_Credits_${date}.xlsx`;
+    }
+
+    // Exporter le fichier
+    XLSX.writeFile(workbook, fileName);
   };
 
   const getCreditsByMonth = (month: string) => {
@@ -523,6 +570,22 @@ const CreditsList: React.FC = () => {
               <XCircle className="w-8 h-8 text-red-600" />
             </div>
           </div>
+        </div>
+
+        {/* Bouton d'exportation */}
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={exportToExcel}
+            disabled={filteredCredits.length === 0}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+              filteredCredits.length === 0
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-green-600 text-white hover:bg-green-700'
+            }`}
+          >
+            <Download className="w-4 h-4" />
+            <span>Exporter en Excel</span>
+          </button>
         </div>
 
         {/* Filtres (masqués quand un filtre spécial est actif) */}
