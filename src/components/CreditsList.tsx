@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, DollarSign, User, Download } from 'lucide-react';
 import { getCredits, updateCreditStatus } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
-
-// Import direct de la bibliothèque xlsx
 import * as XLSX from 'xlsx';
 
 const CreditsList: React.FC = () => {
@@ -66,7 +64,37 @@ const CreditsList: React.FC = () => {
     }
   };
 
-  // Fonction corrigée pour exporter les données en XLSX
+  // Fonction pour obtenir l'icône de statut
+  const getStatusIcon = (statut: string) => {
+    switch (statut) {
+      case 'Payé':
+      case 'Payé en total':
+        return <CheckCircle className="w-5 h-5 text-green-500" />;
+      case 'Payé partiellement':
+        return <CheckCircle className="w-5 h-5 text-blue-500" />;
+      case 'En retard':
+        return <XCircle className="w-5 h-5 text-red-500" />;
+      default:
+        return <Clock className="w-5 h-5 text-orange-500" />;
+    }
+  };
+
+  // Fonction pour obtenir la couleur du statut
+  const getStatusColor = (statut: string) => {
+    switch (statut) {
+      case 'Payé':
+      case 'Payé en total':
+        return 'bg-green-100 text-green-800';
+      case 'Payé partiellement':
+        return 'bg-blue-100 text-blue-800';
+      case 'En retard':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-orange-100 text-orange-800';
+    }
+  };
+
+  // Fonction pour exporter en Excel
   const exportToExcel = () => {
     if (filteredCredits.length === 0) {
       alert('Aucune donnée à exporter.');
@@ -248,8 +276,139 @@ const CreditsList: React.FC = () => {
     setFilteredCredits(filtered);
   };
 
-  // ... (le reste des fonctions reste inchangé)
+  const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFilters(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    setActiveFilter('none');
+  };
 
+  const handleStatusUpdate = async (id: number, newStatus: string) => {
+    if (!isHamza) {
+      alert('Seul Hamza peut modifier le statut des crédits.');
+      return;
+    }
+
+    const datePaiement = newStatus === 'Payé' ? new Date().toISOString().split('T')[0] : null;
+    
+    try {
+      const success = await updateCreditStatus(id, newStatus, datePaiement);
+      if (success) {
+        await loadCredits();
+      }
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour:', error);
+    }
+  };
+
+  const showDueIn7Days = () => {
+    setActiveFilter('echeances');
+    setViewMode('tous');
+    setFilters(prev => ({ 
+      ...prev, 
+      statut: 'all',
+      branche: 'all',
+      createdBy: 'all',
+      dateFrom: '',
+      dateTo: ''
+    }));
+    setTimeout(() => {
+      document.getElementById('credits-table')?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+
+  const showOverdueCredits = () => {
+    setActiveFilter('retard');
+    setViewMode('tous');
+    setFilters(prev => ({ 
+      ...prev, 
+      statut: 'all',
+      branche: 'all',
+      createdBy: 'all',
+      dateFrom: '',
+      dateTo: ''
+    }));
+    setTimeout(() => {
+      document.getElementById('credits-table')?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+
+  const clearFilters = () => {
+    setActiveFilter('none');
+    setFilters({
+      statut: 'all',
+      branche: 'all',
+      createdBy: 'all',
+      dateFrom: '',
+      dateTo: '',
+      mois: new Date().toISOString().slice(0, 7)
+    });
+  };
+
+  const calculateDetailedStats = () => {
+    const creditsForStats = viewMode === 'mois'
+      ? getCreditsByMonth(filters.mois)
+      : credits;
+
+    const creditsDueIn7Days = getCreditsDueIn7Days();
+    const overdueCredits = getOverdueCredits();
+
+    const totalCredits = creditsForStats.length;
+    const totalMontant = creditsForStats.reduce((sum, credit) => sum + (credit.montant_credit || 0), 0);
+
+    const payes = creditsForStats.filter(c =>
+      c.statut === 'Payé' || c.statut === 'Payé partiellement' || c.statut === 'Payé en total'
+    );
+    const nonPayes = creditsForStats.filter(c => c.statut === 'Non payé');
+    const enRetard = creditsForStats.filter(c => c.statut === 'En retard');
+
+    const montantPaye = creditsForStats.reduce((sum, credit) => sum + (credit.paiement || 0), 0);
+    const montantNonPaye = creditsForStats
+      .filter(c => c.statut !== 'Payé en total')
+      .reduce((sum, credit) => sum + (credit.solde || 0), 0);
+
+    const montantEnRetard = enRetard.reduce((sum, credit) => sum + (credit.solde || 0), 0);
+
+    const tauxRecouvrement = totalMontant > 0 ? (montantPaye / totalMontant) * 100 : 0;
+
+    return {
+      totalCredits,
+      totalMontant,
+      payes: payes.length,
+      nonPayes: nonPayes.length,
+      enRetard: enRetard.length,
+      montantPaye,
+      montantNonPaye,
+      montantEnRetard,
+      tauxRecouvrement,
+      creditsDueIn7Days: creditsDueIn7Days.length,
+      montantDueIn7Days: creditsDueIn7Days.reduce((sum, credit) => sum + (credit.montant_credit || 0), 0),
+      overdueCredits: overdueCredits.length,
+      montantOverdue: overdueCredits.reduce((sum, credit) => sum + (credit.montant_credit || 0), 0)
+    };
+  };
+
+  const handleViewModeChange = (mode: 'mois' | 'tous') => {
+    setViewMode(mode);
+    setActiveFilter('none');
+    if (mode === 'tous') {
+      setFilters(prev => ({
+        ...prev,
+        mois: new Date().toISOString().slice(0, 7)
+      }));
+    }
+  };
+
+  const stats = calculateDetailedStats();
+  const uniqueUsers = [...new Set(credits.map(c => c.cree_par).filter(Boolean))];
+  const uniqueMonths = [...new Set(credits
+    .map(c => c.date_credit ? c.date_credit.slice(0, 7) : null)
+    .filter(Boolean)
+  )].sort().reverse();
+
+  // Obtenir le nom du mois en français
   const getMonthName = (monthString: string) => {
     const [year, month] = monthString.split('-').map(Number);
     const date = new Date(year, month - 1);
@@ -352,7 +511,6 @@ const CreditsList: React.FC = () => {
           </div>
           
           <div className="flex space-x-2">
-            {/* Bouton de test simple */}
             <button
               onClick={exportToExcelSimple}
               disabled={filteredCredits.length === 0 || isExporting}
@@ -366,7 +524,6 @@ const CreditsList: React.FC = () => {
               <span>Export Simple (Test)</span>
             </button>
             
-            {/* Bouton d'exportation complet */}
             <button
               onClick={exportToExcel}
               disabled={filteredCredits.length === 0 || isExporting}
@@ -391,7 +548,248 @@ const CreditsList: React.FC = () => {
           </div>
         </div>
 
-        {/* ... (le reste du code reste inchangé) */}
+        {/* Bannière d'information pour les permissions */}
+        {!isHamza && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center space-x-2">
+              <Clock className="w-5 h-5 text-blue-600" />
+              <p className="text-blue-700 text-sm">
+                <strong>Mode consultation uniquement :</strong> Seul Hamza peut modifier le statut des crédits.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Indicateur mode édition pour Hamza */}
+        {isHamza && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-6">
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <p className="text-green-700 text-sm font-medium">
+                <strong>Mode édition activé :</strong> Vous pouvez modifier les statuts des crédits.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Statistiques Détaillées */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="bg-blue-50 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-600">
+                  {viewMode === 'mois' ? 'Crédits du Mois' : 'Total Crédits'}
+                </p>
+                <p className="text-xl font-bold text-blue-900">{stats.totalCredits}</p>
+                <p className="text-sm text-blue-700">{stats.totalMontant.toLocaleString('fr-FR')} DT</p>
+              </div>
+              <CreditCard className="w-8 h-8 text-blue-600" />
+            </div>
+          </div>
+
+          <div className="bg-green-50 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-green-600">Montant Payé</p>
+                <p className="text-xl font-bold text-green-900">{stats.montantPaye.toLocaleString('fr-FR')} DT</p>
+                <p className="text-sm text-green-700">{stats.payes} crédits</p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
+          </div>
+
+          <div className="bg-orange-50 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-orange-600">Montant Non Payé</p>
+                <p className="text-xl font-bold text-orange-900">{stats.montantNonPaye.toLocaleString('fr-FR')} DT</p>
+                <p className="text-sm text-orange-700">{stats.nonPayes} crédits</p>
+              </div>
+              <Clock className="w-8 h-8 text-orange-600" />
+            </div>
+          </div>
+
+          <div 
+            className={`rounded-lg p-4 cursor-pointer transition-colors ${
+              activeFilter === 'echeances' 
+                ? 'bg-yellow-100 border-2 border-yellow-400' 
+                : 'bg-purple-50 hover:bg-purple-100'
+            }`}
+            onClick={showDueIn7Days}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-purple-600">Échéances 7 jours</p>
+                <p className="text-xl font-bold text-purple-900">{stats.montantDueIn7Days.toLocaleString('fr-FR')} DT</p>
+                <p className="text-sm text-purple-700">{stats.creditsDueIn7Days} crédits</p>
+              </div>
+              <AlertTriangle className="w-8 h-8 text-purple-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* Taux de Recouvrement et Retards */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <TrendingUp className="w-6 h-6 text-cyan-600" />
+                <div>
+                  <h3 className="text-lg font-semibold text-cyan-900">
+                    {viewMode === 'mois' ? 'Taux de Recouvrement Mois' : 'Taux de Recouvrement Global'}
+                  </h3>
+                  <p className="text-cyan-700">Pourcentage du montant total récupéré</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-3xl font-bold text-cyan-900">{stats.tauxRecouvrement.toFixed(1)}%</p>
+                <p className="text-cyan-700">
+                  {stats.montantPaye.toLocaleString('fr-FR')} DT / {stats.totalMontant.toLocaleString('fr-FR')} DT
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 w-full bg-cyan-200 rounded-full h-2">
+              <div 
+                className="bg-cyan-600 h-2 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(stats.tauxRecouvrement, 100)}%` }}
+              ></div>
+            </div>
+          </div>
+
+          <div 
+            className={`rounded-lg p-4 cursor-pointer transition-colors ${
+              activeFilter === 'retard' 
+                ? 'bg-red-100 border-2 border-red-400' 
+                : 'bg-red-50 hover:bg-red-100'
+            }`}
+            onClick={showOverdueCredits}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-red-600">Crédits en Retard</p>
+                <p className="text-xl font-bold text-red-900">{stats.montantOverdue.toLocaleString('fr-FR')} DT</p>
+                <p className="text-sm text-red-700">{stats.overdueCredits} crédits</p>
+              </div>
+              <XCircle className="w-8 h-8 text-red-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* Filtres (masqués quand un filtre spécial est actif) */}
+        {activeFilter === 'none' && (
+          <div className="bg-gray-50 rounded-lg p-4 mb-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <Filter className="w-5 h-5 text-gray-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Filtres</h3>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+              {viewMode === 'mois' && (
+                <select
+                  name="mois"
+                  value={filters.mois}
+                  onChange={handleFilterChange}
+                  className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {uniqueMonths.map(month => (
+                    <option key={month} value={month}>
+                      {getMonthName(month)}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <select
+                name="statut"
+                value={filters.statut}
+                onChange={handleFilterChange}
+                className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="all">Tous les statuts</option>
+                <option value="Non payé">Non payé</option>
+                <option value="Payé">Payé</option>
+                <option value="Payé partiellement">Payé partiellement</option>
+                <option value="Payé en total">Payé en total</option>
+                <option value="En retard">En retard</option>
+              </select>
+
+              <select
+                name="branche"
+                value={filters.branche}
+                onChange={handleFilterChange}
+                className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="all">Toutes les branches</option>
+                <option value="Auto">Auto</option>
+                <option value="Vie">Vie</option>
+                <option value="Santé">Santé</option>
+                <option value="IRDS">IRDS</option>
+              </select>
+
+              <select
+                name="createdBy"
+                value={filters.createdBy}
+                onChange={handleFilterChange}
+                className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="all">Tous les utilisateurs</option>
+                {uniqueUsers.map(user => (
+                  <option key={user} value={user}>{user}</option>
+                ))}
+              </select>
+
+              <input
+                type="date"
+                name="dateFrom"
+                value={filters.dateFrom}
+                onChange={handleFilterChange}
+                className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Date début"
+              />
+
+              <input
+                type="date"
+                name="dateTo"
+                value={filters.dateTo}
+                onChange={handleFilterChange}
+                className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Date fin"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Indicateur de filtre actif */}
+        {(activeFilter === 'echeances' || activeFilter === 'retard') && (
+          <div className={`rounded-lg p-4 mb-6 ${
+            activeFilter === 'echeances' ? 'bg-yellow-50 border border-yellow-200' : 'bg-red-50 border border-red-200'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                {activeFilter === 'echeances' ? (
+                  <>
+                    <AlertTriangle className="w-5 h-5 text-yellow-600" />
+                    <p className="text-yellow-700 font-medium">
+                      Affichage des crédits avec échéance dans les 7 prochains jours
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-5 h-5 text-red-600" />
+                    <p className="text-red-700 font-medium">
+                      Affichage des crédits en retard de paiement
+                    </p>
+                  </>
+                )}
+              </div>
+              <button
+                onClick={clearFilters}
+                className="text-sm text-gray-600 hover:text-gray-800 underline"
+              >
+                Effacer le filtre
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Liste des crédits */}
         <div id="credits-table" className="overflow-x-auto">
