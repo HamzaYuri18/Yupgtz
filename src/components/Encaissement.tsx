@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, DollarSign, Calendar, FileText, User, CheckCircle, XCircle, AlertCircle, Download } from 'lucide-react';
+import { Search, DollarSign, Calendar, FileText, User, CheckCircle, XCircle, AlertCircle, Download, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
 
@@ -64,10 +64,32 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     nombre_contrats_encaisses: 0
   });
   const [exportLoading, setExportLoading] = useState<string | null>(null);
+  const [sessionDate, setSessionDate] = useState<string>('');
 
   useEffect(() => {
+    initializeSessionDate();
     loadSessionStats();
   }, []);
+
+  // Fonction pour initialiser et vérifier la date de session
+  const initializeSessionDate = () => {
+    const today = new Date();
+    const todayISO = formatDateForQuery(today);
+    const todayDisplay = today.toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    setSessionDate(todayISO);
+    
+    console.log('=== VÉRIFICATION DATE DE SESSION ===');
+    console.log('Date système:', today.toString());
+    console.log('Date formatée pour requêtes (YYYY-MM-DD):', todayISO);
+    console.log('Date affichage:', todayDisplay);
+    console.log('====================================');
+  };
 
   // Fonction pour nettoyer le numéro de contrat des espaces
   const cleanContractNumber = (contract: string): string => {
@@ -128,14 +150,15 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     setLoading(true);
 
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date();
+      const todayISO = formatDateForQuery(today);
 
       // Mettre à jour le statut dans la table terme
       const { error } = await supabase
         .from('terme')
         .update({
           statut: 'Encaissé',
-          Date_Encaissement: today
+          Date_Encaissement: todayISO
         })
         .eq('numero_contrat', termeData.numero_contrat)
         .eq('echeance', termeData.echeance);
@@ -174,19 +197,24 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
 
   // Fonction pour formater la date au format YYYY-MM-DD
   const formatDateForQuery = (date: Date): string => {
-    return date.toISOString().split('T')[0];
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const loadSessionStats = async () => {
     try {
       // Récupérer la date de début de session (aujourd'hui)
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
       const todayISO = formatDateForQuery(today);
       
-      console.log('Date de session pour requêtes:', todayISO);
+      console.log('=== CHARGEMENT STATISTIQUES ===');
+      console.log('Date de session utilisée:', todayISO);
+      console.log('Heure système:', new Date().toLocaleTimeString('fr-FR'));
 
       // 1. Statistiques des PAIEMENTS (statut null ET date_paiement = aujourd'hui)
+      console.log('Recherche paiements - Critères: statut=null, date_paiement=', todayISO);
       const { data: paiementsData, error: paiementsError } = await supabase
         .from('terme')
         .select('prime, statut, date_paiement, numero_contrat, assure, echeance, Date_Encaissement')
@@ -196,11 +224,14 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       if (paiementsError) {
         console.error('Erreur paiements:', paiementsError);
       } else {
-        console.log('Paiements trouvés aujourd\'hui:', paiementsData);
-        console.log('Critères paiements: statut=null, date_paiement=', todayISO);
+        console.log('Paiements trouvés aujourd\'hui:', paiementsData?.length || 0);
+        if (paiementsData && paiementsData.length > 0) {
+          console.log('Exemple de paiement:', paiementsData[0]);
+        }
       }
 
       // 2. Statistiques des ENCAISSEMENTS (date_encaissement = aujourd'hui)
+      console.log('Recherche encaissements - Critères: Date_Encaissement=', todayISO);
       const { data: encaissementsData, error: encaissementsError } = await supabase
         .from('terme')
         .select('prime, Date_Encaissement, numero_contrat, assure, echeance, date_paiement, statut')
@@ -209,8 +240,10 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       if (encaissementsError) {
         console.error('Erreur encaissements:', encaissementsError);
       } else {
-        console.log('Encaissements trouvés aujourd\'hui:', encaissementsData);
-        console.log('Critères encaissements: Date_Encaissement=', todayISO);
+        console.log('Encaissements trouvés aujourd\'hui:', encaissementsData?.length || 0);
+        if (encaissementsData && encaissementsData.length > 0) {
+          console.log('Exemple d\'encaissement:', encaissementsData[0]);
+        }
       }
 
       // 3. Statistiques des contrats avec statut null (toutes dates)
@@ -222,7 +255,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       if (statutNullError) {
         console.error('Erreur statut null:', statutNullError);
       } else {
-        console.log('Contrats avec statut null (toutes dates):', statutNullData?.length);
+        console.log('Contrats avec statut null (toutes dates):', statutNullData?.length || 0);
       }
 
       // 4. Statistiques des contrats encaissés (toutes dates)
@@ -234,7 +267,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       if (encaissesError) {
         console.error('Erreur encaissés:', encaissesError);
       } else {
-        console.log('Contrats encaissés (toutes dates):', encaissesData?.length);
+        console.log('Contrats encaissés (toutes dates):', encaissesData?.length || 0);
       }
 
       // CALCUL DES STATISTIQUES DE PAIEMENTS (Session)
@@ -254,13 +287,13 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
 
       const difference = totalPaiements - totalEncaissements;
 
-      console.log('Résultats calculés:', {
-        totalPaiements,
-        nombreContratsPaiements,
-        totalEncaissements,
-        nombreContratsEncaissements,
-        difference
-      });
+      console.log('=== RÉSULTATS CALCULÉS ===');
+      console.log('Total Paiements:', totalPaiements);
+      console.log('Nombre contrats paiements:', nombreContratsPaiements);
+      console.log('Total Encaissements:', totalEncaissements);
+      console.log('Nombre contrats encaissements:', nombreContratsEncaissements);
+      console.log('Différence:', difference);
+      console.log('===========================');
 
       setSessionStats({
         total_encaissements: totalEncaissements,
@@ -281,18 +314,26 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     }
   };
 
+  // Fonction pour rafraîchir les statistiques
+  const refreshStats = () => {
+    console.log('=== RAFRAÎCHISSEMENT MANUEL ===');
+    initializeSessionDate();
+    loadSessionStats();
+  };
+
   // Fonction pour exporter les données en Excel
   const exportToExcel = async (type: 'paiements' | 'encaissements' | 'statut_null' | 'encaisses') => {
     setExportLoading(type);
     
     try {
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
       const todayISO = formatDateForQuery(today);
       
       let data: ContratData[] = [];
       let fileName = '';
       let sheetName = '';
+
+      console.log(`Export ${type} - Date utilisée:`, todayISO);
 
       switch (type) {
         case 'paiements':
@@ -336,6 +377,8 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
           sheetName = 'Contrats Encaisses';
           break;
       }
+
+      console.log(`Données exportées (${type}):`, data.length);
 
       if (data.length === 0) {
         setMessage('Aucune donnée à exporter pour cette catégorie');
@@ -383,19 +426,60 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     setNumeroContrat(value);
   };
 
+  // Obtenir la date d'aujourd'hui formatée pour l'affichage
+  const getTodayDisplay = () => {
+    const today = new Date();
+    return today.toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
   return (
     <div className="max-w-6xl mx-auto p-6 bg-white rounded-lg shadow-lg">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2 flex items-center">
-          <DollarSign className="w-6 h-6 mr-2 text-green-600" />
-          Encaissement
-        </h2>
-        <p className="text-gray-600">Saisie des encaissements par numéro de contrat et échéance</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+              <DollarSign className="w-6 h-6 mr-2 text-green-600" />
+              Encaissement
+            </h2>
+            <p className="text-gray-600">Saisie des encaissements par numéro de contrat et échéance</p>
+          </div>
+          <button
+            onClick={refreshStats}
+            className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+            title="Rafraîchir les statistiques"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Actualiser
+          </button>
+        </div>
         {username && (
           <p className="text-sm text-blue-600 mt-1">
             Utilisateur connecté : {username}
           </p>
         )}
+      </div>
+
+      {/* Bannière de vérification de date */}
+      <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
+            <div>
+              <p className="font-semibold text-green-800">Session du jour active</p>
+              <p className="text-green-600 text-sm">Date de session: {getTodayDisplay()}</p>
+              <p className="text-green-500 text-xs">Format de requête: {sessionDate}</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-green-700 text-sm">Heure système: {new Date().toLocaleTimeString('fr-FR')}</p>
+            <p className="text-green-600 text-xs">Dernier rafraîchissement: {new Date().toLocaleTimeString('fr-FR')}</p>
+          </div>
+        </div>
       </div>
 
       {/* Formulaire de recherche */}
@@ -501,9 +585,15 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
 
       {/* Statistiques de session */}
       <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">
-          Statistiques de la Session ({new Date().toLocaleDateString('fr-FR')})
-        </h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">
+            Statistiques de la Session ({getTodayDisplay()})
+          </h3>
+          <div className="text-sm text-gray-500">
+            Mise à jour: {new Date().toLocaleTimeString('fr-FR')}
+          </div>
+        </div>
+        
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {/* Paiements */}
           <div 
@@ -522,7 +612,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
               {sessionStats.nombre_contrats_paiements} contrat(s)
             </p>
             <p className="text-xs text-orange-600 mt-1">
-              Statut: null + Date paiement: aujourd'hui
+              Date: {sessionDate}
             </p>
             {exportLoading === 'paiements' && (
               <p className="text-xs text-orange-600 mt-1 animate-pulse">Génération Excel...</p>
@@ -546,7 +636,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
               {sessionStats.nombre_contrats_encaissements} contrat(s)
             </p>
             <p className="text-xs text-blue-600 mt-1">
-              Date encaissement: aujourd'hui
+              Date: {sessionDate}
             </p>
             {exportLoading === 'encaissements' && (
               <p className="text-xs text-blue-600 mt-1 animate-pulse">Génération Excel...</p>
