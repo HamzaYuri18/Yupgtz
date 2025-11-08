@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Search, DollarSign, Calendar, FileText, User, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Search, DollarSign, Calendar, FileText, User, CheckCircle, XCircle, AlertCircle, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import * as XLSX from 'xlsx';
 
 interface EncaissementProps {
   username: string;
@@ -32,6 +33,16 @@ interface SessionStats {
   nombre_contrats_encaisses: number;
 }
 
+interface ContratData {
+  numero_contrat: string;
+  prime: number;
+  assure: string;
+  echeance: string;
+  date_paiement: string | null;
+  Date_Encaissement: string | null;
+  statut: string;
+}
+
 const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   const [numeroContrat, setNumeroContrat] = useState('');
   const [echeance, setEcheance] = useState('');
@@ -52,6 +63,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     total_primes_encaisses: 0,
     nombre_contrats_encaisses: 0
   });
+  const [exportLoading, setExportLoading] = useState<string | null>(null);
 
   useEffect(() => {
     loadSessionStats();
@@ -258,6 +270,102 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     }
   };
 
+  // Fonction pour exporter les données en Excel
+  const exportToExcel = async (type: 'paiements' | 'encaissements' | 'statut_null' | 'encaisses') => {
+    setExportLoading(type);
+    
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayISO = today.toISOString().split('T')[0];
+      
+      let data: ContratData[] = [];
+      let fileName = '';
+      let sheetName = '';
+
+      switch (type) {
+        case 'paiements':
+          const { data: paiementsData } = await supabase
+            .from('terme')
+            .select('numero_contrat, prime, assure, echeance, date_paiement, Date_Encaissement, statut')
+            .is('statut', null)
+            .eq('date_paiement', todayISO);
+          data = paiementsData || [];
+          fileName = `paiements_${todayISO}.xlsx`;
+          sheetName = 'Paiements Aujourdhui';
+          break;
+
+        case 'encaissements':
+          const { data: encaissementsData } = await supabase
+            .from('terme')
+            .select('numero_contrat, prime, assure, echeance, date_paiement, Date_Encaissement, statut')
+            .eq('Date_Encaissement', todayISO);
+          data = encaissementsData || [];
+          fileName = `encaissements_${todayISO}.xlsx`;
+          sheetName = 'Encaissements Aujourdhui';
+          break;
+
+        case 'statut_null':
+          const { data: statutNullData } = await supabase
+            .from('terme')
+            .select('numero_contrat, prime, assure, echeance, date_paiement, Date_Encaissement, statut')
+            .is('statut', null);
+          data = statutNullData || [];
+          fileName = `contrats_attente_${todayISO}.xlsx`;
+          sheetName = 'Contrats en Attente';
+          break;
+
+        case 'encaisses':
+          const { data: encaissesData } = await supabase
+            .from('terme')
+            .select('numero_contrat, prime, assure, echeance, date_paiement, Date_Encaissement, statut')
+            .eq('statut', 'Encaissé');
+          data = encaissesData || [];
+          fileName = `contrats_encaisses_${todayISO}.xlsx`;
+          sheetName = 'Contrats Encaisses';
+          break;
+      }
+
+      if (data.length === 0) {
+        setMessage('Aucune donnée à exporter pour cette catégorie');
+        setMessageType('warning');
+        setExportLoading(null);
+        return;
+      }
+
+      // Préparer les données pour l'export
+      const excelData = data.map(contrat => ({
+        'Numéro Contrat': contrat.numero_contrat,
+        'Prime': Number(contrat.prime),
+        'Assuré': contrat.assure,
+        'Échéance': contrat.echeance,
+        'Date Paiement': contrat.date_paiement || 'Non payé',
+        'Date Encaissement': contrat.Date_Encaissement || 'Non encaissé',
+        'Statut': contrat.statut || 'En attente'
+      }));
+
+      // Créer un workbook et une worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(excelData);
+
+      // Ajouter la worksheet au workbook
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+      // Générer le fichier Excel et le télécharger
+      XLSX.writeFile(wb, fileName);
+
+      setMessage(`Fichier Excel "${fileName}" téléchargé avec succès!`);
+      setMessageType('success');
+
+    } catch (error) {
+      console.error('Erreur lors de l\'export Excel:', error);
+      setMessage('Erreur lors de l\'export Excel');
+      setMessageType('error');
+    } finally {
+      setExportLoading(null);
+    }
+  };
+
   // Gestionnaire de changement pour le numéro de contrat (supprime les espaces)
   const handleNumeroContratChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = cleanContractNumber(e.target.value);
@@ -381,30 +489,49 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
           Statistiques de la Session ({new Date().toLocaleDateString('fr-FR')})
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="text-center p-4 bg-orange-50 rounded-lg shadow border border-orange-200">
-            <p className="text-sm text-gray-600">Paiements (Aujourd'hui)</p>
+          {/* Paiements */}
+          <div 
+            className="text-center p-4 bg-orange-50 rounded-lg shadow border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
+            onClick={() => exportToExcel('paiements')}
+            title="Cliquer pour exporter les numéros de contrat en Excel"
+          >
+            <div className="flex justify-between items-start mb-2">
+              <p className="text-sm text-gray-600 flex-1 text-left">Paiements (Aujourd'hui)</p>
+              <Download className="w-4 h-4 text-orange-600 flex-shrink-0" />
+            </div>
             <p className="text-xl font-bold text-orange-600">
               {sessionStats.total_paiements.toLocaleString()} TND
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              {sessionStats.nombre_contrats_paiements} contrat(s) payés aujourd'hui
+              {sessionStats.nombre_contrats_paiements} contrat(s)
             </p>
-            <p className="text-xs text-orange-600 mt-1">
-              Statut: null + Date paiement: aujourd'hui
-            </p>
+            {exportLoading === 'paiements' && (
+              <p className="text-xs text-orange-600 mt-1">Génération Excel...</p>
+            )}
           </div>
-          <div className="text-center p-4 bg-blue-50 rounded-lg shadow border border-blue-200">
-            <p className="text-sm text-gray-600">Encaissements (Aujourd'hui)</p>
+
+          {/* Encaissements */}
+          <div 
+            className="text-center p-4 bg-blue-50 rounded-lg shadow border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
+            onClick={() => exportToExcel('encaissements')}
+            title="Cliquer pour exporter les numéros de contrat en Excel"
+          >
+            <div className="flex justify-between items-start mb-2">
+              <p className="text-sm text-gray-600 flex-1 text-left">Encaissements (Aujourd'hui)</p>
+              <Download className="w-4 h-4 text-blue-600 flex-shrink-0" />
+            </div>
             <p className="text-xl font-bold text-blue-600">
               {sessionStats.total_encaissements.toLocaleString()} TND
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              {sessionStats.nombre_contrats_encaissements} contrat(s) encaissés aujourd'hui
+              {sessionStats.nombre_contrats_encaissements} contrat(s)
             </p>
-            <p className="text-xs text-blue-600 mt-1">
-              Date encaissement: aujourd'hui
-            </p>
+            {exportLoading === 'encaissements' && (
+              <p className="text-xs text-blue-600 mt-1">Génération Excel...</p>
+            )}
           </div>
+
+          {/* Différence */}
           <div className="text-center p-4 bg-white rounded-lg shadow border border-gray-200">
             <p className="text-sm text-gray-600">Différence (Paiements - Encaissements)</p>
             <p className={`text-xl font-bold ${
@@ -416,6 +543,8 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
               {sessionStats.difference >= 0 ? 'Excédent' : 'Déficit'}
             </p>
           </div>
+
+          {/* Balance de Session */}
           <div className={`text-center p-4 rounded-lg shadow border ${
             sessionStats.session_montant >= 0 ? 'bg-green-100 border-green-200' : 'bg-red-100 border-red-200'
           }`}>
@@ -434,29 +563,46 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         {/* Statistiques globales */}
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Statistiques Globales</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="text-center p-4 bg-yellow-50 rounded-lg shadow border border-yellow-200">
-            <p className="text-sm text-gray-600">Contrats en attente d'encaissement</p>
+          {/* Contrats en attente */}
+          <div 
+            className="text-center p-4 bg-yellow-50 rounded-lg shadow border border-yellow-200 cursor-pointer hover:bg-yellow-100 transition-colors"
+            onClick={() => exportToExcel('statut_null')}
+            title="Cliquer pour exporter les numéros de contrat en Excel"
+          >
+            <div className="flex justify-between items-start mb-2">
+              <p className="text-sm text-gray-600 flex-1 text-left">Contrats en attente d'encaissement</p>
+              <Download className="w-4 h-4 text-yellow-600 flex-shrink-0" />
+            </div>
             <p className="text-xl font-bold text-yellow-600">
               {sessionStats.total_primes_statut_null.toLocaleString()} TND
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              {sessionStats.nombre_contrats_statut_null} contrat(s) avec statut null
+              {sessionStats.nombre_contrats_statut_null} contrat(s)
             </p>
-            <p className="text-xs text-yellow-600 mt-1">
-              Tous les contrats non encaissés
-            </p>
+            {exportLoading === 'statut_null' && (
+              <p className="text-xs text-yellow-600 mt-1">Génération Excel...</p>
+            )}
           </div>
-          <div className="text-center p-4 bg-green-50 rounded-lg shadow border border-green-200">
-            <p className="text-sm text-gray-600">Total des contrats encaissés</p>
+
+          {/* Contrats encaissés */}
+          <div 
+            className="text-center p-4 bg-green-50 rounded-lg shadow border border-green-200 cursor-pointer hover:bg-green-100 transition-colors"
+            onClick={() => exportToExcel('encaisses')}
+            title="Cliquer pour exporter les numéros de contrat en Excel"
+          >
+            <div className="flex justify-between items-start mb-2">
+              <p className="text-sm text-gray-600 flex-1 text-left">Total des contrats encaissés</p>
+              <Download className="w-4 h-4 text-green-600 flex-shrink-0" />
+            </div>
             <p className="text-xl font-bold text-green-700">
               {sessionStats.total_primes_encaisses.toLocaleString()} TND
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              {sessionStats.nombre_contrats_encaisses} contrat(s) encaissés
+              {sessionStats.nombre_contrats_encaisses} contrat(s)
             </p>
-            <p className="text-xs text-green-600 mt-1">
-              Statut: "Encaissé" (toutes dates)
-            </p>
+            {exportLoading === 'encaisses' && (
+              <p className="text-xs text-green-600 mt-1">Génération Excel...</p>
+            )}
           </div>
         </div>
       </div>
