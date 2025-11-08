@@ -167,18 +167,32 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       today.setHours(0, 0, 0, 0);
       const todayISO = today.toISOString().split('T')[0];
       
-      // 1. Statistiques des paiements (statut null et date_paiement = aujourd'hui)
+      console.log('Date de session:', todayISO);
+
+      // 1. Statistiques des PAIEMENTS (statut null ET date_paiement = aujourd'hui)
       const { data: paiementsData, error: paiementsError } = await supabase
         .from('terme')
         .select('prime, statut, date_paiement')
         .is('statut', null)
         .eq('date_paiement', todayISO);
 
-      // 2. Statistiques des encaissements (date_encaissement = aujourd'hui)
+      if (paiementsError) {
+        console.error('Erreur paiements:', paiementsError);
+      } else {
+        console.log('Paiements trouvés:', paiementsData);
+      }
+
+      // 2. Statistiques des ENCAISSEMENTS (date_encaissement = aujourd'hui)
       const { data: encaissementsData, error: encaissementsError } = await supabase
         .from('terme')
         .select('prime, Date_Encaissement')
         .eq('Date_Encaissement', todayISO);
+
+      if (encaissementsError) {
+        console.error('Erreur encaissements:', encaissementsError);
+      } else {
+        console.log('Encaissements trouvés:', encaissementsData);
+      }
 
       // 3. Statistiques des contrats avec statut null (toutes dates)
       const { data: statutNullData, error: statutNullError } = await supabase
@@ -186,41 +200,51 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         .select('prime, statut')
         .is('statut', null);
 
+      if (statutNullError) {
+        console.error('Erreur statut null:', statutNullError);
+      }
+
       // 4. Statistiques des contrats encaissés (toutes dates)
       const { data: encaissesData, error: encaissesError } = await supabase
         .from('terme')
         .select('prime, statut, Date_Encaissement')
         .eq('statut', 'Encaissé');
 
-      if (paiementsError || encaissementsError || statutNullError || encaissesError) {
-        console.error('Erreur chargement stats:', { paiementsError, encaissementsError, statutNullError, encaissesError });
-        return;
+      if (encaissesError) {
+        console.error('Erreur encaissés:', encaissesError);
       }
 
-      // Calcul des totaux pour les paiements
-      const totalPaiements = paiementsData?.reduce((sum, item) => sum + (item.prime || 0), 0) || 0;
+      // CALCUL DES STATISTIQUES DE PAIEMENTS (Session)
+      const totalPaiements = paiementsData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
       const nombreContratsPaiements = paiementsData?.length || 0;
 
-      // Calcul des totaux pour les encaissements
-      const totalEncaissements = encaissementsData?.reduce((sum, item) => sum + (item.prime || 0), 0) || 0;
+      // CALCUL DES STATISTIQUES D'ENCAISSEMENTS (Session)
+      const totalEncaissements = encaissementsData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
       const nombreContratsEncaissements = encaissementsData?.length || 0;
 
-      // Calcul des totaux pour les contrats avec statut null
-      const totalPrimesStatutNull = statutNullData?.reduce((sum, item) => sum + (item.prime || 0), 0) || 0;
+      // CALCUL DES STATISTIQUES GLOBALES
+      const totalPrimesStatutNull = statutNullData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
       const nombreContratsStatutNull = statutNullData?.length || 0;
 
-      // Calcul des totaux pour les contrats encaissés
-      const totalPrimesEncaisses = encaissesData?.reduce((sum, item) => sum + (item.prime || 0), 0) || 0;
+      const totalPrimesEncaisses = encaissesData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
       const nombreContratsEncaisses = encaissesData?.length || 0;
 
       const difference = totalPaiements - totalEncaissements;
+
+      console.log('Résultats calculés:', {
+        totalPaiements,
+        nombreContratsPaiements,
+        totalEncaissements,
+        nombreContratsEncaissements,
+        difference
+      });
 
       setSessionStats({
         total_encaissements: totalEncaissements,
         total_paiements: totalPaiements,
         difference: difference,
         session_montant: difference,
-        cumul_sessions: 0, // À adapter selon votre logique métier
+        cumul_sessions: 0,
         nombre_contrats_paiements: nombreContratsPaiements,
         nombre_contrats_encaissements: nombreContratsEncaissements,
         total_primes_statut_null: totalPrimesStatutNull,
@@ -353,43 +377,56 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
 
       {/* Statistiques de session */}
       <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Statistiques de la Session (Aujourd'hui)</h3>
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">
+          Statistiques de la Session ({new Date().toLocaleDateString('fr-FR')})
+        </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="text-center p-4 bg-white rounded-lg shadow">
-            <p className="text-sm text-gray-600">Paiements (Statut null)</p>
+          <div className="text-center p-4 bg-orange-50 rounded-lg shadow border border-orange-200">
+            <p className="text-sm text-gray-600">Paiements (Aujourd'hui)</p>
             <p className="text-xl font-bold text-orange-600">
               {sessionStats.total_paiements.toLocaleString()} TND
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              {sessionStats.nombre_contrats_paiements} contrat(s)
+              {sessionStats.nombre_contrats_paiements} contrat(s) payés aujourd'hui
+            </p>
+            <p className="text-xs text-orange-600 mt-1">
+              Statut: null + Date paiement: aujourd'hui
             </p>
           </div>
-          <div className="text-center p-4 bg-white rounded-lg shadow">
-            <p className="text-sm text-gray-600">Encaissements</p>
+          <div className="text-center p-4 bg-blue-50 rounded-lg shadow border border-blue-200">
+            <p className="text-sm text-gray-600">Encaissements (Aujourd'hui)</p>
             <p className="text-xl font-bold text-blue-600">
               {sessionStats.total_encaissements.toLocaleString()} TND
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              {sessionStats.nombre_contrats_encaissements} contrat(s)
+              {sessionStats.nombre_contrats_encaissements} contrat(s) encaissés aujourd'hui
+            </p>
+            <p className="text-xs text-blue-600 mt-1">
+              Date encaissement: aujourd'hui
             </p>
           </div>
-          <div className="text-center p-4 bg-white rounded-lg shadow">
-            <p className="text-sm text-gray-600">Différence</p>
+          <div className="text-center p-4 bg-white rounded-lg shadow border border-gray-200">
+            <p className="text-sm text-gray-600">Différence (Paiements - Encaissements)</p>
             <p className={`text-xl font-bold ${
               sessionStats.difference >= 0 ? 'text-green-600' : 'text-red-600'
             }`}>
               {sessionStats.difference.toLocaleString()} TND
             </p>
+            <p className="text-sm text-gray-500 mt-1">
+              {sessionStats.difference >= 0 ? 'Excédent' : 'Déficit'}
+            </p>
           </div>
-          <div className={`text-center p-4 rounded-lg shadow ${
-            sessionStats.session_montant >= 0 ? 'bg-green-100' : 'bg-red-100'
+          <div className={`text-center p-4 rounded-lg shadow border ${
+            sessionStats.session_montant >= 0 ? 'bg-green-100 border-green-200' : 'bg-red-100 border-red-200'
           }`}>
-            <p className="text-sm text-gray-600">Session</p>
+            <p className="text-sm text-gray-600">Balance de Session</p>
             <p className={`text-xl font-bold ${
               sessionStats.session_montant >= 0 ? 'text-green-600' : 'text-red-600'
             }`}>
-              {sessionStats.session_montant >= 0 ? 'Report ' : 'Rapport '}
               {Math.abs(sessionStats.session_montant).toLocaleString()} TND
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              {sessionStats.session_montant >= 0 ? 'À encaisser' : 'Déficit'}
             </p>
           </div>
         </div>
@@ -398,21 +435,27 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Statistiques Globales</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="text-center p-4 bg-yellow-50 rounded-lg shadow border border-yellow-200">
-            <p className="text-sm text-gray-600">Contrats en attente (Statut null)</p>
+            <p className="text-sm text-gray-600">Contrats en attente d'encaissement</p>
             <p className="text-xl font-bold text-yellow-600">
               {sessionStats.total_primes_statut_null.toLocaleString()} TND
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              {sessionStats.nombre_contrats_statut_null} contrat(s) en attente
+              {sessionStats.nombre_contrats_statut_null} contrat(s) avec statut null
+            </p>
+            <p className="text-xs text-yellow-600 mt-1">
+              Tous les contrats non encaissés
             </p>
           </div>
           <div className="text-center p-4 bg-green-50 rounded-lg shadow border border-green-200">
-            <p className="text-sm text-gray-600">Contrats encaissés (Total)</p>
+            <p className="text-sm text-gray-600">Total des contrats encaissés</p>
             <p className="text-xl font-bold text-green-700">
               {sessionStats.total_primes_encaisses.toLocaleString()} TND
             </p>
             <p className="text-sm text-gray-500 mt-1">
               {sessionStats.nombre_contrats_encaisses} contrat(s) encaissés
+            </p>
+            <p className="text-xs text-green-600 mt-1">
+              Statut: "Encaissé" (toutes dates)
             </p>
           </div>
         </div>
