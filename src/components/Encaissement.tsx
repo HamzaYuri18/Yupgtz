@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, DollarSign, Calendar, FileText, User, CheckCircle, XCircle } from 'lucide-react';
+import { Search, DollarSign, Calendar, FileText, User, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface EncaissementProps {
@@ -13,6 +13,9 @@ interface TermeData {
   prime: number;
   assure: string;
   statut: string;
+  date_paiement: string | null;
+  Retour: string | null;
+  Date_Encaissement: string | null;
 }
 
 interface SessionStats {
@@ -29,6 +32,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   const [termeData, setTermeData] = useState<TermeData | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState<'success' | 'error' | 'warning'>('success');
   const [sessionStats, setSessionStats] = useState<SessionStats>({
     total_encaissements: 0,
     total_paiements: 0,
@@ -44,6 +48,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   const searchTerme = async () => {
     if (!numeroContrat || !echeance) {
       setMessage('Veuillez saisir le numéro de contrat et l\'échéance');
+      setMessageType('error');
       return;
     }
 
@@ -57,16 +62,19 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         .select('*')
         .eq('numero_contrat', numeroContrat)
         .eq('echeance', echeance)
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        setMessage('Aucun enregistrement trouvé pour ce numéro de contrat et échéance');
+      if (error || !data) {
+        setMessage('Ce terme n\'est pas payé Impossible de l\'encaisser !!!');
+        setMessageType('error');
         return;
       }
 
       setTermeData(data);
+      setMessage('');
     } catch (error) {
       setMessage('Erreur lors de la recherche');
+      setMessageType('error');
     } finally {
       setLoading(false);
     }
@@ -75,51 +83,62 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   const enregistrerEncaissement = async () => {
     if (!termeData) {
       setMessage('Aucune donnée terme à enregistrer');
+      setMessageType('error');
+      return;
+    }
+
+    // Vérifier si déjà encaissé
+    if (termeData.Date_Encaissement) {
+      setMessage(`Ce terme est deja encaissé en ${formatDate(termeData.Date_Encaissement)}`);
+      setMessageType('warning');
       return;
     }
 
     setLoading(true);
 
     try {
-      const sessionId = `session_${Date.now()}`;
-      
-      const { error } = await supabase
-        .from('Encaissement')
-        .insert([{
-          numero_contrat: termeData.numero_contrat,
-          echeance: termeData.echeance,
-          prime: termeData.prime,
-          assure: termeData.assure,
-          statut: 'encaissé',
-          montant_encaissement: termeData.prime,
-          session_id: sessionId,
-          created_at: new Date().toISOString()
-        }]);
-
-      if (error) {
-        setMessage('Erreur lors de l\'enregistrement de l\'encaissement');
-        return;
-      }
+      const today = new Date().toISOString().split('T')[0];
 
       // Mettre à jour le statut dans la table terme
-      await supabase
+      const { error } = await supabase
         .from('terme')
-        .update({ statut: 'encaissé' })
+        .update({
+          statut: 'Encaissé',
+          Date_Encaissement: today
+        })
         .eq('numero_contrat', termeData.numero_contrat)
         .eq('echeance', termeData.echeance);
 
+      if (error) {
+        setMessage('Erreur lors de l\'enregistrement de l\'encaissement');
+        setMessageType('error');
+        return;
+      }
+
       setMessage('Encaissement enregistré avec succès!');
+      setMessageType('success');
       setTermeData(null);
       setNumeroContrat('');
       setEcheance('');
-      
+
       // Recharger les statistiques
       loadSessionStats();
     } catch (error) {
       setMessage('Erreur lors de l\'enregistrement');
+      setMessageType('error');
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatDate = (dateString: string): string => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('fr-FR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
   };
 
   const loadSessionStats = async () => {
@@ -214,46 +233,62 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
 
       {/* Résultat de la recherche */}
       {termeData && (
-        <div className="bg-green-50 p-6 rounded-lg mb-6 border border-green-200">
+        <div className={`p-6 rounded-lg mb-6 border-2 ${
+          termeData.Date_Encaissement
+            ? 'bg-blue-50 border-blue-200'
+            : 'bg-green-50 border-green-200'
+        }`}>
           <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
             <CheckCircle className="w-5 h-5 mr-2 text-green-600" />
             Données trouvées
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-600">Prime</label>
-              <p className="text-lg font-bold text-green-700">{termeData.prime.toLocaleString()} TND </p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-600">Assuré</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <label className="block text-sm font-medium text-gray-600 mb-1">Assuré</label>
               <p className="text-lg font-semibold text-gray-800 flex items-center">
-                <User className="w-4 h-4 mr-1" />
+                <User className="w-4 h-4 mr-2 text-blue-600" />
                 {termeData.assure}
               </p>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-600">Statut</label>
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <label className="block text-sm font-medium text-gray-600 mb-1">Prime</label>
+              <p className="text-lg font-bold text-green-700">{Number(termeData.prime).toLocaleString()} TND</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <label className="block text-sm font-medium text-gray-600 mb-1">Statut</label>
               <p className={`text-lg font-semibold ${
-                termeData.statut === 'encaissé' ? 'text-green-600' : 'text-orange-600'
+                termeData.statut === 'Encaissé' ? 'text-green-600' : 'text-orange-600'
               }`}>
                 {termeData.statut}
+              </p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <label className="block text-sm font-medium text-gray-600 mb-1">Date de paiement</label>
+              <p className="text-lg font-semibold text-gray-800">
+                {termeData.date_paiement ? formatDate(termeData.date_paiement) : 'N/A'}
+              </p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <label className="block text-sm font-medium text-gray-600 mb-1">Retour</label>
+              <p className="text-lg font-semibold text-gray-800">
+                {termeData.Retour || 'Aucun'}
+              </p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <label className="block text-sm font-medium text-gray-600 mb-1">Date d'encaissement</label>
+              <p className="text-lg font-semibold text-gray-800">
+                {termeData.Date_Encaissement ? formatDate(termeData.Date_Encaissement) : 'Non encaissé'}
               </p>
             </div>
           </div>
           <button
             onClick={enregistrerEncaissement}
-            disabled={loading || termeData.statut === 'encaissé'}
-            className="mt-4 flex items-center justify-center px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            disabled={loading || !!termeData.Date_Encaissement}
+            className="mt-6 flex items-center justify-center px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
             <DollarSign className="w-4 h-4 mr-2" />
             {loading ? 'Enregistrement...' : 'Enregistrer l\'encaissement'}
           </button>
-          {termeData.statut === 'encaissé' && (
-            <p className="mt-2 text-orange-600 text-sm flex items-center">
-              <XCircle className="w-4 h-4 mr-1" />
-              Cet encaissement a déjà été enregistré
-            </p>
-          )}
         </div>
       )}
 
@@ -295,10 +330,17 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
 
       {/* Message de statut */}
       {message && (
-        <div className={`mt-4 p-3 rounded-md ${
-          message.includes('succès') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+        <div className={`mt-4 p-4 rounded-lg flex items-start gap-3 ${
+          messageType === 'success'
+            ? 'bg-green-100 text-green-800 border border-green-300'
+            : messageType === 'warning'
+            ? 'bg-yellow-100 text-yellow-800 border border-yellow-300'
+            : 'bg-red-100 text-red-800 border border-red-300'
         }`}>
-          {message}
+          {messageType === 'success' && <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />}
+          {messageType === 'warning' && <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />}
+          {messageType === 'error' && <XCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />}
+          <span>{message}</span>
         </div>
       )}
     </div>
