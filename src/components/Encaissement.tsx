@@ -24,6 +24,12 @@ interface SessionStats {
   difference: number;
   session_montant: number;
   cumul_sessions: number;
+  nombre_contrats_paiements: number;
+  nombre_contrats_encaissements: number;
+  total_primes_statut_null: number;
+  nombre_contrats_statut_null: number;
+  total_primes_encaisses: number;
+  nombre_contrats_encaisses: number;
 }
 
 const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
@@ -38,15 +44,28 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     total_paiements: 0,
     difference: 0,
     session_montant: 0,
-    cumul_sessions: 0
+    cumul_sessions: 0,
+    nombre_contrats_paiements: 0,
+    nombre_contrats_encaissements: 0,
+    total_primes_statut_null: 0,
+    nombre_contrats_statut_null: 0,
+    total_primes_encaisses: 0,
+    nombre_contrats_encaisses: 0
   });
 
   useEffect(() => {
     loadSessionStats();
   }, []);
 
+  // Fonction pour nettoyer le numéro de contrat des espaces
+  const cleanContractNumber = (contract: string): string => {
+    return contract.replace(/\s+/g, '');
+  };
+
   const searchTerme = async () => {
-    if (!numeroContrat || !echeance) {
+    const cleanedNumeroContrat = cleanContractNumber(numeroContrat);
+    
+    if (!cleanedNumeroContrat || !echeance) {
       setMessage('Veuillez saisir le numéro de contrat et l\'échéance');
       setMessageType('error');
       return;
@@ -60,7 +79,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       const { data, error } = await supabase
         .from('terme')
         .select('*')
-        .eq('numero_contrat', numeroContrat)
+        .eq('numero_contrat', cleanedNumeroContrat)
         .eq('echeance', echeance)
         .maybeSingle();
 
@@ -146,35 +165,68 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       // Récupérer la date de début de session (aujourd'hui)
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+      const todayISO = today.toISOString().split('T')[0];
       
-      // 1. Total des encaissements de la session
-      const { data: encaissements, error: encError } = await supabase
-        .from('Encaissement')
-        .select('montant_encaissement, created_at')
-        .gte('created_at', today.toISOString());
+      // 1. Statistiques des paiements (statut null et date_paiement = aujourd'hui)
+      const { data: paiementsData, error: paiementsError } = await supabase
+        .from('terme')
+        .select('prime, statut, date_paiement')
+        .is('statut', null)
+        .eq('date_paiement', todayISO);
 
-      // 2. Total des paiements de type terme
-      const { data: paiements, error: payError } = await supabase
-        .from('paiements')
-        .select('montant, created_at, type_paiement')
-        .gte('created_at', today.toISOString())
-        .or('type_paiement.eq.terme,type_paiement.eq.paiement credit terme');
+      // 2. Statistiques des encaissements (date_encaissement = aujourd'hui)
+      const { data: encaissementsData, error: encaissementsError } = await supabase
+        .from('terme')
+        .select('prime, Date_Encaissement')
+        .eq('Date_Encaissement', todayISO);
 
-      if (encError || payError) {
-        console.error('Erreur chargement stats:', encError, payError);
+      // 3. Statistiques des contrats avec statut null (toutes dates)
+      const { data: statutNullData, error: statutNullError } = await supabase
+        .from('terme')
+        .select('prime, statut')
+        .is('statut', null);
+
+      // 4. Statistiques des contrats encaissés (toutes dates)
+      const { data: encaissesData, error: encaissesError } = await supabase
+        .from('terme')
+        .select('prime, statut, Date_Encaissement')
+        .eq('statut', 'Encaissé');
+
+      if (paiementsError || encaissementsError || statutNullError || encaissesError) {
+        console.error('Erreur chargement stats:', { paiementsError, encaissementsError, statutNullError, encaissesError });
         return;
       }
 
-      const totalEncaissements = encaissements?.reduce((sum, item) => sum + (item.montant_encaissement || 0), 0) || 0;
-      const totalPaiements = paiements?.reduce((sum, item) => sum + (item.montant || 0), 0) || 0;
-      const difference = totalEncaissements - totalPaiements;
+      // Calcul des totaux pour les paiements
+      const totalPaiements = paiementsData?.reduce((sum, item) => sum + (item.prime || 0), 0) || 0;
+      const nombreContratsPaiements = paiementsData?.length || 0;
+
+      // Calcul des totaux pour les encaissements
+      const totalEncaissements = encaissementsData?.reduce((sum, item) => sum + (item.prime || 0), 0) || 0;
+      const nombreContratsEncaissements = encaissementsData?.length || 0;
+
+      // Calcul des totaux pour les contrats avec statut null
+      const totalPrimesStatutNull = statutNullData?.reduce((sum, item) => sum + (item.prime || 0), 0) || 0;
+      const nombreContratsStatutNull = statutNullData?.length || 0;
+
+      // Calcul des totaux pour les contrats encaissés
+      const totalPrimesEncaisses = encaissesData?.reduce((sum, item) => sum + (item.prime || 0), 0) || 0;
+      const nombreContratsEncaisses = encaissesData?.length || 0;
+
+      const difference = totalPaiements - totalEncaissements;
 
       setSessionStats({
         total_encaissements: totalEncaissements,
         total_paiements: totalPaiements,
         difference: difference,
         session_montant: difference,
-        cumul_sessions: 0 // À adapter selon votre logique métier
+        cumul_sessions: 0, // À adapter selon votre logique métier
+        nombre_contrats_paiements: nombreContratsPaiements,
+        nombre_contrats_encaissements: nombreContratsEncaissements,
+        total_primes_statut_null: totalPrimesStatutNull,
+        nombre_contrats_statut_null: nombreContratsStatutNull,
+        total_primes_encaisses: totalPrimesEncaisses,
+        nombre_contrats_encaisses: nombreContratsEncaisses
       });
 
     } catch (error) {
@@ -182,8 +234,14 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     }
   };
 
+  // Gestionnaire de changement pour le numéro de contrat (supprime les espaces)
+  const handleNumeroContratChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = cleanContractNumber(e.target.value);
+    setNumeroContrat(value);
+  };
+
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
+    <div className="max-w-6xl mx-auto p-6 bg-white rounded-lg shadow-lg">
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-gray-800 mb-2 flex items-center">
           <DollarSign className="w-6 h-6 mr-2 text-green-600" />
@@ -203,10 +261,11 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
             <input
               type="text"
               value={numeroContrat}
-              onChange={(e) => setNumeroContrat(e.target.value)}
+              onChange={handleNumeroContratChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Saisir le numéro de contrat"
+              placeholder="Saisir le numéro de contrat (sans espaces)"
             />
+            <p className="text-xs text-gray-500 mt-1">Les espaces seront automatiquement supprimés</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -294,23 +353,31 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
 
       {/* Statistiques de session */}
       <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Statistiques de la Session</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">Statistiques de la Session (Aujourd'hui)</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="text-center p-4 bg-white rounded-lg shadow">
+            <p className="text-sm text-gray-600">Paiements (Statut null)</p>
+            <p className="text-xl font-bold text-orange-600">
+              {sessionStats.total_paiements.toLocaleString()} TND
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              {sessionStats.nombre_contrats_paiements} contrat(s)
+            </p>
+          </div>
           <div className="text-center p-4 bg-white rounded-lg shadow">
             <p className="text-sm text-gray-600">Encaissements</p>
             <p className="text-xl font-bold text-blue-600">
               {sessionStats.total_encaissements.toLocaleString()} TND
             </p>
-          </div>
-          <div className="text-center p-4 bg-white rounded-lg shadow">
-            <p className="text-sm text-gray-600">Paiements</p>
-            <p className="text-xl font-bold text-orange-600">
-              {sessionStats.total_paiements.toLocaleString()} TND
+            <p className="text-sm text-gray-500 mt-1">
+              {sessionStats.nombre_contrats_encaissements} contrat(s)
             </p>
           </div>
           <div className="text-center p-4 bg-white rounded-lg shadow">
             <p className="text-sm text-gray-600">Différence</p>
-            <p className="text-xl font-bold">
+            <p className={`text-xl font-bold ${
+              sessionStats.difference >= 0 ? 'text-green-600' : 'text-red-600'
+            }`}>
               {sessionStats.difference.toLocaleString()} TND
             </p>
           </div>
@@ -323,6 +390,29 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
             }`}>
               {sessionStats.session_montant >= 0 ? 'Report ' : 'Rapport '}
               {Math.abs(sessionStats.session_montant).toLocaleString()} TND
+            </p>
+          </div>
+        </div>
+
+        {/* Statistiques globales */}
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">Statistiques Globales</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="text-center p-4 bg-yellow-50 rounded-lg shadow border border-yellow-200">
+            <p className="text-sm text-gray-600">Contrats en attente (Statut null)</p>
+            <p className="text-xl font-bold text-yellow-600">
+              {sessionStats.total_primes_statut_null.toLocaleString()} TND
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              {sessionStats.nombre_contrats_statut_null} contrat(s) en attente
+            </p>
+          </div>
+          <div className="text-center p-4 bg-green-50 rounded-lg shadow border border-green-200">
+            <p className="text-sm text-gray-600">Contrats encaissés (Total)</p>
+            <p className="text-xl font-bold text-green-700">
+              {sessionStats.total_primes_encaisses.toLocaleString()} TND
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              {sessionStats.nombre_contrats_encaisses} contrat(s) encaissés
             </p>
           </div>
         </div>
