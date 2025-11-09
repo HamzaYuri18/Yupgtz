@@ -232,6 +232,21 @@ export const saveTermeContract = async (
       console.log(`🔄 Retour ${retourType} détecté - Prime avant retour: ${originalPrimeAmount}, Prime actuelle: ${primeValue}`);
     }
 
+    // Ajouter les colonnes Credit si le type de paiement est Crédit
+    if (contractData.paymentType === 'Crédit' && contractData.creditAmount) {
+      const creditValue = Number(contractData.creditAmount);
+      const netPrimeValue = primeValue - creditValue;
+
+      insertData.Credit = creditValue;
+      insertData.Type_Paiement = 'Credit';
+      insertData['prime NETTE'] = netPrimeValue;
+
+      console.log('💳 Enregistrement du crédit:');
+      console.log(`  - Prime totale: ${primeValue}`);
+      console.log(`  - Montant crédit: ${creditValue}`);
+      console.log(`  - Prime nette: ${netPrimeValue}`);
+    }
+
     const { data, error } = await supabase
       .from('terme')
       .insert([insertData])
