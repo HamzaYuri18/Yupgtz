@@ -90,16 +90,25 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
 
   useEffect(() => {
     initializeSessionDate();
-    loadSessionStats();
-    calculateGlobalBalance();
-    loadRPData();
   }, []);
+
+  // Charger les données quand la session change
+  useEffect(() => {
+    if (sessionDate || customSessionDate) {
+      loadSessionStats();
+      calculateGlobalBalance();
+      loadRPData();
+    }
+  }, [sessionDate, customSessionDate, useCustomDate]);
 
   // Fonction pour charger les données de la table RP
   const loadRPData = async () => {
     try {
       const currentSessionDate = useCustomDate ? customSessionDate : sessionDate;
       
+      console.log('=== CHARGEMENT DONNÉES RP ===');
+      console.log('Date de session utilisée:', currentSessionDate);
+
       const { data, error } = await supabase
         .from('rp')
         .select('session, paiement, encaissement, difference')
@@ -108,14 +117,27 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
 
       if (error) {
         console.error('Erreur chargement RP:', error);
+        setRpData(null);
         return;
       }
 
-      setRpData(data);
       console.log('Données RP chargées:', data);
+      setRpData(data);
+
+      // Mettre à jour les stats avec les données RP
+      if (data) {
+        setSessionStats(prev => ({
+          ...prev,
+          total_paiements: data.paiement || 0,
+          total_encaissements: data.encaissement || 0,
+          difference: data.difference || 0,
+          session_montant: data.difference || 0
+        }));
+      }
 
     } catch (error) {
       console.error('Erreur lors du chargement RP:', error);
+      setRpData(null);
     }
   };
 
@@ -123,6 +145,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   const initializeSessionDate = () => {
     const today = new Date();
     const todayISO = formatDateForQuery(today);
+    console.log('Initialisation session date:', todayISO);
     setSessionDate(todayISO);
     setCustomSessionDate(todayISO);
   };
@@ -130,23 +153,34 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   // Fonction pour calculer la balance globale
   const calculateGlobalBalance = async () => {
     try {
+      console.log('=== CALCUL BALANCE GLOBALE ===');
+
       // Total des primes des contrats avec statut null (à encaisser)
-      const { data: statutNullData } = await supabase
+      const { data: statutNullData, error: statutNullError } = await supabase
         .from('terme')
         .select('prime')
         .is('statut', null);
 
+      if (statutNullError) {
+        console.error('Erreur statut null:', statutNullError);
+      }
+
       // Total des primes des contrats encaissés
-      const { data: encaissesData } = await supabase
+      const { data: encaissesData, error: encaissesError } = await supabase
         .from('terme')
         .select('prime')
         .eq('statut', 'Encaissé');
+
+      if (encaissesError) {
+        console.error('Erreur encaissés:', encaissesError);
+      }
 
       const totalAttente = statutNullData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
       const totalEncaisses = encaissesData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
 
       // Balance globale = Total encaissé - Total en attente
       const balance = totalEncaisses - totalAttente;
+      console.log('Balance globale calculée:', { totalEncaisses, totalAttente, balance });
       setGlobalBalance(balance);
 
     } catch (error) {
@@ -260,7 +294,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       setNumeroContrat('');
       setEcheance('');
 
-      // Recharger les statistiques
+      // Recharger les statistiques après un délai
       setTimeout(() => {
         loadSessionStats();
         calculateGlobalBalance();
@@ -306,18 +340,8 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       console.log('=== CHARGEMENT STATISTIQUES ===');
       console.log('Date de session utilisée:', currentSessionDate);
 
-      // 1. Charger les données de la table RP pour la session
-      const { data: rpSessionData, error: rpError } = await supabase
-        .from('rp')
-        .select('paiement, encaissement, difference')
-        .eq('session', currentSessionDate)
-        .maybeSingle();
-
-      if (rpError) {
-        console.error('Erreur RP:', rpError);
-      }
-
-      console.log('Données RP session:', rpSessionData);
+      // 1. Charger les données de la table RP pour la session (déjà fait dans loadRPData)
+      // Les stats de session viennent maintenant directement de loadRPData
 
       // 2. Statistiques des PAIEMENTS depuis le 25/10/2025
       const { data: paiementsDepuis2510Data, error: paiements2510Error } = await supabase
@@ -361,11 +385,6 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         console.error('Erreur encaissés:', encaissesError);
       }
 
-      // CALCUL DES STATISTIQUES DE SESSION (depuis table RP)
-      const paiementSession = rpSessionData?.paiement || 0;
-      const encaissementSession = rpSessionData?.encaissement || 0;
-      const differenceSession = rpSessionData?.difference || 0;
-
       // CALCUL DES STATISTIQUES GLOBALES DEPUIS 25/10/2025
       const totalPaiementsDepuis2510 = paiementsDepuis2510Data?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
       const totalEncaissementsDepuis2510 = encaissementsDepuis2510Data?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
@@ -381,21 +400,13 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       const deportCumule = -47369.10;
 
       console.log('=== RÉSULTATS CALCULÉS ===');
-      console.log('Paiement Session (RP):', paiementSession);
-      console.log('Encaissement Session (RP):', encaissementSession);
-      console.log('Différence Session (RP):', differenceSession);
       console.log('Paiements depuis 25/10:', totalPaiementsDepuis2510);
       console.log('Encaissements depuis 25/10:', totalEncaissementsDepuis2510);
       console.log('Déport cumulé:', deportCumule);
 
-      setSessionStats({
-        total_encaissements: encaissementSession,
-        total_paiements: paiementSession,
-        difference: differenceSession,
-        session_montant: differenceSession,
-        cumul_sessions: 0,
-        nombre_contrats_paiements: 0, // Non utilisé depuis RP
-        nombre_contrats_encaissements: 0, // Non utilisé depuis RP
+      // Mettre à jour seulement les stats globales (les stats de session viennent de RP)
+      setSessionStats(prev => ({
+        ...prev,
         total_primes_statut_null: totalPrimesStatutNull,
         nombre_contrats_statut_null: nombreContratsStatutNull,
         total_primes_encaisses: totalPrimesEncaisses,
@@ -403,7 +414,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         total_paiements_depuis_2510: totalPaiementsDepuis2510,
         total_encaissements_depuis_2510: totalEncaissementsDepuis2510,
         deport_cumule: deportCumule
-      });
+      }));
 
     } catch (error) {
       console.error('Erreur calcul stats:', error);
@@ -417,6 +428,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       setMessageType('error');
       return;
     }
+    console.log('Application filtre date:', useCustomDate ? customSessionDate : sessionDate);
     loadSessionStats();
     loadRPData();
   };
@@ -425,7 +437,9 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   const resetDateFilter = () => {
     setUseCustomDate(false);
     const today = new Date();
-    setCustomSessionDate(formatDateForQuery(today));
+    const todayISO = formatDateForQuery(today);
+    setCustomSessionDate(todayISO);
+    console.log('Réinitialisation filtre date:', todayISO);
     setTimeout(() => {
       loadSessionStats();
       loadRPData();
@@ -436,7 +450,10 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   const refreshStats = () => {
     console.log('=== RAFRAÎCHISSEMENT MANUEL ===');
     if (!useCustomDate) {
-      initializeSessionDate();
+      const today = new Date();
+      const todayISO = formatDateForQuery(today);
+      setSessionDate(todayISO);
+      console.log('Date session actualisée:', todayISO);
     }
     loadSessionStats();
     calculateGlobalBalance();
@@ -563,6 +580,11 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     }
   };
 
+  // Obtenir la date formatée pour l'affichage technique
+  const getTechnicalDate = () => {
+    return useCustomDate ? customSessionDate : sessionDate;
+  };
+
   return (
     <div className="max-w-6xl mx-auto p-6 bg-white rounded-lg shadow-lg">
       <div className="mb-8">
@@ -600,15 +622,36 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
                 {useCustomDate ? 'Session personnalisée active' : 'Session du jour active'}
               </p>
               <p className="text-green-600 text-sm">Date de session: {getDisplayDate()}</p>
-              <p className="text-green-500 text-xs">Données chargées depuis table RP</p>
+              <p className="text-green-500 text-xs">
+                Données RP: {rpData ? 'Chargées' : 'Non trouvées'} | 
+                Date technique: {getTechnicalDate()}
+              </p>
             </div>
           </div>
           <div className="text-right">
             <p className="text-green-700 text-sm">Heure système: {new Date().toLocaleTimeString('fr-FR')}</p>
-            <p className="text-green-600 text-xs">Dernier rafraîchissement: {new Date().toLocaleTimeString('fr-FR')}</p>
+            <p className="text-green-600 text-xs">Session ID: {getTechnicalDate()}</p>
           </div>
         </div>
       </div>
+
+      {/* Affichage des données RP en temps réel */}
+      {rpData && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <h4 className="font-semibold text-blue-800 mb-2">Données RP chargées:</h4>
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <span className="text-blue-600">Paiement:</span> {rpData.paiement?.toLocaleString()} TND
+            </div>
+            <div>
+              <span className="text-blue-600">Encaissement:</span> {rpData.encaissement?.toLocaleString()} TND
+            </div>
+            <div>
+              <span className="text-blue-600">Différence:</span> {rpData.difference?.toLocaleString()} TND
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Formulaire de recherche */}
       <div className="bg-blue-50 p-6 rounded-lg mb-6">
@@ -762,6 +805,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
             </div>
             <div className="text-sm text-purple-600">
               <p>Session affichée: {getDisplayDate()}</p>
+              <p className="text-xs">ID: {getTechnicalDate()}</p>
             </div>
           </div>
         )}
@@ -774,7 +818,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
             Statistiques de la Session ({getDisplayDate()})
           </h3>
           <div className="text-sm text-gray-500">
-            Données chargées depuis table RP
+            {rpData ? '✅ Données RP chargées' : '❌ Données RP non trouvées'}
           </div>
         </div>
         
@@ -796,7 +840,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
               Données table RP
             </p>
             <p className="text-xs text-orange-600 mt-1">
-              Session: {useCustomDate ? customSessionDate : sessionDate}
+              Session: {getTechnicalDate()}
             </p>
             {exportLoading === 'paiements' && (
               <p className="text-xs text-orange-600 mt-1 animate-pulse">Génération Excel...</p>
@@ -820,7 +864,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
               Données table RP
             </p>
             <p className="text-xs text-blue-600 mt-1">
-              Session: {useCustomDate ? customSessionDate : sessionDate}
+              Session: {getTechnicalDate()}
             </p>
             {exportLoading === 'encaissements' && (
               <p className="text-xs text-blue-600 mt-1 animate-pulse">Génération Excel...</p>
@@ -860,6 +904,15 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
               Données table RP
             </p>
           </div>
+        </div>
+
+        {/* Informations de débogage */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Informations techniques:</strong> Session ID: {getTechnicalDate()} | 
+            Données RP: {rpData ? 'Présentes' : 'Absentes'} | 
+            Dernier chargement: {new Date().toLocaleTimeString('fr-FR')}
+          </p>
         </div>
       </div>
 
