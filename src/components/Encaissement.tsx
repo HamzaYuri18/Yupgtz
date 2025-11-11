@@ -208,26 +208,29 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     setLoading(true);
 
     try {
-      const today = new Date();
-      const todayISO = formatDateForQuery(today);
+      // Utiliser la date de session actuelle (personnalisée ou du jour)
+      const currentSessionDate = useCustomDate ? customSessionDate : sessionDate;
+      
+      console.log('Enregistrement encaissement avec date session:', currentSessionDate);
 
-      // Mettre à jour le statut dans la table terme
+      // Mettre à jour le statut dans la table terme avec la date de session
       const { error } = await supabase
         .from('terme')
         .update({
           statut: 'Encaissé',
-          Date_Encaissement: todayISO
+          Date_Encaissement: currentSessionDate  // Utiliser la date de session
         })
         .eq('numero_contrat', termeData.numero_contrat)
         .eq('echeance', termeData.echeance);
 
       if (error) {
+        console.error('Erreur détaillée:', error);
         setMessage('Erreur lors de l\'enregistrement de l\'encaissement');
         setMessageType('error');
         return;
       }
 
-      setMessage('Encaissement enregistré avec succès!');
+      setMessage(`Encaissement enregistré avec succès pour la session du ${getDisplayDate()}!`);
       setMessageType('success');
       setTermeData(null);
       setNumeroContrat('');
@@ -238,6 +241,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       calculateGlobalBalance();
       loadRPData();
     } catch (error) {
+      console.error('Erreur lors de l\'enregistrement:', error);
       setMessage('Erreur lors de l\'enregistrement');
       setMessageType('error');
     } finally {
