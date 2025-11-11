@@ -13,10 +13,15 @@ interface TermeData {
   echeance: string;
   prime: number;
   assure: string;
-  statut: string;
+  branche: string;
   date_paiement: string | null;
+  cree_par: string;
+  created_at: string;
   Retour: string | null;
+  "Prime avant retour": string | null;
+  statut: string | null;
   Date_Encaissement: string | null;
+  "prime NETTE": number | null;
 }
 
 interface SessionStats {
@@ -43,7 +48,7 @@ interface ContratData {
   echeance: string;
   date_paiement: string | null;
   Date_Encaissement: string | null;
-  statut: string;
+  statut: string | null;
 }
 
 interface RPData {
@@ -168,6 +173,8 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     setTermeData(null);
 
     try {
+      console.log('Recherche terme:', { cleanedNumeroContrat, echeance });
+
       const { data, error } = await supabase
         .from('terme')
         .select('*')
@@ -175,15 +182,25 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         .eq('echeance', echeance)
         .maybeSingle();
 
-      if (error || !data) {
-        setMessage('Ce terme n\'est pas payé Impossible de l\'encaisser !!!');
+      if (error) {
+        console.error('Erreur recherche terme:', error);
+        setMessage('Erreur lors de la recherche dans la base de données');
         setMessageType('error');
         return;
       }
 
+      if (!data) {
+        setMessage('Ce terme n\'est pas payé. Impossible de l\'encaisser !!!');
+        setMessageType('error');
+        return;
+      }
+
+      console.log('Données trouvées:', data);
       setTermeData(data);
       setMessage('');
+
     } catch (error) {
+      console.error('Erreur lors de la recherche:', error);
       setMessage('Erreur lors de la recherche');
       setMessageType('error');
     } finally {
@@ -200,7 +217,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
 
     // Vérifier si déjà encaissé
     if (termeData.Date_Encaissement) {
-      setMessage(`Ce terme est deja encaissé en ${formatDate(termeData.Date_Encaissement)}`);
+      setMessage(`Ce terme est déjà encaissé en ${formatDate(termeData.Date_Encaissement)}`);
       setMessageType('warning');
       return;
     }
@@ -211,24 +228,31 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       // Utiliser la date de session actuelle (personnalisée ou du jour)
       const currentSessionDate = useCustomDate ? customSessionDate : sessionDate;
       
-      console.log('Enregistrement encaissement avec date session:', currentSessionDate);
+      console.log('Enregistrement encaissement:', {
+        numero_contrat: termeData.numero_contrat,
+        echeance: termeData.echeance,
+        date_encaissement: currentSessionDate
+      });
 
       // Mettre à jour le statut dans la table terme avec la date de session
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('terme')
         .update({
           statut: 'Encaissé',
           Date_Encaissement: currentSessionDate  // Utiliser la date de session
         })
         .eq('numero_contrat', termeData.numero_contrat)
-        .eq('echeance', termeData.echeance);
+        .eq('echeance', termeData.echeance)
+        .select();
 
       if (error) {
-        console.error('Erreur détaillée:', error);
-        setMessage('Erreur lors de l\'enregistrement de l\'encaissement');
+        console.error('Erreur détaillée encaissement:', error);
+        setMessage(`Erreur lors de l'enregistrement de l'encaissement: ${error.message}`);
         setMessageType('error');
         return;
       }
+
+      console.log('Encaissement réussi, données mises à jour:', data);
 
       setMessage(`Encaissement enregistré avec succès pour la session du ${getDisplayDate()}!`);
       setMessageType('success');
@@ -237,9 +261,12 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       setEcheance('');
 
       // Recharger les statistiques
-      loadSessionStats();
-      calculateGlobalBalance();
-      loadRPData();
+      setTimeout(() => {
+        loadSessionStats();
+        calculateGlobalBalance();
+        loadRPData();
+      }, 1000);
+
     } catch (error) {
       console.error('Erreur lors de l\'enregistrement:', error);
       setMessage('Erreur lors de l\'enregistrement');
@@ -251,12 +278,16 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
 
   const formatDate = (dateString: string): string => {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('fr-FR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return dateString;
+    }
   };
 
   // Fonction pour formater la date au format YYYY-MM-DD
@@ -519,13 +550,17 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   // Obtenir la date d'affichage
   const getDisplayDate = () => {
     const dateToDisplay = useCustomDate ? customSessionDate : sessionDate;
-    const date = new Date(dateToDisplay);
-    return date.toLocaleDateString('fr-FR', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    try {
+      const date = new Date(dateToDisplay);
+      return date.toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return dateToDisplay;
+    }
   };
 
   return (
@@ -643,7 +678,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
               <p className={`text-lg font-semibold ${
                 termeData.statut === 'Encaissé' ? 'text-green-600' : 'text-orange-600'
               }`}>
-                {termeData.statut}
+                {termeData.statut || 'En attente'}
               </p>
             </div>
             <div className="bg-white p-4 rounded-lg shadow-sm">
