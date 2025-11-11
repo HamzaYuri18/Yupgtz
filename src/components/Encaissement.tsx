@@ -87,123 +87,57 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   const [useCustomDate, setUseCustomDate] = useState<boolean>(false);
   const [globalBalance, setGlobalBalance] = useState<number>(0);
   const [rpData, setRpData] = useState<RPData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
 
-  // Initialisation au chargement du composant
   useEffect(() => {
-    const initializeData = async () => {
-      setIsLoading(true);
-      await initializeSessionDate();
-      await loadAllData();
-      setIsLoading(false);
-    };
-    
-    initializeData();
+    initializeSessionDate();
   }, []);
 
-  // Recharger les données quand la session change
+  // Charger les données quand la session change
   useEffect(() => {
     if (sessionDate || customSessionDate) {
-      loadAllData();
+      loadSessionStats();
+      calculateGlobalBalance();
+      loadRPData();
     }
   }, [sessionDate, customSessionDate, useCustomDate]);
-
-  const loadAllData = async () => {
-    setIsLoading(true);
-    await Promise.all([
-      loadRPData(),
-      loadSessionStats(),
-      calculateGlobalBalance()
-    ]);
-    setIsLoading(false);
-  };
 
   // Fonction pour charger les données de la table RP
   const loadRPData = async () => {
     try {
       const currentSessionDate = useCustomDate ? customSessionDate : sessionDate;
       
-      console.log('🔍 CHARGEMENT DONNÉES RP - Date recherchée:', currentSessionDate);
+      console.log('=== CHARGEMENT DONNÉES RP ===');
+      console.log('Date de session utilisée:', currentSessionDate);
 
       const { data, error } = await supabase
         .from('rp')
-        .select('*')
+        .select('session, paiement, encaissement, difference')
         .eq('session', currentSessionDate)
         .maybeSingle();
 
       if (error) {
-        console.error('❌ Erreur chargement RP:', error);
+        console.error('Erreur chargement RP:', error);
         setRpData(null);
-        
-        // Si pas de données RP, on calcule manuellement depuis la table terme
-        await calculateStatsFromTerme(currentSessionDate);
         return;
       }
 
-      if (!data) {
-        console.warn('⚠️ Aucune donnée RP trouvée pour la date:', currentSessionDate);
-        setRpData(null);
-        await calculateStatsFromTerme(currentSessionDate);
-        return;
-      }
-
-      console.log('✅ Données RP chargées:', data);
+      console.log('Données RP chargées:', data);
       setRpData(data);
 
       // Mettre à jour les stats avec les données RP
-      setSessionStats(prev => ({
-        ...prev,
-        total_paiements: data.paiement || 0,
-        total_encaissements: data.encaissement || 0,
-        difference: data.difference || 0,
-        session_montant: data.difference || 0
-      }));
+      if (data) {
+        setSessionStats(prev => ({
+          ...prev,
+          total_paiements: data.paiement || 0,
+          total_encaissements: data.encaissement || 0,
+          difference: data.difference || 0,
+          session_montant: data.difference || 0
+        }));
+      }
 
     } catch (error) {
-      console.error('❌ Erreur lors du chargement RP:', error);
+      console.error('Erreur lors du chargement RP:', error);
       setRpData(null);
-    }
-  };
-
-  // Fonction de secours pour calculer les stats depuis la table terme si RP est vide
-  const calculateStatsFromTerme = async (currentSessionDate: string) => {
-    try {
-      console.log('🔄 Calcul manuel des stats depuis table terme pour:', currentSessionDate);
-
-      // Paiements de la session (statut null + date_paiement = session)
-      const { data: paiementsData } = await supabase
-        .from('terme')
-        .select('prime')
-        .is('statut', null)
-        .eq('date_paiement', currentSessionDate);
-
-      // Encaissements de la session (statut Encaissé + Date_Encaissement = session)
-      const { data: encaissementsData } = await supabase
-        .from('terme')
-        .select('prime')
-        .eq('statut', 'Encaissé')
-        .eq('Date_Encaissement', currentSessionDate);
-
-      const totalPaiements = paiementsData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
-      const totalEncaissements = encaissementsData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
-      const difference = totalPaiements - totalEncaissements;
-
-      console.log('📊 Stats calculées manuellement:', {
-        totalPaiements,
-        totalEncaissements,
-        difference
-      });
-
-      setSessionStats(prev => ({
-        ...prev,
-        total_paiements: totalPaiements,
-        total_encaissements: totalEncaissements,
-        difference: difference,
-        session_montant: difference
-      }));
-
-    } catch (error) {
-      console.error('❌ Erreur calcul manuel stats:', error);
     }
   };
 
@@ -211,7 +145,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   const initializeSessionDate = () => {
     const today = new Date();
     const todayISO = formatDateForQuery(today);
-    console.log('📅 Initialisation session date:', todayISO);
+    console.log('Initialisation session date:', todayISO);
     setSessionDate(todayISO);
     setCustomSessionDate(todayISO);
   };
@@ -219,30 +153,38 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   // Fonction pour calculer la balance globale
   const calculateGlobalBalance = async () => {
     try {
-      console.log('💰 CALCUL BALANCE GLOBALE');
+      console.log('=== CALCUL BALANCE GLOBALE ===');
 
       // Total des primes des contrats avec statut null (à encaisser)
-      const { data: statutNullData } = await supabase
+      const { data: statutNullData, error: statutNullError } = await supabase
         .from('terme')
         .select('prime')
         .is('statut', null);
 
+      if (statutNullError) {
+        console.error('Erreur statut null:', statutNullError);
+      }
+
       // Total des primes des contrats encaissés
-      const { data: encaissesData } = await supabase
+      const { data: encaissesData, error: encaissesError } = await supabase
         .from('terme')
         .select('prime')
         .eq('statut', 'Encaissé');
+
+      if (encaissesError) {
+        console.error('Erreur encaissés:', encaissesError);
+      }
 
       const totalAttente = statutNullData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
       const totalEncaisses = encaissesData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
 
       // Balance globale = Total encaissé - Total en attente
       const balance = totalEncaisses - totalAttente;
-      console.log('📈 Balance globale calculée:', { totalEncaisses, totalAttente, balance });
+      console.log('Balance globale calculée:', { totalEncaisses, totalAttente, balance });
       setGlobalBalance(balance);
 
     } catch (error) {
-      console.error('❌ Erreur calcul balance globale:', error);
+      console.error('Erreur calcul balance globale:', error);
     }
   };
 
@@ -265,7 +207,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     setTermeData(null);
 
     try {
-      console.log('🔍 Recherche terme:', { cleanedNumeroContrat, echeance });
+      console.log('Recherche terme:', { cleanedNumeroContrat, echeance });
 
       const { data, error } = await supabase
         .from('terme')
@@ -275,7 +217,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         .maybeSingle();
 
       if (error) {
-        console.error('❌ Erreur recherche terme:', error);
+        console.error('Erreur recherche terme:', error);
         setMessage('Erreur lors de la recherche dans la base de données');
         setMessageType('error');
         return;
@@ -287,12 +229,12 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         return;
       }
 
-      console.log('✅ Données trouvées:', data);
+      console.log('Données trouvées:', data);
       setTermeData(data);
       setMessage('');
 
     } catch (error) {
-      console.error('❌ Erreur lors de la recherche:', error);
+      console.error('Erreur lors de la recherche:', error);
       setMessage('Erreur lors de la recherche');
       setMessageType('error');
     } finally {
@@ -320,20 +262,11 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       // Utiliser la date de session actuelle (personnalisée ou du jour)
       const currentSessionDate = useCustomDate ? customSessionDate : sessionDate;
       
-      console.log('💾 Enregistrement encaissement:', {
+      console.log('Enregistrement encaissement:', {
         numero_contrat: termeData.numero_contrat,
         echeance: termeData.echeance,
-        date_encaissement: currentSessionDate,
-        id: termeData.id
-      });
-
-      // VÉRIFICATION CRITIQUE : Afficher les données avant mise à jour
-      console.log('📋 DONNÉES AVANT MISE À JOUR:', {
-        id: termeData.id,
-        numero_contrat: termeData.numero_contrat,
-        echeance: termeData.echeance,
-        statut_actuel: termeData.statut,
-        date_encaissement_actuelle: termeData.Date_Encaissement
+        Date_Encaissement: currentSessionDate,
+        statut: 'Encaissé'
       });
 
       // Mettre à jour le statut dans la table terme avec la date de session
@@ -341,61 +274,36 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         .from('terme')
         .update({
           statut: 'Encaissé',
-          Date_Encaissement: currentSessionDate  // Utiliser la date de session
+          Date_Encaissement: currentSessionDate
         })
-        .eq('id', termeData.id)  // Utiliser l'ID comme clé primaire pour plus de précision
+        .eq('numero_contrat', termeData.numero_contrat)
+        .eq('echeance', termeData.echeance)
         .select();
 
       if (error) {
-        console.error('❌ Erreur détaillée encaissement:', error);
-        console.error('Code erreur:', error.code);
-        console.error('Détails erreur:', error.details);
-        console.error('Message erreur:', error.message);
-        
+        console.error('Erreur détaillée encaissement:', error);
         setMessage(`Erreur lors de l'enregistrement de l'encaissement: ${error.message}`);
         setMessageType('error');
         return;
       }
 
-      console.log('✅ Encaissement réussi, données mises à jour:', data);
-
-      // VÉRIFICATION : Vérifier que les données ont bien été mises à jour
-      if (data && data.length > 0) {
-        const updatedData = data[0];
-        console.log('📗 DONNÉES APRÈS MISE À JOUR:', {
-          id: updatedData.id,
-          statut: updatedData.statut,
-          Date_Encaissement: updatedData.Date_Encaissement,
-          date_session_utilisee: currentSessionDate
-        });
-
-        // Vérifier que la date d'encaissement correspond à la session
-        if (updatedData.Date_Encaissement === currentSessionDate) {
-          console.log('🎯 SUCCÈS: Date d\'encaissement correctement enregistrée');
-        } else {
-          console.warn('⚠️ ATTENTION: Date d\'encaissement ne correspond pas à la session', {
-            date_attendue: currentSessionDate,
-            date_obtenue: updatedData.Date_Encaissement
-          });
-        }
-      }
+      console.log('Encaissement réussi, données mises à jour:', data);
 
       setMessage(`Encaissement enregistré avec succès pour la session du ${getDisplayDate()}!`);
       setMessageType('success');
-      
-      // Réinitialiser le formulaire
       setTermeData(null);
       setNumeroContrat('');
       setEcheance('');
 
       // Recharger les statistiques après un délai
       setTimeout(() => {
-        console.log('🔄 Rechargement des données après encaissement...');
-        loadAllData();
-      }, 1500);
+        loadSessionStats();
+        calculateGlobalBalance();
+        loadRPData();
+      }, 1000);
 
     } catch (error) {
-      console.error('❌ Erreur lors de l\'enregistrement:', error);
+      console.error('Erreur lors de l\'enregistrement:', error);
       setMessage('Erreur lors de l\'enregistrement');
       setMessageType('error');
     } finally {
@@ -427,33 +335,56 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
 
   const loadSessionStats = async () => {
     try {
-      console.log('📊 CHARGEMENT STATISTIQUES GLOBALES');
+      // Utiliser la date personnalisée ou la date du jour
+      const currentSessionDate = useCustomDate ? customSessionDate : sessionDate;
+      
+      console.log('=== CHARGEMENT STATISTIQUES ===');
+      console.log('Date de session utilisée:', currentSessionDate);
 
-      // 1. Statistiques des PAIEMENTS depuis le 25/10/2025
-      const { data: paiementsDepuis2510Data } = await supabase
+      // 1. Charger les données de la table RP pour la session (déjà fait dans loadRPData)
+      // Les stats de session viennent maintenant directement de loadRPData
+
+      // 2. Statistiques des PAIEMENTS depuis le 25/10/2025
+      const { data: paiementsDepuis2510Data, error: paiements2510Error } = await supabase
         .from('terme')
         .select('prime, date_paiement')
         .gte('date_paiement', '2025-10-25')
         .is('statut', null);
 
-      // 2. Statistiques des ENCAISSEMENTS depuis le 25/10/2025
-      const { data: encaissementsDepuis2510Data } = await supabase
+      if (paiements2510Error) {
+        console.error('Erreur paiements depuis 25/10:', paiements2510Error);
+      }
+
+      // 3. Statistiques des ENCAISSEMENTS depuis le 25/10/2025
+      const { data: encaissementsDepuis2510Data, error: encaissements2510Error } = await supabase
         .from('terme')
         .select('prime, Date_Encaissement')
         .gte('Date_Encaissement', '2025-10-25')
         .eq('statut', 'Encaissé');
 
-      // 3. Statistiques des contrats avec statut null (toutes dates)
-      const { data: statutNullData } = await supabase
+      if (encaissements2510Error) {
+        console.error('Erreur encaissements depuis 25/10:', encaissements2510Error);
+      }
+
+      // 4. Statistiques des contrats avec statut null (toutes dates)
+      const { data: statutNullData, error: statutNullError } = await supabase
         .from('terme')
         .select('prime, statut, numero_contrat')
         .is('statut', null);
 
-      // 4. Statistiques des contrats encaissés (toutes dates)
-      const { data: encaissesData } = await supabase
+      if (statutNullError) {
+        console.error('Erreur statut null:', statutNullError);
+      }
+
+      // 5. Statistiques des contrats encaissés (toutes dates)
+      const { data: encaissesData, error: encaissesError } = await supabase
         .from('terme')
         .select('prime, statut, numero_contrat')
         .eq('statut', 'Encaissé');
+
+      if (encaissesError) {
+        console.error('Erreur encaissés:', encaissesError);
+      }
 
       // CALCUL DES STATISTIQUES GLOBALES DEPUIS 25/10/2025
       const totalPaiementsDepuis2510 = paiementsDepuis2510Data?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
@@ -466,14 +397,15 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       const totalPrimesEncaisses = encaissesData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
       const nombreContratsEncaisses = encaissesData?.length || 0;
 
-      console.log('📈 Statistiques globales calculées:', {
-        totalPaiementsDepuis2510,
-        totalEncaissementsDepuis2510,
-        totalPrimesStatutNull,
-        totalPrimesEncaisses
-      });
+      // DÉPORT CUMULÉ FIXE
+      const deportCumule = -47369.10;
 
-      // Mettre à jour seulement les stats globales
+      console.log('=== RÉSULTATS CALCULÉS ===');
+      console.log('Paiements depuis 25/10:', totalPaiementsDepuis2510);
+      console.log('Encaissements depuis 25/10:', totalEncaissementsDepuis2510);
+      console.log('Déport cumulé:', deportCumule);
+
+      // Mettre à jour seulement les stats globales (les stats de session viennent de RP)
       setSessionStats(prev => ({
         ...prev,
         total_primes_statut_null: totalPrimesStatutNull,
@@ -481,11 +413,12 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         total_primes_encaisses: totalPrimesEncaisses,
         nombre_contrats_encaisses: nombreContratsEncaisses,
         total_paiements_depuis_2510: totalPaiementsDepuis2510,
-        total_encaissements_depuis_2510: totalEncaissementsDepuis2510
+        total_encaissements_depuis_2510: totalEncaissementsDepuis2510,
+        deport_cumule: deportCumule
       }));
 
     } catch (error) {
-      console.error('❌ Erreur calcul stats globales:', error);
+      console.error('Erreur calcul stats:', error);
     }
   };
 
@@ -496,8 +429,9 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       setMessageType('error');
       return;
     }
-    console.log('🎯 Application filtre date:', useCustomDate ? customSessionDate : sessionDate);
-    loadAllData();
+    console.log('Application filtre date:', useCustomDate ? customSessionDate : sessionDate);
+    loadSessionStats();
+    loadRPData();
   };
 
   // Fonction pour réinitialiser le filtre de date
@@ -506,22 +440,25 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     const today = new Date();
     const todayISO = formatDateForQuery(today);
     setCustomSessionDate(todayISO);
-    console.log('🔄 Réinitialisation filtre date:', todayISO);
+    console.log('Réinitialisation filtre date:', todayISO);
     setTimeout(() => {
-      loadAllData();
+      loadSessionStats();
+      loadRPData();
     }, 100);
   };
 
   // Fonction pour rafraîchir les statistiques
   const refreshStats = () => {
-    console.log('🔄 RAFRAÎCHISSEMENT MANUEL');
+    console.log('=== RAFRAÎCHISSEMENT MANUEL ===');
     if (!useCustomDate) {
       const today = new Date();
       const todayISO = formatDateForQuery(today);
       setSessionDate(todayISO);
-      console.log('📅 Date session actualisée:', todayISO);
+      console.log('Date session actualisée:', todayISO);
     }
-    loadAllData();
+    loadSessionStats();
+    calculateGlobalBalance();
+    loadRPData();
   };
 
   // Fonction pour exporter les données en Excel
@@ -535,7 +472,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       let fileName = '';
       let sheetName = '';
 
-      console.log(`📤 Export ${type} - Date utilisée:`, currentSessionDate);
+      console.log(`Export ${type} - Date utilisée:`, currentSessionDate);
 
       switch (type) {
         case 'paiements':
@@ -580,7 +517,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
           break;
       }
 
-      console.log(`📊 Données exportées (${type}):`, data.length);
+      console.log(`Données exportées (${type}):`, data.length);
 
       if (data.length === 0) {
         setMessage('Aucune donnée à exporter pour cette catégorie');
@@ -614,7 +551,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       setMessageType('success');
 
     } catch (error) {
-      console.error('❌ Erreur lors de l\'export Excel:', error);
+      console.error('Erreur lors de l\'export Excel:', error);
       setMessage('Erreur lors de l\'export Excel');
       setMessageType('error');
     } finally {
@@ -648,17 +585,6 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   const getTechnicalDate = () => {
     return useCustomDate ? customSessionDate : sessionDate;
   };
-
-  if (isLoading) {
-    return (
-      <div className="max-w-6xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-        <div className="flex items-center justify-center py-12">
-          <RefreshCw className="w-8 h-8 text-blue-600 animate-spin mr-3" />
-          <p className="text-lg text-gray-600">Chargement des données...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-6xl mx-auto p-6 bg-white rounded-lg shadow-lg">
@@ -698,35 +624,35 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
               </p>
               <p className="text-green-600 text-sm">Date de session: {getDisplayDate()}</p>
               <p className="text-green-500 text-xs">
-                Données: {rpData ? 'RP' : 'Calcul manuel'} | 
-                ID: {getTechnicalDate()}
+                Données RP: {rpData ? 'Chargées' : 'Non trouvées'} | 
+                Date technique: {getTechnicalDate()}
               </p>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-green-700 text-sm">Heure: {new Date().toLocaleTimeString('fr-FR')}</p>
-            <p className="text-green-600 text-xs">Dernier refresh: {new Date().toLocaleTimeString('fr-FR')}</p>
+            <p className="text-green-700 text-sm">Heure système: {new Date().toLocaleTimeString('fr-FR')}</p>
+            <p className="text-green-600 text-xs">Session ID: {getTechnicalDate()}</p>
           </div>
         </div>
       </div>
 
-      {/* Affichage des données en temps réel */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-        <h4 className="font-semibold text-blue-800 mb-2">
-          {rpData ? '✅ Données RP chargées' : '🔄 Données calculées depuis table terme'}
-        </h4>
-        <div className="grid grid-cols-3 gap-4 text-sm">
-          <div>
-            <span className="text-blue-600">Paiement Session:</span> {sessionStats.total_paiements.toLocaleString()} TND
-          </div>
-          <div>
-            <span className="text-blue-600">Encaissement Session:</span> {sessionStats.total_encaissements.toLocaleString()} TND
-          </div>
-          <div>
-            <span className="text-blue-600">Différence:</span> {sessionStats.difference.toLocaleString()} TND
+      {/* Affichage des données RP en temps réel */}
+      {rpData && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <h4 className="font-semibold text-blue-800 mb-2">Données RP chargées:</h4>
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <span className="text-blue-600">Paiement:</span> {rpData.paiement?.toLocaleString()} TND
+            </div>
+            <div>
+              <span className="text-blue-600">Encaissement:</span> {rpData.encaissement?.toLocaleString()} TND
+            </div>
+            <div>
+              <span className="text-blue-600">Différence:</span> {rpData.difference?.toLocaleString()} TND
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Formulaire de recherche */}
       <div className="bg-blue-50 p-6 rounded-lg mb-6">
@@ -893,7 +819,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
             Statistiques de la Session ({getDisplayDate()})
           </h3>
           <div className="text-sm text-gray-500">
-            {rpData ? '✅ Données RP chargées' : '🔄 Données calculées depuis table terme'}
+            {rpData ? '✅ Données RP chargées' : '❌ Données RP non trouvées'}
           </div>
         </div>
         
@@ -912,7 +838,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
               {sessionStats.total_paiements.toLocaleString()} TND
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              {rpData ? 'Données RP' : 'Calcul manuel'}
+              Données table RP
             </p>
             <p className="text-xs text-orange-600 mt-1">
               Session: {getTechnicalDate()}
@@ -936,7 +862,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
               {sessionStats.total_encaissements.toLocaleString()} TND
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              {rpData ? 'Données RP' : 'Calcul manuel'}
+              Données table RP
             </p>
             <p className="text-xs text-blue-600 mt-1">
               Session: {getTechnicalDate()}
@@ -958,7 +884,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
               {sessionStats.difference >= 0 ? 'Excédent' : 'Déficit'}
             </p>
             <p className="text-xs text-gray-600 mt-1">
-              {rpData ? 'Données RP' : 'Calcul manuel'}
+              Données table RP
             </p>
           </div>
 
@@ -976,7 +902,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
               {sessionStats.session_montant >= 0 ? 'À encaisser' : 'Déficit'}
             </p>
             <p className="text-xs text-gray-600 mt-1">
-              {rpData ? 'Données RP' : 'Calcul manuel'}
+              Données table RP
             </p>
           </div>
         </div>
