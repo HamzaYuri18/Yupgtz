@@ -1,60 +1,651 @@
-// Dans sessionService.ts
-export const updateSessionRemarque = async (sessionId: number, remarque: string): Promise<boolean> => {
-  try {
-    const response = await fetch('/api/sessions/update-remarque', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        sessionId,
-        remarque
-      }),
+import { useState, useEffect } from 'react';
+import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw, MessageSquare } from 'lucide-react';
+import { getRecentSessions, getSessionsByDateRange, updateSessionVersement, getMonthlyStats, verifyAndSyncSessionTotals, calculateTotalEspeceFromRapport, updateSessionRemarque } from '../utils/sessionService';
+import * as XLSX from 'xlsx';
+
+interface VersementBancaireProps {
+  username: string;
+}
+
+interface SessionData {
+  id: number;
+  date_session: string;
+  total_espece: number;
+  versement: number;
+  date_versement: string | null;
+  charges: number;
+  banque: string | null;
+  statut: string;
+  cree_par: string;
+  remarque: string | null;
+}
+
+interface QuinzaineStats {
+  premiere: number;
+  deuxieme: number;
+  total: number;
+}
+
+const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
+  const [sessions, setSessions] = useState<SessionData[]>([]);
+  const [filteredSessions, setFilteredSessions] = useState<SessionData[]>([]);
+  const [dateDebut, setDateDebut] = useState('');
+  const [dateFin, setDateFin] = useState('');
+  const [message, setMessage] = useState('');
+  const [monthlyStats, setMonthlyStats] = useState<any>(null);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [quinzaineStats, setQuinzaineStats] = useState<QuinzaineStats>({ premiere: 0, deuxieme: 0, total: 0 });
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [editingRemarque, setEditingRemarque] = useState<{sessionId: number, remarque: string} | null>(null);
+
+  const [formData, setFormData] = useState({
+    sessionId: '',
+    dateSession: '',
+    versement: '',
+    dateVersement: '',
+    charges: '',
+    banque: 'ATTIJARI',
+    remarque: ''
+  });
+
+  useEffect(() => {
+    loadSessions();
+    loadMonthlyStats();
+  }, [selectedMonth, selectedYear]);
+
+  useEffect(() => {
+    calculateQuinzaineStats();
+  }, [filteredSessions, selectedMonth, selectedYear]);
+
+  const loadSessions = async () => {
+    const data = await getRecentSessions(15);
+    setSessions(data);
+    setFilteredSessions(data);
+  };
+
+  const loadMonthlyStats = async () => {
+    const stats = await getMonthlyStats(selectedMonth, selectedYear);
+    setMonthlyStats(stats);
+  };
+
+  const calculateQuinzaineStats = () => {
+    const currentMonthSessions = filteredSessions.filter(session => {
+      const sessionDate = new Date(session.date_session);
+      return sessionDate.getMonth() + 1 === selectedMonth && 
+             sessionDate.getFullYear() === selectedYear;
     });
 
-    if (!response.ok) {
-      throw new Error('Erreur lors de la mise à jour de la remarque');
-    }
+    let premiereQuinzaine = 0;
+    let deuxiemeQuinzaine = 0;
 
-    return true;
-  } catch (error) {
-    console.error('Erreur updateSessionRemarque:', error);
-    return false;
-  }
-};
-
-// Et mettez à jour la fonction updateSessionVersement pour inclure la remarque :
-export const updateSessionVersement = async (
-  sessionId: number, 
-  versement: number, 
-  dateVersement: string, 
-  banque: string, 
-  charges: number,
-  remarque?: string
-): Promise<boolean> => {
-  try {
-    const response = await fetch('/api/sessions/update-versement', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        sessionId,
-        versement,
-        dateVersement,
-        banque,
-        charges,
-        remarque
-      }),
+    currentMonthSessions.forEach(session => {
+      const sessionDate = new Date(session.date_session);
+      const day = sessionDate.getDate();
+      
+      if (day <= 15) {
+        premiereQuinzaine += session.charges;
+      } else {
+        deuxiemeQuinzaine += session.charges;
+      }
     });
 
-    if (!response.ok) {
-      throw new Error('Erreur lors de la mise à jour du versement');
+    const total = premiereQuinzaine + deuxiemeQuinzaine;
+    
+    setQuinzaineStats({
+      premiere: premiereQuinzaine,
+      deuxieme: deuxiemeQuinzaine,
+      total: total
+    });
+  };
+
+  const getQuinzaineDates = () => {
+    const monthNames = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
+    
+    return {
+      premiere: `1-15 ${monthNames[selectedMonth - 1]} ${selectedYear}`,
+      deuxieme: `16-${new Date(selectedYear, selectedMonth, 0).getDate()} ${monthNames[selectedMonth - 1]} ${selectedYear}`
+    };
+  };
+
+  // Fonction pour sauvegarder une remarque
+  const handleSaveRemarque = async (sessionId: number, remarque: string) => {
+    try {
+      const success = await updateSessionRemarque(sessionId, remarque);
+      if (success) {
+        setMessage('Remarque enregistrée avec succès');
+        // Mettre à jour la session localement
+        setSessions(prevSessions => 
+          prevSessions.map(session => 
+            session.id === sessionId 
+              ? { ...session, remarque: remarque }
+              : session
+          )
+        );
+        setFilteredSessions(prevSessions => 
+          prevSessions.map(session => 
+            session.id === sessionId 
+              ? { ...session, remarque: remarque }
+              : session
+          )
+        );
+        setEditingRemarque(null);
+      } else {
+        setMessage('Erreur lors de l\'enregistrement de la remarque');
+      }
+    } catch (error) {
+      setMessage('Erreur lors de l\'enregistrement de la remarque');
+      console.error('Erreur sauvegarde remarque:', error);
+    }
+    
+    setTimeout(() => setMessage(''), 3000);
+  };
+
+  // Fonction pour démarrer l'édition d'une remarque
+  const startEditingRemarque = (sessionId: number, currentRemarque: string | null) => {
+    setEditingRemarque({
+      sessionId,
+      remarque: currentRemarque || ''
+    });
+  };
+
+  // Fonction pour annuler l'édition
+  const cancelEditingRemarque = () => {
+    setEditingRemarque(null);
+  };
+
+  // Fonction pour vérifier et synchroniser tous les totaux espèce
+  const verifySessionTotals = async () => {
+    setIsVerifying(true);
+    setMessage('🔍 Vérification des totaux espèce en cours...');
+    
+    try {
+      await verifyAndSyncSessionTotals();
+      
+      // Recharger les sessions après vérification
+      await loadSessions();
+      
+      setMessage('✅ Vérification des totaux terminée - Sessions mises à jour');
+    } catch (error) {
+      setMessage('❌ Erreur lors de la vérification des totaux');
+      console.error('Erreur vérification totaux:', error);
+    } finally {
+      setIsVerifying(false);
+      setTimeout(() => setMessage(''), 5000);
+    }
+  };
+
+  // Fonction pour vérifier une session spécifique
+  const verifySingleSessionTotal = async (sessionId: number, dateSession: string) => {
+    try {
+      const calculatedTotal = await calculateTotalEspeceFromRapport(dateSession);
+      
+      // Récupérer le total actuel de la session
+      const session = sessions.find(s => s.id === sessionId);
+      if (!session) return;
+
+      const difference = Math.abs(calculatedTotal - session.total_espece);
+      
+      if (difference > 0.01) {
+        console.warn(`⚠️ Session ${sessionId}: Incohérence détectée!`);
+        console.log(`   Table sessions: ${session.total_espece} DT`);
+        console.log(`   Table rapport: ${calculatedTotal} DT`);
+        console.log(`   Différence: ${difference.toFixed(2)} DT`);
+        
+        setMessage(`⚠️ Incohérence détectée pour la session du ${dateSession}`);
+        return {
+          sessionId,
+          dateSession,
+          currentTotal: session.total_espece,
+          calculatedTotal,
+          difference
+        };
+      } else {
+        console.log(`✅ Session ${sessionId}: Total cohérent (${session.total_espece} DT)`);
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Erreur vérification session:', error);
+      return null;
+    }
+  };
+
+  // Vérification automatique au chargement
+  useEffect(() => {
+    const verifyAllSessionsOnLoad = async () => {
+      if (filteredSessions.length > 0) {
+        console.log('🔍 Vérification automatique des totaux au chargement...');
+        const inconsistencies = [];
+        
+        for (const session of filteredSessions) {
+          const result = await verifySingleSessionTotal(session.id, session.date_session);
+          if (result) {
+            inconsistencies.push(result);
+          }
+        }
+        
+        if (inconsistencies.length > 0) {
+          console.log(`⚠️ ${inconsistencies.length} incohérences détectées`);
+          setMessage(`⚠️ ${inconsistencies.length} incohérences détectées - Cliquez sur "Vérifier les Totaux" pour corriger`);
+          setTimeout(() => setMessage(''), 7000);
+        }
+      }
+    };
+
+    verifyAllSessionsOnLoad();
+  }, [filteredSessions]);
+
+  const handleFilter = async () => {
+    if (!dateDebut || !dateFin) {
+      setMessage('Veuillez saisir les deux dates');
+      setTimeout(() => setMessage(''), 3000);
+      return;
     }
 
-    return true;
-  } catch (error) {
-    console.error('Erreur updateSessionVersement:', error);
-    return false;
-  }
+    const data = await getSessionsByDateRange(dateDebut, dateFin);
+    setFilteredSessions(data);
+  };
+
+  const handleResetFilter = () => {
+    setDateDebut('');
+    setDateFin('');
+    setFilteredSessions(sessions);
+  };
+
+  const handleSaveVersement = async () => {
+    if (!formData.versement || !formData.dateVersement || !formData.dateSession) {
+      setMessage('Veuillez remplir tous les champs obligatoires');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+
+    const session = sessions.find(s => s.date_session === formData.dateSession);
+    if (!session) {
+      setMessage('Session introuvable');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+
+    const success = await updateSessionVersement(
+      session.id,
+      parseFloat(formData.versement),
+      formData.dateVersement,
+      formData.banque,
+      parseFloat(formData.charges) || 0,
+      formData.remarque // Ajouter la remarque
+    );
+
+    if (success) {
+      setMessage('Versement enregistré avec succès');
+      setFormData({
+        sessionId: '',
+        dateSession: '',
+        versement: '',
+        dateVersement: '',
+        charges: '',
+        banque: 'ATTIJARI',
+        remarque: ''
+      });
+      loadSessions();
+    } else {
+      setMessage('Erreur lors de l\'enregistrement');
+    }
+
+    setTimeout(() => setMessage(''), 3000);
+  };
+
+  const calculateSolde = (session: SessionData): number => {
+    const netEspece = session.total_espece - session.charges;
+    return session.versement - netEspece;
+  };
+
+  const exportToExcel = () => {
+    const dataToExport = filteredSessions.map(session => ({
+      'Date Session': session.date_session,
+      'Total Espèce': session.total_espece,
+      'Charges': session.charges,
+      'Net': session.total_espece - session.charges,
+      'Versement': session.versement,
+      'Date Versement': session.date_versement || '',
+      'Banque': session.banque || '',
+      'Remarque': session.remarque || '',
+      'Solde': calculateSolde(session),
+      'Statut': session.statut,
+      'Créé par': session.cree_par
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sessions');
+    XLSX.writeFile(wb, `sessions_${dateDebut || 'toutes'}_${dateFin || 'dates'}.xlsx`);
+  };
+
+  const quinzaineDates = getQuinzaineDates();
+
+  return (
+    <div className="space-y-6">
+      {monthlyStats && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg shadow-lg p-6">
+            <div className="flex items-center space-x-3 mb-3">
+              <TrendingUp className="w-6 h-6 text-orange-600" />
+              <h3 className="text-lg font-bold text-orange-900">Sessions Non Versées</h3>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                  className="px-3 py-1 border border-orange-300 rounded-lg text-sm"
+                >
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <option key={i + 1} value={i + 1}>
+                      {new Date(2024, i, 1).toLocaleDateString('fr-FR', { month: 'long' })}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  className="w-20 px-3 py-1 border border-orange-300 rounded-lg text-sm"
+                />
+              </div>
+              <p className="text-3xl font-bold text-orange-700">{monthlyStats.nonVersees.count}</p>
+              <p className="text-sm text-orange-600">Total: {monthlyStats.nonVersees.total.toFixed(2)} DT</p>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg shadow-lg p-6">
+            <div className="flex items-center space-x-3 mb-3">
+              <DollarSign className="w-6 h-6 text-green-600" />
+              <h3 className="text-lg font-bold text-green-900">Sessions Versées</h3>
+            </div>
+            <p className="text-3xl font-bold text-green-700">{monthlyStats.versees.count}</p>
+            <p className="text-sm text-green-600">Total: {monthlyStats.versees.total.toFixed(2)} DT</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow-lg p-6">
+            <div className="flex items-center space-x-3 mb-3">
+              <Building2 className="w-6 h-6 text-blue-600" />
+              <h3 className="text-lg font-bold text-blue-900">Charges 1ère Quinzaine</h3>
+            </div>
+            <p className="text-3xl font-bold text-blue-700">{quinzaineStats.premiere.toFixed(2)} DT</p>
+            <p className="text-sm text-blue-600">{quinzaineDates.premiere}</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg shadow-lg p-6">
+            <div className="flex items-center space-x-3 mb-3">
+              <Building2 className="w-6 h-6 text-purple-600" />
+              <h3 className="text-lg font-bold text-purple-900">Charges 2ème Quinzaine</h3>
+            </div>
+            <p className="text-3xl font-bold text-purple-700">{quinzaineStats.deuxieme.toFixed(2)} DT</p>
+            <p className="text-sm text-purple-600">{quinzaineDates.deuxieme}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="p-2 bg-green-100 rounded-lg">
+            <Building2 className="w-6 h-6 text-green-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800">Versement Bancaire</h2>
+        </div>
+
+        {message && (
+          <div className={`mb-4 p-3 rounded-lg ${
+            message.includes('✅') || message.includes('succès') ? 'bg-green-100 text-green-800' : 
+            message.includes('⚠️') || message.includes('Incohérence') ? 'bg-yellow-100 text-yellow-800' :
+            'bg-red-100 text-red-800'
+          }`}>
+            {message}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Date de Session
+              </label>
+              <input
+                type="date"
+                value={formData.dateSession}
+                onChange={(e) => setFormData({ ...formData, dateSession: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Charges
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.charges}
+                onChange={(e) => setFormData({ ...formData, charges: e.target.value })}
+                placeholder="0.00"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Banque
+              </label>
+              <select
+                value={formData.banque}
+                onChange={(e) => setFormData({ ...formData, banque: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="ATTIJARI">ATTIJARI</option>
+                <option value="BIAT">BIAT</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Versement
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.versement}
+                onChange={(e) => setFormData({ ...formData, versement: e.target.value })}
+                placeholder="0.00"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Date de Versement
+              </label>
+              <input
+                type="date"
+                value={formData.dateVersement}
+                onChange={(e) => setFormData({ ...formData, dateVersement: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Remarques
+              </label>
+              <textarea
+                value={formData.remarque}
+                onChange={(e) => setFormData({ ...formData, remarque: e.target.value })}
+                placeholder="Notes ou observations..."
+                rows={3}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              />
+            </div>
+
+            <button
+              onClick={handleSaveVersement}
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
+            >
+              <DollarSign className="w-5 h-5" />
+              <span>Enregistrer le Versement</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-bold text-gray-800">Liste des Sessions</h3>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={verifySessionTotals}
+              disabled={isVerifying}
+              className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-yellow-400 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2"
+              title="Vérifier la cohérence des totaux espèce avec la table rapport"
+            >
+              <RefreshCw className={`w-5 h-5 ${isVerifying ? 'animate-spin' : ''}`} />
+              <span>{isVerifying ? 'Vérification...' : 'Vérifier les Totaux'}</span>
+            </button>
+            <button
+              onClick={exportToExcel}
+              className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2"
+            >
+              <FileSpreadsheet className="w-5 h-5" />
+              <span>Exporter Excel</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date Début</label>
+            <input
+              type="date"
+              value={dateDebut}
+              onChange={(e) => setDateDebut(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date Fin</label>
+            <input
+              type="date"
+              value={dateFin}
+              onChange={(e) => setDateFin(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <div className="flex items-end space-x-2">
+            <button
+              onClick={handleFilter}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
+            >
+              Filtrer
+            </button>
+            <button
+              onClick={handleResetFilter}
+              className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
+            >
+              Réinitialiser
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date Session</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Espèce</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Charges</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Versement</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date Versement</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Banque</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Solde</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Remarques</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredSessions.map((session) => {
+                const solde = calculateSolde(session);
+                return (
+                  <tr key={session.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.date_session}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.total_espece.toFixed(2)} DT</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.charges.toFixed(2)} DT</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.versement.toFixed(2)} DT</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.date_versement || '-'}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.banque || '-'}</td>
+                    <td className={`px-4 py-3 whitespace-nowrap text-sm font-semibold ${solde < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {solde.toFixed(2)} DT
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
+                      {editingRemarque?.sessionId === session.id ? (
+                        <div className="space-y-2">
+                          <textarea
+                            value={editingRemarque.remarque}
+                            onChange={(e) => setEditingRemarque({
+                              ...editingRemarque,
+                              remarque: e.target.value
+                            })}
+                            rows={3}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                            placeholder="Ajouter une remarque..."
+                          />
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleSaveRemarque(session.id, editingRemarque.remarque)}
+                              className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                            >
+                              Sauvegarder
+                            </button>
+                            <button
+                              onClick={cancelEditingRemarque}
+                              className="px-2 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700"
+                            >
+                              Annuler
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start space-x-2">
+                          <div className={`flex-1 min-w-0 ${session.remarque ? 'text-gray-900' : 'text-gray-400 italic'}`}>
+                            {session.remarque || 'Aucune remarque'}
+                          </div>
+                          <button
+                            onClick={() => startEditingRemarque(session.id, session.remarque)}
+                            className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                            title="Modifier la remarque"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                        session.statut === 'Versé' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                      }`}>
+                        {session.statut}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
 };
+
+export default VersementBancaire;
