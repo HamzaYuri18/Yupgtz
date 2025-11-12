@@ -339,3 +339,94 @@ export const getSessionTransactionsDetail = async (dateSession: string) => {
     return { transactions: [], totals: { espece: 0, cheque: 0, carte: 0, virement: 0, totalGeneral: 0 } };
   }
 };
+// Ajouter ces fonctions à votre sessionService.ts existant
+
+export const updateSessionRemarque = async (sessionId: number, remarque: string): Promise<boolean> => {
+  try {
+    console.log('💾 Sauvegarde de la remarque pour la session:', sessionId);
+    
+    const { error } = await supabase
+      .from('sessions')
+      .update({ 
+        remarque: remarque.trim(),
+        modifie_le: new Date().toISOString()
+      })
+      .eq('id', sessionId);
+
+    if (error) {
+      console.error('❌ Erreur sauvegarde remarque:', error);
+      return false;
+    }
+
+    console.log('✅ Remarque sauvegardée avec succès');
+    return true;
+  } catch (error) {
+    console.error('❌ Erreur générale sauvegarde remarque:', error);
+    return false;
+  }
+};
+
+// Mettre à jour la fonction updateSessionVersement existante pour inclure la remarque
+export const updateSessionVersement = async (
+  id: number,
+  versement: number,
+  dateVersement: string,
+  banque: string,
+  charges: number,
+  remarque?: string
+): Promise<boolean> => {
+  try {
+    console.log('💾 Mise à jour du versement avec remarque pour la session:', id);
+    
+    const updateData: any = {
+      versement,
+      date_versement: dateVersement,
+      banque,
+      charges,
+      statut: 'Versé',
+      modifie_le: new Date().toISOString()
+    };
+
+    // Ajouter la remarque seulement si elle est fournie
+    if (remarque !== undefined && remarque.trim() !== '') {
+      updateData.remarque = remarque.trim();
+    }
+
+    const { error } = await supabase
+      .from('sessions')
+      .update(updateData)
+      .eq('id', id);
+
+    if (error) {
+      console.error('❌ Erreur mise à jour versement:', error);
+      return false;
+    }
+
+    console.log('✅ Versement et remarque sauvegardés avec succès');
+    return true;
+  } catch (error) {
+    console.error('❌ Erreur générale mise à jour versement:', error);
+    return false;
+  }
+};
+
+// Fonction pour récupérer les détails d'une session spécifique
+export const getSessionDetails = async (sessionId: number): Promise<SessionData | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('id', sessionId)
+      .single();
+
+    if (error) {
+      console.error('❌ Erreur récupération détails session:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('❌ Erreur générale récupération détails session:', error);
+    return null;
+  }
+};
