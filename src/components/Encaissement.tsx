@@ -467,8 +467,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       console.log('=== RÉSULTATS CALCULÉS (CORRIGÉS) ===');
       console.log('Session - Paiements:', totalPaiementsSession, '(', nombreContratsPaiementsSession, 'contrats)');
       console.log('Session - Encaissements:', totalEncaissementsSession, '(', nombreContratsEncaissementsSession, 'contrats)');
-      console.log('Session - Différence (Encaissements - Paiements):', differenceSession);
-      console.log('Session - Balance de session:', sessionMontant);
+      console.log('Session - Balance de session (Encaissements - Paiements):', sessionMontant);
       console.log('Reportdeport session actuelle:', reportdeportSessionActuelle);
       console.log('Reportdeport session précédente:', reportdeportSessionPrecedente);
       console.log('Paiements depuis 25/10:', totalPaiementsDepuis2510);
@@ -939,7 +938,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {/* Paiements Session */}
           <div 
             className="text-center p-4 bg-orange-50 rounded-lg shadow border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
@@ -988,29 +987,6 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
             )}
           </div>
 
-          {/* Différence Session - CORRIGÉ: Encaissements - Paiements */}
-          <div className="text-center p-4 bg-white rounded-lg shadow border border-gray-200">
-            <p className="text-sm text-gray-600">Différence Session</p>
-            <div className="flex items-center justify-center">
-              <p className={`text-xl font-bold ${
-                sessionStats.difference >= 0 ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {sessionStats.difference.toLocaleString()} TND
-              </p>
-              {sessionStats.difference >= 0 ? (
-                <ArrowUp className="w-4 h-4 ml-1 text-green-600" />
-              ) : (
-                <ArrowDown className="w-4 h-4 ml-1 text-red-600" />
-              )}
-            </div>
-            <p className="text-sm text-gray-500 mt-1">
-              Encaissements - Paiements
-            </p>
-            <p className="text-xs text-gray-600 mt-1">
-              {sessionStats.difference >= 0 ? 'Excédent' : 'Déficit'}
-            </p>
-          </div>
-
           {/* Balance de Session - CORRIGÉ: Même que différence */}
           <div className={`text-center p-4 rounded-lg shadow border ${
             sessionStats.session_montant >= 0 ? 'bg-green-100 border-green-200' : 'bg-red-100 border-red-200'
@@ -1032,7 +1008,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
               {sessionStats.session_montant >= 0 ? 'Solde positif' : 'Solde négatif'}
             </p>
             <p className="text-xs text-gray-600 mt-1">
-              Données table TERME
+              Encaissements - Paiements
             </p>
           </div>
         </div>
