@@ -78,7 +78,7 @@ export const saveDepense = async (depense: Depense): Promise<boolean> => {
         numero_contrat: `DEP-${data[0].id}`,
         montant: -Math.abs(depense.montant), // Négatif pour les dépenses
         assure: depense.type_depense,
-        mode_paiement: 'Espece',
+        mode_paiement: 'Espece', // Par défaut Espèce pour les dépenses
         type_paiement: 'Au comptant',
         cree_par: depense.cree_par
       }, {
@@ -158,7 +158,7 @@ export const saveRecetteExceptionnelle = async (recette: RecetteExceptionnelle):
         numero_contrat: `REC-${data[0].id}`,
         montant: recette.montant, // Positif pour les recettes
         assure: recette.type_recette,
-        mode_paiement: 'Espece',
+        mode_paiement: 'Espece', // Par défaut Espèce pour les recettes
         type_paiement: 'Au comptant',
         cree_par: recette.cree_par
       }, {
@@ -249,7 +249,9 @@ export const saveRistourne = async (ristourne: Ristourne): Promise<boolean> => {
         client: ristourne.client,
         montant_ristourne: ristourne.montant_ristourne,
         date_ristourne: ristourne.date_ristourne || new Date().toISOString().split('T')[0],
-        created_at: new Date().toISOString().split('T')[0], // Date courante
+        date_paiement_ristourne: ristourne.date_paiement_ristourne,
+        type_paiement: ristourne.type_paiement || 'Espece',
+        created_at: new Date().toISOString().split('T')[0],
         cree_par: ristourne.cree_par
       }])
       .select();
@@ -269,7 +271,7 @@ export const saveRistourne = async (ristourne: Ristourne): Promise<boolean> => {
         numero_contrat: ristourne.numero_contrat,
         montant: -Math.abs(ristourne.montant_ristourne), // Négatif pour les ristournes
         assure: ristourne.client,
-        mode_paiement: 'Espece',
+        mode_paiement: ristourne.type_paiement || 'Espece', // Ici on utilise le type_paiement de la ristourne
         type_paiement: 'Au comptant',
         cree_par: ristourne.cree_par
       }, {
@@ -348,7 +350,8 @@ export const saveSinistre = async (sinistre: Sinistre): Promise<boolean> => {
         montant: sinistre.montant,
         client: sinistre.client,
         date_sinistre: sinistre.date_sinistre || new Date().toISOString().split('T')[0],
-        created_at: new Date().toISOString().split('T')[0], // Date courante
+        date_paiement_sinistre: sinistre.date_paiement_sinistre,
+        created_at: new Date().toISOString().split('T')[0],
         cree_par: sinistre.cree_par
       }])
       .select();
@@ -368,7 +371,7 @@ export const saveSinistre = async (sinistre: Sinistre): Promise<boolean> => {
         numero_contrat: sinistre.numero_sinistre,
         montant: -Math.abs(sinistre.montant), // Négatif pour les sinistres
         assure: sinistre.client,
-        mode_paiement: 'Espece',
+        mode_paiement: 'Espece', // Par défaut Espèce pour les sinistres
         type_paiement: 'Au comptant',
         cree_par: sinistre.cree_par
       }, {
@@ -422,7 +425,7 @@ const saveToRapport = async (baseData: any, additionalData?: any): Promise<void>
     prime: baseData.montant || 0, // Utiliser montant pour prime aussi
     montant: baseData.montant, // Colonne unifiée pour tous les montants
     assure: baseData.assure,
-    mode_paiement: baseData.mode_paiement,
+    mode_paiement: baseData.mode_paiement, // Ici on utilise directement le mode_paiement passé en paramètre
     type_paiement: baseData.type_paiement,
     cree_par: baseData.cree_par,
     
