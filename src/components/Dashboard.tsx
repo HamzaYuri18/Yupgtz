@@ -13,7 +13,7 @@ import TermeSearch from './TermeSearch';
 import TransactionReport from './TransactionReport';
 import ChequesManagement from './ChequesManagement';
 import VersementBancaire from './VersementBancaire';
-import Encaissement from './Encaissement'; // Ajouter cet import
+import Encaissement from './Encaissement';
 
 interface DashboardProps {
   username: string;
@@ -67,6 +67,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
   };
 
   const isUserAdmin = isAdmin(username);
+  const isHamza = username.toLowerCase() === 'hamza';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
@@ -214,7 +215,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
             </button>
 
             {/* Section réservée à Hamza */}
-            {username.toLowerCase() === 'hamza' && (
+            {isHamza && (
               <>
                 <button
                   onClick={() => setActiveTab('cheques')}
@@ -239,20 +240,21 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
                   <Building2 className="w-4 h-4" />
                   <span>Versement Bancaire</span>
                 </button>
-
-                <button
-                  onClick={() => setActiveTab('encaissement')}
-                  className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
-                    activeTab === 'encaissement'
-                      ? 'border-green-500 text-green-600 bg-green-50/50'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <DollarSign className="w-4 h-4" />
-                  <span>Encaissement</span>
-                </button>
               </>
             )}
+
+            {/* Encaissement - visible pour tous les utilisateurs */}
+            <button
+              onClick={() => setActiveTab('encaissement')}
+              className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
+                activeTab === 'encaissement'
+                  ? 'border-green-500 text-green-600 bg-green-50/50'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <DollarSign className="w-4 h-4" />
+              <span>Encaissement</span>
+            </button>
           </div>
         </div>
       </nav>
@@ -267,9 +269,9 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
         {activeTab === 'payment' && <CreditPayment />}
         {activeTab === 'terme' && <TermeSearch />}
         {activeTab === 'transactions' && <TransactionReport />}
-        {activeTab === 'cheques' && username.toLowerCase() === 'hamza' && <ChequesManagement />}
-        {activeTab === 'versement' && username.toLowerCase() === 'hamza' && <VersementBancaire username={username} />}
-        {activeTab === 'encaissement' && username.toLowerCase() === 'hamza' && <Encaissement username={username} />}
+        {activeTab === 'cheques' && isHamza && <ChequesManagement />}
+        {activeTab === 'versement' && isHamza && <VersementBancaire username={username} />}
+        {activeTab === 'encaissement' && <Encaissement username={username} />}
       </main>
 
       {/* Modal de confirmation de déconnexion */}
