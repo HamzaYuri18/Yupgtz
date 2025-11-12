@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, DollarSign, Calendar, FileText, User, CheckCircle, XCircle, AlertCircle, Download, RefreshCw, Filter } from 'lucide-react';
+import { Search, DollarSign, Calendar, FileText, User, CheckCircle, XCircle, AlertCircle, Download, RefreshCw, Filter, ArrowUp, ArrowDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
 
@@ -38,6 +38,8 @@ interface SessionStats {
   deport_cumule: number;
   nombre_contrats_paiements_session: number;
   nombre_contrats_encaissements_session: number;
+  reportdeport_session_actuelle: number;
+  reportdeport_session_precedente: number;
 }
 
 interface ContratData {
@@ -55,6 +57,7 @@ interface RPData {
   paiement: number;
   encaissement: number;
   difference: number;
+  reportdeport: number;
 }
 
 const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
@@ -77,7 +80,9 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     total_encaissements_depuis_2510: 0,
     deport_cumule: -47369.10,
     nombre_contrats_paiements_session: 0,
-    nombre_contrats_encaissements_session: 0
+    nombre_contrats_encaissements_session: 0,
+    reportdeport_session_actuelle: 0,
+    reportdeport_session_precedente: 0
   });
   const [exportLoading, setExportLoading] = useState<string | null>(null);
   const [sessionDate, setSessionDate] = useState<string>('');
@@ -85,6 +90,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   const [useCustomDate, setUseCustomDate] = useState<boolean>(false);
   const [globalBalance, setGlobalBalance] = useState<number>(0);
   const [rpData, setRpData] = useState<RPData | null>(null);
+  const [previousRpData, setPreviousRpData] = useState<RPData | null>(null);
 
   useEffect(() => {
     initializeSessionDate();
@@ -96,35 +102,69 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       loadSessionStats();
       calculateGlobalBalance();
       loadRPData();
+      loadPreviousRPData();
     }
   }, [sessionDate, customSessionDate, useCustomDate]);
 
-  // Fonction pour charger les données de la table RP
+  // Fonction pour charger les données de la table RP pour la session actuelle
   const loadRPData = async () => {
     try {
       const currentSessionDate = useCustomDate ? customSessionDate : sessionDate;
       
-      console.log('=== CHARGEMENT DONNÉES RP ===');
+      console.log('=== CHARGEMENT DONNÉES RP SESSION ACTUELLE ===');
       console.log('Date de session utilisée:', currentSessionDate);
 
       const { data, error } = await supabase
         .from('rp')
-        .select('session, paiement, encaissement, difference')
+        .select('session, paiement, encaissement, difference, reportdeport')
         .eq('session', currentSessionDate)
         .maybeSingle();
 
       if (error) {
-        console.error('Erreur chargement RP:', error);
+        console.error('Erreur chargement RP session actuelle:', error);
         setRpData(null);
         return;
       }
 
-      console.log('Données RP chargées:', data);
+      console.log('Données RP session actuelle chargées:', data);
       setRpData(data);
 
     } catch (error) {
-      console.error('Erreur lors du chargement RP:', error);
+      console.error('Erreur lors du chargement RP session actuelle:', error);
       setRpData(null);
+    }
+  };
+
+  // Fonction pour charger les données de la session précédente
+  const loadPreviousRPData = async () => {
+    try {
+      const currentSessionDate = useCustomDate ? customSessionDate : sessionDate;
+      const currentDate = new Date(currentSessionDate);
+      const previousDate = new Date(currentDate);
+      previousDate.setDate(previousDate.getDate() - 1);
+      const previousDateISO = formatDateForQuery(previousDate);
+
+      console.log('=== CHARGEMENT DONNÉES RP SESSION PRÉCÉDENTE ===');
+      console.log('Date session précédente:', previousDateISO);
+
+      const { data, error } = await supabase
+        .from('rp')
+        .select('session, paiement, encaissement, difference, reportdeport')
+        .eq('session', previousDateISO)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Erreur chargement RP session précédente:', error);
+        setPreviousRpData(null);
+        return;
+      }
+
+      console.log('Données RP session précédente chargées:', data);
+      setPreviousRpData(data);
+
+    } catch (error) {
+      console.error('Erreur lors du chargement RP session précédente:', error);
+      setPreviousRpData(null);
     }
   };
 
@@ -287,6 +327,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         loadSessionStats();
         calculateGlobalBalance();
         loadRPData();
+        loadPreviousRPData();
       }, 1000);
 
     } catch (error) {
@@ -392,12 +433,18 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         console.error('Erreur encaissés:', encaissesError);
       }
 
-      // CALCUL DES STATISTIQUES DE SESSION
+      // CALCUL DES STATISTIQUES DE SESSION - CORRIGÉ
       const totalPaiementsSession = paiementsSessionData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
       const totalEncaissementsSession = encaissementsSessionData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
+      
+      // CORRECTION: Différence = Encaissements - Paiements
+      const differenceSession = totalEncaissementsSession - totalPaiementsSession;
+      
+      // CORRECTION: Balance de session = Différence (Encaissements - Paiements)
+      const sessionMontant = differenceSession;
+      
       const nombreContratsPaiementsSession = paiementsSessionData?.length || 0;
       const nombreContratsEncaissementsSession = encaissementsSessionData?.length || 0;
-      const differenceSession = totalEncaissementsSession - totalPaiementsSession;
 
       // CALCUL DES STATISTIQUES GLOBALES DEPUIS 25/10/2025
       const totalPaiementsDepuis2510 = paiementsDepuis2510Data?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
@@ -413,10 +460,17 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       // DÉPORT CUMULÉ FIXE
       const deportCumule = -47369.10;
 
-      console.log('=== RÉSULTATS CALCULÉS ===');
+      // Récupérer les reportdeport depuis la table RP
+      const reportdeportSessionActuelle = rpData?.reportdeport || 0;
+      const reportdeportSessionPrecedente = previousRpData?.reportdeport || 0;
+
+      console.log('=== RÉSULTATS CALCULÉS (CORRIGÉS) ===');
       console.log('Session - Paiements:', totalPaiementsSession, '(', nombreContratsPaiementsSession, 'contrats)');
       console.log('Session - Encaissements:', totalEncaissementsSession, '(', nombreContratsEncaissementsSession, 'contrats)');
-      console.log('Session - Différence:', differenceSession);
+      console.log('Session - Différence (Encaissements - Paiements):', differenceSession);
+      console.log('Session - Balance de session:', sessionMontant);
+      console.log('Reportdeport session actuelle:', reportdeportSessionActuelle);
+      console.log('Reportdeport session précédente:', reportdeportSessionPrecedente);
       console.log('Paiements depuis 25/10:', totalPaiementsDepuis2510);
       console.log('Encaissements depuis 25/10:', totalEncaissementsDepuis2510);
       console.log('Contrats en attente:', totalPrimesStatutNull, '(', nombreContratsStatutNull, 'contrats)');
@@ -427,8 +481,8 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       setSessionStats({
         total_paiements: totalPaiementsSession,
         total_encaissements: totalEncaissementsSession,
-        difference: differenceSession,
-        session_montant: differenceSession,
+        difference: differenceSession, // CORRIGÉ: Encaissements - Paiements
+        session_montant: sessionMontant, // CORRIGÉ: Même que différence
         total_primes_statut_null: totalPrimesStatutNull,
         nombre_contrats_statut_null: nombreContratsStatutNull,
         total_primes_encaisses: totalPrimesEncaisses,
@@ -437,7 +491,9 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         total_encaissements_depuis_2510: totalEncaissementsDepuis2510,
         deport_cumule: deportCumule,
         nombre_contrats_paiements_session: nombreContratsPaiementsSession,
-        nombre_contrats_encaissements_session: nombreContratsEncaissementsSession
+        nombre_contrats_encaissements_session: nombreContratsEncaissementsSession,
+        reportdeport_session_actuelle: reportdeportSessionActuelle,
+        reportdeport_session_precedente: reportdeportSessionPrecedente
       });
 
     } catch (error) {
@@ -455,6 +511,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     console.log('Application filtre date:', useCustomDate ? customSessionDate : sessionDate);
     loadSessionStats();
     loadRPData();
+    loadPreviousRPData();
   };
 
   // Fonction pour réinitialiser le filtre de date
@@ -467,6 +524,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     setTimeout(() => {
       loadSessionStats();
       loadRPData();
+      loadPreviousRPData();
     }, 100);
   };
 
@@ -482,6 +540,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     loadSessionStats();
     calculateGlobalBalance();
     loadRPData();
+    loadPreviousRPData();
   };
 
   // Fonction pour exporter les données en Excel
@@ -609,6 +668,14 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     return useCustomDate ? customSessionDate : sessionDate;
   };
 
+  // Obtenir la date de la session précédente
+  const getPreviousSessionDate = () => {
+    const currentDate = new Date(useCustomDate ? customSessionDate : sessionDate);
+    const previousDate = new Date(currentDate);
+    previousDate.setDate(previousDate.getDate() - 1);
+    return formatDateForQuery(previousDate);
+  };
+
   return (
     <div className="max-w-6xl mx-auto p-6 bg-white rounded-lg shadow-lg">
       <div className="mb-8">
@@ -663,7 +730,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       {rpData && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <h4 className="font-semibold text-blue-800 mb-2">Données RP chargées:</h4>
-          <div className="grid grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-4 gap-4 text-sm">
             <div>
               <span className="text-blue-600">Paiement:</span> {rpData.paiement?.toLocaleString()} TND
             </div>
@@ -672,6 +739,32 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
             </div>
             <div>
               <span className="text-blue-600">Différence:</span> {rpData.difference?.toLocaleString()} TND
+            </div>
+            <div>
+              <span className="text-blue-600">Reportdeport:</span> {rpData.reportdeport?.toLocaleString()} TND
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Affichage des données de la session précédente */}
+      {previousRpData && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
+          <h4 className="font-semibold text-purple-800 mb-2">
+            Données Session Précédente ({formatDate(getPreviousSessionDate())}):
+          </h4>
+          <div className="grid grid-cols-4 gap-4 text-sm">
+            <div>
+              <span className="text-purple-600">Paiement:</span> {previousRpData.paiement?.toLocaleString()} TND
+            </div>
+            <div>
+              <span className="text-purple-600">Encaissement:</span> {previousRpData.encaissement?.toLocaleString()} TND
+            </div>
+            <div>
+              <span className="text-purple-600">Différence:</span> {previousRpData.difference?.toLocaleString()} TND
+            </div>
+            <div>
+              <span className="text-purple-600">Reportdeport:</span> {previousRpData.reportdeport?.toLocaleString()} TND
             </div>
           </div>
         </div>
@@ -895,34 +988,48 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
             )}
           </div>
 
-          {/* Différence Session */}
+          {/* Différence Session - CORRIGÉ: Encaissements - Paiements */}
           <div className="text-center p-4 bg-white rounded-lg shadow border border-gray-200">
             <p className="text-sm text-gray-600">Différence Session</p>
-            <p className={`text-xl font-bold ${
-              sessionStats.difference >= 0 ? 'text-green-600' : 'text-red-600'
-            }`}>
-              {sessionStats.difference.toLocaleString()} TND
-            </p>
+            <div className="flex items-center justify-center">
+              <p className={`text-xl font-bold ${
+                sessionStats.difference >= 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {sessionStats.difference.toLocaleString()} TND
+              </p>
+              {sessionStats.difference >= 0 ? (
+                <ArrowUp className="w-4 h-4 ml-1 text-green-600" />
+              ) : (
+                <ArrowDown className="w-4 h-4 ml-1 text-red-600" />
+              )}
+            </div>
             <p className="text-sm text-gray-500 mt-1">
-              {sessionStats.difference >= 0 ? 'Excédent' : 'Déficit'}
+              Encaissements - Paiements
             </p>
             <p className="text-xs text-gray-600 mt-1">
-              Encaissements - Paiements
+              {sessionStats.difference >= 0 ? 'Excédent' : 'Déficit'}
             </p>
           </div>
 
-          {/* Balance de Session */}
+          {/* Balance de Session - CORRIGÉ: Même que différence */}
           <div className={`text-center p-4 rounded-lg shadow border ${
             sessionStats.session_montant >= 0 ? 'bg-green-100 border-green-200' : 'bg-red-100 border-red-200'
           }`}>
             <p className="text-sm text-gray-600">Balance de Session</p>
-            <p className={`text-xl font-bold ${
-              sessionStats.session_montant >= 0 ? 'text-green-600' : 'text-red-600'
-            }`}>
-              {Math.abs(sessionStats.session_montant).toLocaleString()} TND
-            </p>
+            <div className="flex items-center justify-center">
+              <p className={`text-xl font-bold ${
+                sessionStats.session_montant >= 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {Math.abs(sessionStats.session_montant).toLocaleString()} TND
+              </p>
+              {sessionStats.session_montant >= 0 ? (
+                <ArrowUp className="w-4 h-4 ml-1 text-green-600" />
+              ) : (
+                <ArrowDown className="w-4 h-4 ml-1 text-red-600" />
+              )}
+            </div>
             <p className="text-sm text-gray-500 mt-1">
-              {sessionStats.session_montant >= 0 ? 'À encaisser' : 'Déficit'}
+              {sessionStats.session_montant >= 0 ? 'Solde positif' : 'Solde négatif'}
             </p>
             <p className="text-xs text-gray-600 mt-1">
               Données table TERME
@@ -966,32 +1073,53 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
             </p>
           </div>
 
-          {/* Déport cumulé */}
-          <div className="text-center p-4 bg-red-50 rounded-lg shadow border border-red-200">
-            <p className="text-sm text-gray-600">Déport cumulé</p>
-            <p className="text-xl font-bold text-red-600">
-              {sessionStats.deport_cumule.toLocaleString()} TND
-            </p>
+          {/* Reportdeport Session Actuelle */}
+          <div className={`text-center p-4 rounded-lg shadow border ${
+            sessionStats.reportdeport_session_actuelle >= 0 ? 'bg-green-100 border-green-200' : 'bg-red-100 border-red-200'
+          }`}>
+            <p className="text-sm text-gray-600">Reportdeport Session Actuelle</p>
+            <div className="flex items-center justify-center">
+              <p className={`text-xl font-bold ${
+                sessionStats.reportdeport_session_actuelle >= 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {Math.abs(sessionStats.reportdeport_session_actuelle).toLocaleString()} TND
+              </p>
+              {sessionStats.reportdeport_session_actuelle >= 0 ? (
+                <ArrowUp className="w-4 h-4 ml-1 text-green-600" />
+              ) : (
+                <ArrowDown className="w-4 h-4 ml-1 text-red-600" />
+              )}
+            </div>
             <p className="text-sm text-gray-500 mt-1">
-              Suite mission inspection
+              {sessionStats.reportdeport_session_actuelle >= 0 ? 'Crédit' : 'Débit'}
             </p>
-            <p className="text-xs text-red-600 mt-1">
-              Au 24/10/2025
+            <p className="text-xs text-gray-600 mt-1">
+              Session: {getTechnicalDate()}
             </p>
           </div>
 
-          {/* Balance Globale */}
+          {/* Reportdeport Session Précédente */}
           <div className={`text-center p-4 rounded-lg shadow border ${
-            globalBalance >= 0 ? 'bg-blue-100 border-blue-200' : 'bg-red-100 border-red-200'
+            sessionStats.reportdeport_session_precedente >= 0 ? 'bg-blue-100 border-blue-200' : 'bg-orange-100 border-orange-200'
           }`}>
-            <p className="text-sm text-gray-600">Balance Globale</p>
-            <p className={`text-xl font-bold ${
-              globalBalance >= 0 ? 'text-blue-600' : 'text-red-600'
-            }`}>
-              {Math.abs(globalBalance).toLocaleString()} TND
-            </p>
+            <p className="text-sm text-gray-600">Reportdeport Session Précédente</p>
+            <div className="flex items-center justify-center">
+              <p className={`text-xl font-bold ${
+                sessionStats.reportdeport_session_precedente >= 0 ? 'text-blue-600' : 'text-orange-600'
+              }`}>
+                {Math.abs(sessionStats.reportdeport_session_precedente).toLocaleString()} TND
+              </p>
+              {sessionStats.reportdeport_session_precedente >= 0 ? (
+                <ArrowUp className="w-4 h-4 ml-1 text-blue-600" />
+              ) : (
+                <ArrowDown className="w-4 h-4 ml-1 text-orange-600" />
+              )}
+            </div>
             <p className="text-sm text-gray-500 mt-1">
-              {globalBalance >= 0 ? 'Solde positif' : 'Solde négatif'}
+              {sessionStats.reportdeport_session_precedente >= 0 ? 'Crédit' : 'Débit'}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">
+              Session: {formatDate(getPreviousSessionDate())}
             </p>
           </div>
         </div>
