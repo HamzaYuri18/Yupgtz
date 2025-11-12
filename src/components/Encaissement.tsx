@@ -27,8 +27,7 @@ interface TermeData {
 interface SessionStats {
   total_encaissements: number;
   total_paiements: number;
-  difference: number;
-  session_montant: number;
+  balance_session: number;
   total_primes_statut_null: number;
   nombre_contrats_statut_null: number;
   total_primes_encaisses: number;
@@ -70,8 +69,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   const [sessionStats, setSessionStats] = useState<SessionStats>({
     total_encaissements: 0,
     total_paiements: 0,
-    difference: 0,
-    session_montant: 0,
+    balance_session: 0,
     total_primes_statut_null: 0,
     nombre_contrats_statut_null: 0,
     total_primes_encaisses: 0,
@@ -437,11 +435,8 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       const totalPaiementsSession = paiementsSessionData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
       const totalEncaissementsSession = encaissementsSessionData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
       
-      // CORRECTION: Différence = Encaissements - Paiements
-      const differenceSession = totalEncaissementsSession - totalPaiementsSession;
-      
-      // CORRECTION: Balance de session = Différence (Encaissements - Paiements)
-      const sessionMontant = differenceSession;
+      // CORRECTION: Balance de session = Paiements - Encaissements
+      const balanceSession = totalPaiementsSession - totalEncaissementsSession;
       
       const nombreContratsPaiementsSession = paiementsSessionData?.length || 0;
       const nombreContratsEncaissementsSession = encaissementsSessionData?.length || 0;
@@ -467,7 +462,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       console.log('=== RÉSULTATS CALCULÉS (CORRIGÉS) ===');
       console.log('Session - Paiements:', totalPaiementsSession, '(', nombreContratsPaiementsSession, 'contrats)');
       console.log('Session - Encaissements:', totalEncaissementsSession, '(', nombreContratsEncaissementsSession, 'contrats)');
-      console.log('Session - Balance de session (Encaissements - Paiements):', sessionMontant);
+      console.log('Session - Balance (Paiements - Encaissements):', balanceSession);
       console.log('Reportdeport session actuelle:', reportdeportSessionActuelle);
       console.log('Reportdeport session précédente:', reportdeportSessionPrecedente);
       console.log('Paiements depuis 25/10:', totalPaiementsDepuis2510);
@@ -480,8 +475,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       setSessionStats({
         total_paiements: totalPaiementsSession,
         total_encaissements: totalEncaissementsSession,
-        difference: differenceSession, // CORRIGÉ: Encaissements - Paiements
-        session_montant: sessionMontant, // CORRIGÉ: Même que différence
+        balance_session: balanceSession, // CORRIGÉ: Paiements - Encaissements
         total_primes_statut_null: totalPrimesStatutNull,
         nombre_contrats_statut_null: nombreContratsStatutNull,
         total_primes_encaisses: totalPrimesEncaisses,
@@ -987,28 +981,28 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
             )}
           </div>
 
-          {/* Balance de Session - CORRIGÉ: Même que différence */}
+          {/* Balance de Session - CORRIGÉ: Paiements - Encaissements */}
           <div className={`text-center p-4 rounded-lg shadow border ${
-            sessionStats.session_montant >= 0 ? 'bg-green-100 border-green-200' : 'bg-red-100 border-red-200'
+            sessionStats.balance_session >= 0 ? 'bg-green-100 border-green-200' : 'bg-red-100 border-red-200'
           }`}>
             <p className="text-sm text-gray-600">Balance de Session</p>
             <div className="flex items-center justify-center">
               <p className={`text-xl font-bold ${
-                sessionStats.session_montant >= 0 ? 'text-green-600' : 'text-red-600'
+                sessionStats.balance_session >= 0 ? 'text-green-600' : 'text-red-600'
               }`}>
-                {Math.abs(sessionStats.session_montant).toLocaleString()} TND
+                {Math.abs(sessionStats.balance_session).toLocaleString()} TND
               </p>
-              {sessionStats.session_montant >= 0 ? (
+              {sessionStats.balance_session >= 0 ? (
                 <ArrowUp className="w-4 h-4 ml-1 text-green-600" />
               ) : (
                 <ArrowDown className="w-4 h-4 ml-1 text-red-600" />
               )}
             </div>
             <p className="text-sm text-gray-500 mt-1">
-              {sessionStats.session_montant >= 0 ? 'Solde positif' : 'Solde négatif'}
+              {sessionStats.balance_session >= 0 ? 'Solde positif' : 'Solde négatif'}
             </p>
             <p className="text-xs text-gray-600 mt-1">
-              Encaissements - Paiements
+              Paiements - Encaissements
             </p>
           </div>
         </div>
