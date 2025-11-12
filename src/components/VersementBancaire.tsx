@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw, MessageSquare } from 'lucide-react';
-import { getRecentSessions, getSessionsByDateRange, updateSessionVersement, getMonthlyStats, verifyAndSyncSessionTotals, calculateTotalEspeceFromRapport, updateSessionRemarque } from '../utils/sessionService';
+import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw } from 'lucide-react';
+import { getRecentSessions, getSessionsByDateRange, updateSessionVersement, getMonthlyStats, verifyAndSyncSessionTotals, calculateTotalEspeceFromRapport } from '../utils/sessionService';
 import * as XLSX from 'xlsx';
 
 interface VersementBancaireProps {
@@ -17,7 +17,6 @@ interface SessionData {
   banque: string | null;
   statut: string;
   cree_par: string;
-  remarque: string | null;
 }
 
 interface QuinzaineStats {
@@ -37,7 +36,6 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [quinzaineStats, setQuinzaineStats] = useState<QuinzaineStats>({ premiere: 0, deuxieme: 0, total: 0 });
   const [isVerifying, setIsVerifying] = useState(false);
-  const [editingRemarque, setEditingRemarque] = useState<{sessionId: number, remarque: string} | null>(null);
 
   const [formData, setFormData] = useState({
     sessionId: '',
@@ -45,8 +43,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     versement: '',
     dateVersement: '',
     charges: '',
-    banque: 'ATTIJARI',
-    remarque: ''
+    banque: 'ATTIJARI'
   });
 
   useEffect(() => {
@@ -109,52 +106,6 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       premiere: `1-15 ${monthNames[selectedMonth - 1]} ${selectedYear}`,
       deuxieme: `16-${new Date(selectedYear, selectedMonth, 0).getDate()} ${monthNames[selectedMonth - 1]} ${selectedYear}`
     };
-  };
-
-  // Fonction pour sauvegarder une remarque
-  const handleSaveRemarque = async (sessionId: number, remarque: string) => {
-    try {
-      const success = await updateSessionRemarque(sessionId, remarque);
-      if (success) {
-        setMessage('Remarque enregistrée avec succès');
-        // Mettre à jour la session localement
-        setSessions(prevSessions => 
-          prevSessions.map(session => 
-            session.id === sessionId 
-              ? { ...session, remarque: remarque }
-              : session
-          )
-        );
-        setFilteredSessions(prevSessions => 
-          prevSessions.map(session => 
-            session.id === sessionId 
-              ? { ...session, remarque: remarque }
-              : session
-          )
-        );
-        setEditingRemarque(null);
-      } else {
-        setMessage('Erreur lors de l\'enregistrement de la remarque');
-      }
-    } catch (error) {
-      setMessage('Erreur lors de l\'enregistrement de la remarque');
-      console.error('Erreur sauvegarde remarque:', error);
-    }
-    
-    setTimeout(() => setMessage(''), 3000);
-  };
-
-  // Fonction pour démarrer l'édition d'une remarque
-  const startEditingRemarque = (sessionId: number, currentRemarque: string | null) => {
-    setEditingRemarque({
-      sessionId,
-      remarque: currentRemarque || ''
-    });
-  };
-
-  // Fonction pour annuler l'édition
-  const cancelEditingRemarque = () => {
-    setEditingRemarque(null);
   };
 
   // Fonction pour vérifier et synchroniser tous les totaux espèce
@@ -274,8 +225,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       parseFloat(formData.versement),
       formData.dateVersement,
       formData.banque,
-      parseFloat(formData.charges) || 0,
-      formData.remarque // Ajouter la remarque
+      parseFloat(formData.charges) || 0
     );
 
     if (success) {
@@ -286,8 +236,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
         versement: '',
         dateVersement: '',
         charges: '',
-        banque: 'ATTIJARI',
-        remarque: ''
+        banque: 'ATTIJARI'
       });
       loadSessions();
     } else {
@@ -311,7 +260,6 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       'Versement': session.versement,
       'Date Versement': session.date_versement || '',
       'Banque': session.banque || '',
-      'Remarque': session.remarque || '',
       'Solde': calculateSolde(session),
       'Statut': session.statut,
       'Créé par': session.cree_par
@@ -476,19 +424,6 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Remarques
-              </label>
-              <textarea
-                value={formData.remarque}
-                onChange={(e) => setFormData({ ...formData, remarque: e.target.value })}
-                placeholder="Notes ou observations..."
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              />
-            </div>
-
             <button
               onClick={handleSaveVersement}
               className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
@@ -569,7 +504,6 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date Versement</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Banque</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Solde</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Remarques</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
               </tr>
             </thead>
@@ -586,49 +520,6 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.banque || '-'}</td>
                     <td className={`px-4 py-3 whitespace-nowrap text-sm font-semibold ${solde < 0 ? 'text-red-600' : 'text-green-600'}`}>
                       {solde.toFixed(2)} DT
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
-                      {editingRemarque?.sessionId === session.id ? (
-                        <div className="space-y-2">
-                          <textarea
-                            value={editingRemarque.remarque}
-                            onChange={(e) => setEditingRemarque({
-                              ...editingRemarque,
-                              remarque: e.target.value
-                            })}
-                            rows={3}
-                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                            placeholder="Ajouter une remarque..."
-                          />
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => handleSaveRemarque(session.id, editingRemarque.remarque)}
-                              className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
-                            >
-                              Sauvegarder
-                            </button>
-                            <button
-                              onClick={cancelEditingRemarque}
-                              className="px-2 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700"
-                            >
-                              Annuler
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-start space-x-2">
-                          <div className={`flex-1 min-w-0 ${session.remarque ? 'text-gray-900' : 'text-gray-400 italic'}`}>
-                            {session.remarque || 'Aucune remarque'}
-                          </div>
-                          <button
-                            onClick={() => startEditingRemarque(session.id, session.remarque)}
-                            className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
-                            title="Modifier la remarque"
-                          >
-                            <MessageSquare className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
@@ -648,4 +539,4 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   );
 };
 
-export default VersementBancaire;
+export default VersementBancaire; 
