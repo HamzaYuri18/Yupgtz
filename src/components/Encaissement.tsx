@@ -97,12 +97,31 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   // Charger les données quand la session change
   useEffect(() => {
     if (sessionDate || customSessionDate) {
-      loadSessionStats();
-      calculateGlobalBalance();
-      loadRPData();
-      loadPreviousRPData();
+      loadAllData();
     }
   }, [sessionDate, customSessionDate, useCustomDate]);
+
+  // Fonction pour charger toutes les données en séquence
+  const loadAllData = async () => {
+    try {
+      console.log('=== CHARGEMENT DE TOUTES LES DONNÉES ===');
+      
+      // 1. Charger d'abord les données RP
+      await loadRPData();
+      
+      // 2. Charger les données de la session précédente
+      await loadPreviousRPData();
+      
+      // 3. Charger les statistiques (qui utilisent maintenant les données RP chargées)
+      await loadSessionStats();
+      
+      // 4. Calculer la balance globale
+      await calculateGlobalBalance();
+      
+    } catch (error) {
+      console.error('Erreur lors du chargement des données:', error);
+    }
+  };
 
   // Fonction pour charger les données de la table RP pour la session actuelle
   const loadRPData = async () => {
@@ -121,15 +140,17 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       if (error) {
         console.error('Erreur chargement RP session actuelle:', error);
         setRpData(null);
-        return;
+        return null;
       }
 
       console.log('Données RP session actuelle chargées:', data);
       setRpData(data);
+      return data;
 
     } catch (error) {
       console.error('Erreur lors du chargement RP session actuelle:', error);
       setRpData(null);
+      return null;
     }
   };
 
@@ -154,15 +175,17 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       if (error) {
         console.error('Erreur chargement RP session précédente:', error);
         setPreviousRpData(null);
-        return;
+        return null;
       }
 
       console.log('Données RP session précédente chargées:', data);
       setPreviousRpData(data);
+      return data;
 
     } catch (error) {
       console.error('Erreur lors du chargement RP session précédente:', error);
       setPreviousRpData(null);
+      return null;
     }
   };
 
@@ -320,12 +343,9 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       setNumeroContrat('');
       setEcheance('');
 
-      // Recharger les statistiques après un délai
+      // Recharger toutes les données après un délai
       setTimeout(() => {
-        loadSessionStats();
-        calculateGlobalBalance();
-        loadRPData();
-        loadPreviousRPData();
+        loadAllData();
       }, 1000);
 
     } catch (error) {
@@ -366,6 +386,8 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       
       console.log('=== CHARGEMENT STATISTIQUES SESSION ===');
       console.log('Date de session utilisée:', currentSessionDate);
+      console.log('Données RP disponibles:', rpData);
+      console.log('Données RP précédentes disponibles:', previousRpData);
 
       // 1. Charger les PAIEMENTS de la session actuelle depuis la table terme
       const { data: paiementsSessionData, error: paiementsSessionError } = await supabase
@@ -455,7 +477,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       // DÉPORT CUMULÉ FIXE
       const deportCumule = -47369.10;
 
-      // Récupérer les reportdeport depuis la table RP
+      // UTILISER LES DONNÉES RP DÉJÀ CHARGÉES
       const reportdeportSessionActuelle = rpData?.reportdeport || 0;
       const reportdeportSessionPrecedente = previousRpData?.reportdeport || 0;
 
@@ -502,9 +524,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       return;
     }
     console.log('Application filtre date:', useCustomDate ? customSessionDate : sessionDate);
-    loadSessionStats();
-    loadRPData();
-    loadPreviousRPData();
+    loadAllData();
   };
 
   // Fonction pour réinitialiser le filtre de date
@@ -515,9 +535,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     setCustomSessionDate(todayISO);
     console.log('Réinitialisation filtre date:', todayISO);
     setTimeout(() => {
-      loadSessionStats();
-      loadRPData();
-      loadPreviousRPData();
+      loadAllData();
     }, 100);
   };
 
@@ -530,10 +548,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       setSessionDate(todayISO);
       console.log('Date session actualisée:', todayISO);
     }
-    loadSessionStats();
-    calculateGlobalBalance();
-    loadRPData();
-    loadPreviousRPData();
+    loadAllData();
   };
 
   // Fonction pour exporter les données en Excel
