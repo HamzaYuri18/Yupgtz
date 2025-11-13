@@ -1,4 +1,4 @@
-mport React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, DollarSign, Calendar, FileText, User, CheckCircle, XCircle, AlertCircle, Download, RefreshCw, Filter, ArrowUp, ArrowDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
@@ -1164,6 +1164,5 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     </div>
   );
 };
-
 
 export default Encaissement;
