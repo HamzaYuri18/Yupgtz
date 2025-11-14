@@ -110,57 +110,37 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     try {
       console.log('=== SYNCHRONISATION TABLE RP ===');
       
-      const { data, error } = await supabase
-        .rpc('sync_rp_after_terme_change');
+      // Essayer d'abord avec la fonction RPC
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('sync_rp_table');
 
-      if (error) {
-        console.error('Erreur synchronisation RP:', error);
+      if (rpcError) {
+        console.error('Erreur RPC sync_rp_table:', rpcError);
         
-        // Fallback: essayer d'appeler la fonction via une requête SQL directe
-        console.log('Tentative de fallback...');
-        const { error: fallbackError } = await supabase
-          .from('terme')
-          .select('id')
-          .limit(1);
-        
-        if (fallbackError) {
-          throw fallbackError;
+        // Fallback: méthode alternative avec requête SQL directe
+        console.log('Tentative méthode alternative...');
+        const { error: updateError } = await supabase
+          .from('rp')
+          .update({
+            updated_at: new Date().toISOString()
+          })
+          .not('session', 'is', null);
+
+        if (updateError) {
+          console.error('Erreur méthode alternative:', updateError);
+          return false;
         }
         
-        // Si le fallback réussit, forcer un recalcul manuel
-        await forceRPRecalculation();
+        console.log('Synchronisation RP réussie (méthode alternative)');
+        return true;
       }
 
-      console.log('Synchronisation RP réussie');
+      console.log('Synchronisation RP réussie via RPC');
       return true;
       
     } catch (error) {
       console.error('Erreur synchronisation RP:', error);
       return false;
-    }
-  };
-
-  // Fallback pour forcer le recalcul RP
-  const forceRPRecalculation = async (): Promise<void> => {
-    try {
-      console.log('Forçage du recalcul RP...');
-      
-      // Mettre à jour une ligne RP pour déclencher les calculs
-      const currentSessionDate = useCustomDate ? customSessionDate : sessionDate;
-      const { error } = await supabase
-        .from('rp')
-        .update({ updated_at: new Date().toISOString() })
-        .eq('session', currentSessionDate);
-
-      if (error) {
-        console.error('Erreur forçage recalcul:', error);
-      }
-      
-      // Attendre un peu pour que les triggers s'exécutent
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-    } catch (error) {
-      console.error('Erreur forçage recalcul:', error);
     }
   };
 
@@ -432,6 +412,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
 
     try {
       // Étape 1: Synchroniser la table RP
+      console.log('Début synchronisation RP...');
       const syncSuccess = await syncRPTable();
       
       if (!syncSuccess) {
@@ -450,7 +431,11 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         console.log('Date session actualisée:', todayISO);
       }
 
-      // Étape 3: Recharger toutes les données
+      // Étape 3: Attendre un peu pour que les données soient bien synchronisées
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      // Étape 4: Recharger toutes les données
+      console.log('Rechargement des données après synchronisation...');
       await Promise.all([
         loadSessionStats(),
         calculateGlobalBalance(),
@@ -458,7 +443,8 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         loadPreviousRPData()
       ]);
 
-      setMessage('Données actualisées avec succès!');
+      console.log('Rafraîchissement terminé avec succès');
+      setMessage('Données actualisées avec succès! Table RP synchronisée.');
       setMessageType('success');
 
     } catch (error) {
@@ -780,10 +766,10 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
             onClick={refreshStats}
             disabled={refreshing}
             className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-            title="Rafraîchir les statistiques et synchroniser RP"
+            title="Rafraîchir les statistiques et synchroniser la table RP"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Synchronisation...' : 'Actualiser'}
+            {refreshing ? 'Synchronisation...' : 'Actualiser RP'}
           </button>
         </div>
         {username && (
