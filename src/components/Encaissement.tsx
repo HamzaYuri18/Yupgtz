@@ -222,22 +222,21 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     }
   };
 
-  // Fonction pour charger les données de la session précédente
+  // Fonction pour charger les données de la session précédente la plus proche
   const loadPreviousRPData = async () => {
     try {
       const currentSessionDate = useCustomDate ? customSessionDate : sessionDate;
-      const currentDate = new Date(currentSessionDate);
-      const previousDate = new Date(currentDate);
-      previousDate.setDate(previousDate.getDate() - 1);
-      const previousDateISO = formatDateForQuery(previousDate);
-
+      
       console.log('=== CHARGEMENT DONNÉES RP SESSION PRÉCÉDENTE ===');
-      console.log('Date session précédente:', previousDateISO);
+      console.log('Date session actuelle:', currentSessionDate);
 
+      // Charger la session précédente la plus proche
       const { data, error } = await supabase
         .from('rp')
         .select('session, paiement, encaissement, difference, reportdeport')
-        .eq('session', previousDateISO)
+        .lt('session', currentSessionDate)
+        .order('session', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (error) {
@@ -604,7 +603,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       // DÉPORT CUMULÉ FIXE
       const deportCumule = -47369.10;
 
-      // Récupérer les reportdeport depuis la table RP
+      // NOUVELLE ASTUCE: Utiliser les reportdeport de la table RP
       const reportdeportSessionActuelle = rpData?.reportdeport || 0;
       const reportdeportSessionPrecedente = previousRpData?.reportdeport || 0;
 
@@ -612,8 +611,8 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       console.log('Session - Paiements:', totalPaiementsSession, '(', nombreContratsPaiementsSession, 'contrats)');
       console.log('Session - Encaissements:', totalEncaissementsSession, '(', nombreContratsEncaissementsSession, 'contrats)');
       console.log('Session - Balance (Paiements - Encaissements):', balanceSession);
-      console.log('Reportdeport session actuelle:', reportdeportSessionActuelle);
-      console.log('Reportdeport session précédente:', reportdeportSessionPrecedente);
+      console.log('Reportdeport session actuelle (depuis RP):', reportdeportSessionActuelle);
+      console.log('Reportdeport session précédente (depuis RP):', reportdeportSessionPrecedente);
       console.log('Paiements depuis 25/10:', totalPaiementsDepuis2510);
       console.log('Encaissements depuis 25/10:', totalEncaissementsDepuis2510);
       console.log('Contrats en attente:', totalPrimesStatutNull, '(', nombreContratsStatutNull, 'contrats)');
@@ -801,6 +800,10 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
 
   // Obtenir la date de la session précédente
   const getPreviousSessionDate = () => {
+    if (previousRpData?.session) {
+      return formatDate(previousRpData.session);
+    }
+    
     const currentDate = new Date(useCustomDate ? customSessionDate : sessionDate);
     const previousDate = new Date(currentDate);
     previousDate.setDate(previousDate.getDate() - 1);
@@ -883,7 +886,6 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         </div>
       </div>
 
-      {/* Le reste du code reste exactement le même */}
       {/* Affichage des données RP en temps réel */}
       {rpData && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
@@ -905,8 +907,417 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         </div>
       )}
 
-      {/* Le reste de votre composant reste inchangé */}
-      {/* ... (Formulaire de recherche, Résultats, Filtres, Statistiques) ... */}
+      {/* Affichage des données de la session précédente */}
+      {previousRpData && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
+          <h4 className="font-semibold text-purple-800 mb-2">
+            Données Session Précédente ({formatDate(previousRpData.session)}):
+          </h4>
+          <div className="grid grid-cols-4 gap-4 text-sm">
+            <div>
+              <span className="text-purple-600">Paiement:</span> {previousRpData.paiement?.toLocaleString()} TND
+            </div>
+            <div>
+              <span className="text-purple-600">Encaissement:</span> {previousRpData.encaissement?.toLocaleString()} TND
+            </div>
+            <div>
+              <span className="text-purple-600">Différence:</span> {previousRpData.difference?.toLocaleString()} TND
+            </div>
+            <div>
+              <span className="text-purple-600">Reportdeport:</span> {previousRpData.reportdeport?.toLocaleString()} TND
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Formulaire de recherche */}
+      <div className="bg-blue-50 p-6 rounded-lg mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <FileText className="w-4 h-4 inline mr-1" />
+              Numéro de contrat
+            </label>
+            <input
+              type="text"
+              value={numeroContrat}
+              onChange={handleNumeroContratChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Saisir le numéro de contrat (sans espaces)"
+            />
+            <p className="text-xs text-gray-500 mt-1">Les espaces seront automatiquement supprimés</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Calendar className="w-4 h-4 inline mr-1" />
+              Échéance
+            </label>
+            <input
+              type="date"
+              value={echeance}
+              onChange={(e) => setEcheance(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+        <button
+          onClick={searchTerme}
+          disabled={loading || !numeroContrat || !echeance}
+          className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+        >
+          <Search className="w-4 h-4 mr-2" />
+          {loading ? 'Recherche...' : 'Rechercher'}
+        </button>
+      </div>
+
+      {/* Résultat de la recherche */}
+      {termeData && (
+        <div className={`p-6 rounded-lg mb-6 border-2 ${
+          termeData.Date_Encaissement
+            ? 'bg-blue-50 border-blue-200'
+            : 'bg-green-50 border-green-200'
+        }`}>
+          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+            <CheckCircle className="w-5 h-5 mr-2 text-green-600" />
+            Données trouvées
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <label className="block text-sm font-medium text-gray-600 mb-1">Assuré</label>
+              <p className="text-lg font-semibold text-gray-800 flex items-center">
+                <User className="w-4 h-4 mr-2 text-blue-600" />
+                {termeData.assure}
+              </p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <label className="block text-sm font-medium text-gray-600 mb-1">Prime</label>
+              <p className="text-lg font-bold text-green-700">{Number(termeData.prime).toLocaleString()} TND</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <label className="block text-sm font-medium text-gray-600 mb-1">Statut</label>
+              <p className={`text-lg font-semibold ${
+                termeData.statut === 'Encaissé' ? 'text-green-600' : 'text-orange-600'
+              }`}>
+                {termeData.statut || 'En attente'}
+              </p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <label className="block text-sm font-medium text-gray-600 mb-1">Date de paiement</label>
+              <p className="text-lg font-semibold text-gray-800">
+                {termeData.date_paiement ? formatDate(termeData.date_paiement) : 'N/A'}
+              </p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <label className="block text-sm font-medium text-gray-600 mb-1">Retour</label>
+              <p className="text-lg font-semibold text-gray-800">
+                {termeData.Retour || 'Aucun'}
+              </p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <label className="block text-sm font-medium text-gray-600 mb-1">Date d'encaissement</label>
+              <p className="text-lg font-semibold text-gray-800">
+                {termeData.Date_Encaissement ? formatDate(termeData.Date_Encaissement) : 'Non encaissé'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={enregistrerEncaissement}
+            disabled={loading || !!termeData.Date_Encaissement}
+            className="mt-6 flex items-center justify-center px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          >
+            <DollarSign className="w-4 h-4 mr-2" />
+            {loading ? 'Enregistrement...' : 'Enregistrer l\'encaissement'}
+          </button>
+        </div>
+      )}
+
+      {/* Filtre de date pour les statistiques de session */}
+      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-purple-800 flex items-center">
+            <Filter className="w-5 h-5 mr-2" />
+            Filtre de Date pour les Statistiques de Session
+          </h3>
+          <div className="flex items-center space-x-2">
+            <label className="flex items-center text-sm text-purple-700">
+              <input
+                type="checkbox"
+                checked={useCustomDate}
+                onChange={(e) => setUseCustomDate(e.target.checked)}
+                className="mr-2 rounded text-purple-600 focus:ring-purple-500"
+              />
+              Utiliser une date personnalisée
+            </label>
+          </div>
+        </div>
+
+        {useCustomDate && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div>
+              <label className="block text-sm font-medium text-purple-700 mb-2">
+                Date de session personnalisée
+              </label>
+              <input
+                type="date"
+                value={customSessionDate}
+                onChange={(e) => setCustomSessionDate(e.target.value)}
+                className="w-full px-3 py-2 border border-purple-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={applyDateFilter}
+                className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+              >
+                <Filter className="w-4 h-4 mr-2" />
+                Appliquer
+              </button>
+              <button
+                onClick={resetDateFilter}
+                className="flex items-center px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Réinitialiser
+              </button>
+            </div>
+            <div className="text-sm text-purple-600">
+              <p>Session affichée: {getDisplayDate()}</p>
+              <p className="text-xs">ID: {getTechnicalDate()}</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Statistiques de session */}
+      <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">
+            Statistiques de la Session ({getDisplayDate()})
+          </h3>
+          <div className="text-sm text-gray-500">
+            Données depuis table TERME
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          {/* Paiements Session */}
+          <div 
+            className="text-center p-4 bg-orange-50 rounded-lg shadow border border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors"
+            onClick={() => exportToExcel('paiements')}
+            title="Cliquer pour exporter les numéros de contrat en Excel"
+          >
+            <div className="flex justify-between items-start mb-2">
+              <p className="text-sm text-gray-600 flex-1 text-left">Paiements Session</p>
+              <Download className="w-4 h-4 text-orange-600 flex-shrink-0" />
+            </div>
+            <p className="text-xl font-bold text-orange-600">
+              {sessionStats.total_paiements.toLocaleString()} TND
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              {sessionStats.nombre_contrats_paiements_session} contrat(s)
+            </p>
+            <p className="text-xs text-orange-600 mt-1">
+              Session: {getTechnicalDate()}
+            </p>
+            {exportLoading === 'paiements' && (
+              <p className="text-xs text-orange-600 mt-1 animate-pulse">Génération Excel...</p>
+            )}
+          </div>
+
+          {/* Encaissements Session */}
+          <div 
+            className="text-center p-4 bg-blue-50 rounded-lg shadow border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
+            onClick={() => exportToExcel('encaissements')}
+            title="Cliquer pour exporter les numéros de contrat en Excel"
+          >
+            <div className="flex justify-between items-start mb-2">
+              <p className="text-sm text-gray-600 flex-1 text-left">Encaissements Session</p>
+              <Download className="w-4 h-4 text-blue-600 flex-shrink-0" />
+            </div>
+            <p className="text-xl font-bold text-blue-600">
+              {sessionStats.total_encaissements.toLocaleString()} TND
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              {sessionStats.nombre_contrats_encaissements_session} contrat(s)
+            </p>
+            <p className="text-xs text-blue-600 mt-1">
+              Session: {getTechnicalDate()}
+            </p>
+            {exportLoading === 'encaissements' && (
+              <p className="text-xs text-blue-600 mt-1 animate-pulse">Génération Excel...</p>
+            )}
+          </div>
+
+          {/* Balance de Session - CORRIGÉ: Paiements - Encaissements */}
+          <div className={`text-center p-4 rounded-lg shadow border ${
+            sessionStats.balance_session >= 0 ? 'bg-green-100 border-green-200' : 'bg-red-100 border-red-200'
+          }`}>
+            <p className="text-sm text-gray-600">Balance de Session</p>
+            <div className="flex items-center justify-center">
+              <p className={`text-xl font-bold ${
+                sessionStats.balance_session >= 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {Math.abs(sessionStats.balance_session).toLocaleString()} TND
+              </p>
+              {sessionStats.balance_session >= 0 ? (
+                <ArrowUp className="w-4 h-4 ml-1 text-green-600" />
+              ) : (
+                <ArrowDown className="w-4 h-4 ml-1 text-red-600" />
+              )}
+            </div>
+            <p className="text-sm text-gray-500 mt-1">
+              {sessionStats.balance_session >= 0 ? 'Solde positif' : 'Solde négatif'}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">
+              Paiements - Encaissements
+            </p>
+          </div>
+        </div>
+
+        {/* Informations de débogage */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4">
+          <p className="text-sm text-yellow-800">
+            <strong>Informations techniques:</strong> Session ID: {getTechnicalDate()} | 
+            Données chargées depuis table TERME | 
+            Dernier chargement: {new Date().toLocaleTimeString('fr-FR')}
+          </p>
+        </div>
+      </div>
+
+      {/* Statistiques globales */}
+      <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">Statistiques Globales</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          {/* Paiements depuis 25/10/2025 */}
+          <div className="text-center p-4 bg-purple-50 rounded-lg shadow border border-purple-200">
+            <p className="text-sm text-gray-600">Paiements depuis 25/10/2025</p>
+            <p className="text-xl font-bold text-purple-600">
+              {sessionStats.total_paiements_depuis_2510.toLocaleString()} TND
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              Depuis le 25/10/2025
+            </p>
+          </div>
+
+          {/* Encaissements depuis 25/10/2025 */}
+          <div className="text-center p-4 bg-indigo-50 rounded-lg shadow border border-indigo-200">
+            <p className="text-sm text-gray-600">Encaissements depuis 25/10/2025</p>
+            <p className="text-xl font-bold text-indigo-600">
+              {sessionStats.total_encaissements_depuis_2510.toLocaleString()} TND
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              Depuis le 25/10/2025
+            </p>
+          </div>
+
+          {/* Reportdeport Session Actuelle - NOUVELLE ASTUCE */}
+          <div className={`text-center p-4 rounded-lg shadow border ${
+            sessionStats.reportdeport_session_actuelle >= 0 ? 'bg-green-100 border-green-200' : 'bg-red-100 border-red-200'
+          }`}>
+            <p className="text-sm text-gray-600">Reportdeport Session Actuelle</p>
+            <div className="flex items-center justify-center">
+              <p className={`text-xl font-bold ${
+                sessionStats.reportdeport_session_actuelle >= 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {Math.abs(sessionStats.reportdeport_session_actuelle).toLocaleString()} TND
+              </p>
+              {sessionStats.reportdeport_session_actuelle >= 0 ? (
+                <ArrowUp className="w-4 h-4 ml-1 text-green-600" />
+              ) : (
+                <ArrowDown className="w-4 h-4 ml-1 text-red-600" />
+              )}
+            </div>
+            <p className="text-sm text-gray-500 mt-1">
+              {sessionStats.reportdeport_session_actuelle >= 0 ? 'Crédit' : 'Débit'}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">
+              Session: {getTechnicalDate()}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Source: Table RP
+            </p>
+          </div>
+
+          {/* Reportdeport Session Précédente - NOUVELLE ASTUCE */}
+          <div className={`text-center p-4 rounded-lg shadow border ${
+            sessionStats.reportdeport_session_precedente >= 0 ? 'bg-blue-100 border-blue-200' : 'bg-orange-100 border-orange-200'
+          }`}>
+            <p className="text-sm text-gray-600">Reportdeport Session Précédente</p>
+            <div className="flex items-center justify-center">
+              <p className={`text-xl font-bold ${
+                sessionStats.reportdeport_session_precedente >= 0 ? 'text-blue-600' : 'text-orange-600'
+              }`}>
+                {Math.abs(sessionStats.reportdeport_session_precedente).toLocaleString()} TND
+              </p>
+              {sessionStats.reportdeport_session_precedente >= 0 ? (
+                <ArrowUp className="w-4 h-4 ml-1 text-blue-600" />
+              ) : (
+                <ArrowDown className="w-4 h-4 ml-1 text-orange-600" />
+              )}
+            </div>
+            <p className="text-sm text-gray-500 mt-1">
+              {sessionStats.reportdeport_session_precedente >= 0 ? 'Crédit' : 'Débit'}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">
+              Session: {previousRpData ? formatDate(previousRpData.session) : 'N/A'}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Source: Table RP
+            </p>
+          </div>
+        </div>
+
+        {/* Contrats en attente et encaissés */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Contrats en attente */}
+          <div 
+            className="text-center p-4 bg-yellow-50 rounded-lg shadow border border-yellow-200 cursor-pointer hover:bg-yellow-100 transition-colors"
+            onClick={() => exportToExcel('statut_null')}
+            title="Cliquer pour exporter les numéros de contrat en Excel"
+          >
+            <div className="flex justify-between items-start mb-2">
+              <p className="text-sm text-gray-600 flex-1 text-left">Contrats en attente</p>
+              <Download className="w-4 h-4 text-yellow-600 flex-shrink-0" />
+            </div>
+            <p className="text-xl font-bold text-yellow-600">
+              {sessionStats.total_primes_statut_null.toLocaleString()} TND
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              {sessionStats.nombre_contrats_statut_null} contrat(s)
+            </p>
+            <p className="text-xs text-yellow-600 mt-1">
+              Statut: null (toutes dates)
+            </p>
+            {exportLoading === 'statut_null' && (
+              <p className="text-xs text-yellow-600 mt-1 animate-pulse">Génération Excel...</p>
+            )}
+          </div>
+
+          {/* Contrats encaissés */}
+          <div 
+            className="text-center p-4 bg-green-50 rounded-lg shadow border border-green-200 cursor-pointer hover:bg-green-100 transition-colors"
+            onClick={() => exportToExcel('encaisses')}
+            title="Cliquer pour exporter les numéros de contrat en Excel"
+          >
+            <div className="flex justify-between items-start mb-2">
+              <p className="text-sm text-gray-600 flex-1 text-left">Contrats encaissés</p>
+              <Download className="w-4 h-4 text-green-600 flex-shrink-0" />
+            </div>
+            <p className="text-xl font-bold text-green-700">
+              {sessionStats.total_primes_encaisses.toLocaleString()} TND
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              {sessionStats.nombre_contrats_encaisses} contrat(s)
+            </p>
+            <p className="text-xs text-green-600 mt-1">
+              Statut: "Encaissé" (toutes dates)
+            </p>
+            {exportLoading === 'encaisses' && (
+              <p className="text-xs text-green-600 mt-1 animate-pulse">Génération Excel...</p>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Message de statut */}
       {message && (
