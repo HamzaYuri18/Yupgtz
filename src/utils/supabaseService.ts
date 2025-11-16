@@ -153,14 +153,6 @@ export const updateCreditPayment = async (
 ): Promise<boolean> => {
   try {
     console.log('💳 Début de la mise à jour du paiement crédit...');
-    console.log('📋 Paramètres reçus:', {
-      id,
-      montantPaiement,
-      assure,
-      modePaiement,
-      numeroContrat,
-      chequeData
-    });
 
     // 1. Récupérer le crédit actuel
     const { data: creditActuel, error: fetchError } = await supabase
@@ -174,29 +166,12 @@ export const updateCreditPayment = async (
       return false;
     }
 
-    console.log('📊 Crédit actuel:', {
-      id: creditActuel.id,
-      numero_contrat: creditActuel.numero_contrat,
-      montant_credit: creditActuel.montant_credit,
-      paiement_actuel: creditActuel.paiement,
-      solde_actuel: creditActuel.solde,
-      statut_actuel: creditActuel.statut
-    });
-
     // 2. Calculer les nouveaux montants
     const paiementActuel = creditActuel.paiement || 0;
     const soldeActuel = creditActuel.solde || creditActuel.montant_credit;
     
     const nouveauPaiementTotal = paiementActuel + montantPaiement;
     const nouveauSolde = soldeActuel - montantPaiement;
-
-    console.log('🧮 Calculs financiers:', {
-      paiementActuel,
-      soldeActuel,
-      montantPaiement,
-      nouveauPaiementTotal,
-      nouveauSolde
-    });
 
     // 3. Validation des montants
     if (montantPaiement <= 0) {
@@ -219,8 +194,6 @@ export const updateCreditPayment = async (
       nouveauStatut = 'Non payé';
     }
 
-    console.log('📈 Nouveau statut déterminé:', nouveauStatut);
-
     // 5. Mettre à jour le crédit dans liste_credits
     const updateData: Partial<CreditData> = {
       paiement: nouveauPaiementTotal,
@@ -234,8 +207,6 @@ export const updateCreditPayment = async (
         date_encaissement_prevue: chequeData.dateEncaissementPrevue
       })
     };
-
-    console.log('📝 Données de mise à jour pour liste_credits:', updateData);
 
     const { error: updateError } = await supabase
       .from('liste_credits')
@@ -260,13 +231,6 @@ export const updateCreditPayment = async (
       console.error('❌ Erreur vérification mise à jour liste_credits:', verifyError);
       return false;
     }
-
-    console.log('✅ Vérification liste_credits réussie:', {
-      id: creditVerifie.id,
-      nouveauPaiement: creditVerifie.paiement,
-      nouveauSolde: creditVerifie.solde,
-      nouveauStatut: creditVerifie.statut
-    });
 
     // 7. Enregistrer le paiement dans la table rapport
     const datePaiement = new Date().toISOString();
@@ -297,8 +261,6 @@ export const updateCreditPayment = async (
       created_at: datePaiement
     };
 
-    console.log('📋 Données pour rapport:', rapportData);
-
     const { data: rapportInsert, error: rapportError } = await supabase
       .from('rapport')
       .insert([rapportData])
@@ -311,27 +273,7 @@ export const updateCreditPayment = async (
 
     console.log('✅ Paiement enregistré dans rapport avec succès');
 
-    // 8. Vérification finale dans rapport
-    const { data: rapportVerifie, error: rapportVerifyError } = await supabase
-      .from('rapport')
-      .select('*')
-      .eq('numero_contrat', creditActuel.numero_contrat)
-      .eq('type', 'Paiement Crédit')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (rapportVerifyError) {
-      console.error('❌ Erreur vérification rapport:', rapportVerifyError);
-    } else {
-      console.log('✅ Vérification rapport réussie:', {
-        id: rapportVerifie.id,
-        montant: rapportVerifie.montant,
-        created_at: rapportVerifie.created_at
-      });
-    }
-
-    // 9. Si paiement par chèque, enregistrer dans la table Cheques
+    // 8. Si paiement par chèque, enregistrer dans la table Cheques
     if (modePaiement === 'Cheque' && chequeData && numeroContrat) {
       const { error: chequeError } = await supabase
         .from('Cheques')
@@ -508,27 +450,275 @@ export const searchCreditFlexible = async (
   }
 };
 
-// Fonction utilitaire pour convertir les dates Excel
-const convertExcelDateToISO = (excelDate: string | number): string => {
-  if (typeof excelDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(excelDate)) {
-    return excelDate;
-  }
-  
-  if (typeof excelDate === 'number' || /^\d+$/.test(excelDate.toString())) {
-    const serialNumber = typeof excelDate === 'number' ? excelDate : parseInt(excelDate.toString());
-    const excelEpoch = new Date(1900, 0, 1);
-    const date = new Date(excelEpoch.getTime() + (serialNumber - 2) * 24 * 60 * 60 * 1000);
-    return date.toISOString().split('T')[0];
-  }
-  
+// FONCTIONS MANQUANTES POUR ContractForm.tsx
+
+// Fonction pour vérifier si un contrat Affaire existe déjà dans la table Affaire
+export const checkAffaireContractExists = async (numeroContrat: string, datePaiement: string): Promise<any | null> => {
   try {
-    const date = new Date(excelDate);
-    if (!isNaN(date.getTime())) return date.toISOString().split('T')[0];
+    console.log('🔍 Vérification existence contrat Affaire dans table Affaire...');
+
+    // Chercher les contrats créés aujourd'hui avec ce numéro
+    const { data, error } = await supabase
+      .from('affaire')
+      .select('*')
+      .eq('numero_contrat', numeroContrat)
+      .gte('created_at', datePaiement)
+      .lt('created_at', datePaiement + 'T23:59:59')
+      .maybeSingle();
+
+    if (error) {
+      console.error('❌ Erreur vérification Affaire:', error);
+      return null;
+    }
+
+    console.log(data ? '⚠️ Contrat Affaire existe déjà' : '✅ Contrat Affaire peut être créé');
+    return data;
   } catch (error) {
-    console.warn('Conversion date impossible:', excelDate);
+    console.error('❌ Erreur générale vérification Affaire:', error);
+    return null;
   }
-  
-  return new Date().toISOString().split('T')[0];
+};
+
+// Fonction pour vérifier si un contrat Affaire existe déjà dans la table Rapport
+export const checkAffaireInRapport = async (numeroContrat: string, datePaiement: string): Promise<any | null> => {
+  try {
+    console.log('🔍 Vérification existence contrat Affaire dans table Rapport...');
+
+    // Chercher les contrats créés aujourd'hui avec ce numéro
+    const { data, error } = await supabase
+      .from('rapport')
+      .select('*')
+      .eq('numero_contrat', numeroContrat)
+      .eq('type', 'Affaire')
+      .gte('created_at', datePaiement)
+      .lt('created_at', datePaiement + 'T23:59:59')
+      .maybeSingle();
+
+    if (error) {
+      console.error('❌ Erreur vérification Affaire dans Rapport:', error);
+      return null;
+    }
+
+    console.log(data ? '⚠️ Contrat Affaire existe dans Rapport' : '✅ Contrat Affaire peut être créé dans Rapport');
+    return data;
+  } catch (error) {
+    console.error('❌ Erreur générale vérification Affaire dans Rapport:', error);
+    return null;
+  }
+};
+
+// Fonction pour sauvegarder un contrat Affaire
+export const saveAffaireContract = async (contractData: ContractData): Promise<boolean> => {
+  try {
+    console.log('💾 Sauvegarde du contrat Affaire...');
+
+    const primeValue = Number(contractData.premiumAmount);
+    if (isNaN(primeValue) || primeValue <= 0) {
+      console.error('❌ Montant de prime invalide:', contractData.premiumAmount);
+      return false;
+    }
+
+    // Gérer le crédit pour Affaire
+    let montantCreditValue: number | null = null;
+    if (contractData.paymentType === 'Crédit') {
+      montantCreditValue = contractData.creditAmount ? Number(contractData.creditAmount) : primeValue;
+      if (montantCreditValue > primeValue) {
+        montantCreditValue = primeValue;
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('affaire')
+      .insert([{
+        numero_contrat: contractData.contractNumber || '',
+        prime: primeValue,
+        assure: contractData.insuredName,
+        branche: contractData.branch,
+        mode_paiement: contractData.paymentMode,
+        type_paiement: contractData.paymentType,
+        montant_credit: montantCreditValue,
+        date_paiement: contractData.paymentType === 'Crédit' ? contractData.paymentDate : null,
+        cree_par: contractData.createdBy
+      }]);
+
+    if (error) {
+      console.error('❌ Erreur lors de la sauvegarde Affaire:', error);
+      return false;
+    }
+
+    console.log('✅ Contrat Affaire sauvegardé avec succès');
+    return true;
+  } catch (error) {
+    console.error('❌ Erreur générale lors de la sauvegarde Affaire:', error);
+    return false;
+  }
+};
+
+// Fonction pour vérifier si un contrat Terme existe déjà dans la table Terme
+export const checkTermeContractExists = async (numeroContrat: string, echeance: string): Promise<any | null> => {
+  try {
+    console.log('🔍 Vérification existence contrat Terme dans table Terme...');
+
+    const echeanceISO = convertExcelDateToISO(echeance);
+
+    const { data, error } = await supabase
+      .from('terme')
+      .select('*')
+      .eq('numero_contrat', numeroContrat)
+      .eq('echeance', echeanceISO)
+      .maybeSingle();
+
+    if (error) {
+      console.error('❌ Erreur vérification Terme:', error);
+      return null;
+    }
+
+    console.log(data ? '⚠️ Contrat Terme existe déjà' : '✅ Contrat Terme peut être créé');
+    return data;
+  } catch (error) {
+    console.error('❌ Erreur générale vérification Terme:', error);
+    return null;
+  }
+};
+
+// Fonction pour vérifier si un contrat Terme existe déjà dans la table Rapport
+export const checkTermeInRapport = async (numeroContrat: string, echeance: string): Promise<any | null> => {
+  try {
+    console.log('🔍 Vérification existence contrat Terme dans table Rapport...');
+
+    const echeanceISO = convertExcelDateToISO(echeance);
+
+    const { data, error } = await supabase
+      .from('rapport')
+      .select('*')
+      .eq('numero_contrat', numeroContrat)
+      .eq('echeance', echeanceISO)
+      .eq('type', 'Terme')
+      .maybeSingle();
+
+    if (error) {
+      console.error('❌ Erreur vérification Terme dans Rapport:', error);
+      return null;
+    }
+
+    console.log(data ? '⚠️ Contrat Terme existe dans Rapport' : '✅ Contrat Terme peut être créé dans Rapport');
+    return data;
+  } catch (error) {
+    console.error('❌ Erreur générale vérification Terme dans Rapport:', error);
+    return null;
+  }
+};
+
+// Fonction pour sauvegarder un contrat Terme
+export const saveTermeContract = async (
+  contractData: ContractData,
+  retourType?: 'Technique' | 'Contentieux' | null,
+  originalPrimeAmount?: number
+): Promise<boolean> => {
+  try {
+    console.log('📝 Sauvegarde du contrat Terme...');
+
+    const primeValue = Number(contractData.premiumAmount);
+    if (isNaN(primeValue) || primeValue <= 0) {
+      console.error('❌ Montant de prime invalide:', contractData.premiumAmount);
+      return false;
+    }
+
+    const echeanceISO = convertExcelDateToISO(contractData.xmlData?.maturity || contractData.echeance);
+
+    const insertData: any = {
+      numero_contrat: contractData.contractNumber || '',
+      prime: primeValue,
+      assure: contractData.insuredName || '',
+      branche: contractData.branch || '',
+      echeance: echeanceISO,
+      date_paiement: new Date().toISOString().split('T')[0],
+      cree_par: contractData.createdBy || 'Système'
+    };
+
+    // Ajouter les informations de retour si applicable
+    if (retourType) {
+      insertData.Retour = retourType;
+      if (originalPrimeAmount) {
+        insertData['Prime avant retour'] = originalPrimeAmount;
+      }
+      console.log(`🔄 Retour ${retourType} détecté - Prime avant retour: ${originalPrimeAmount}, Prime actuelle: ${primeValue}`);
+    }
+
+    // Ajouter les colonnes Credit si le type de paiement est Crédit
+    if (contractData.paymentType === 'Crédit' && contractData.creditAmount) {
+      const creditValue = Number(contractData.creditAmount);
+      const netPrimeValue = primeValue - creditValue;
+
+      insertData.Credit = creditValue;
+      insertData.Type_Paiement = 'Credit';
+      insertData['prime NETTE'] = netPrimeValue;
+
+      console.log('💳 Enregistrement du crédit:');
+      console.log(`  - Prime totale: ${primeValue}`);
+      console.log(`  - Montant crédit: ${creditValue}`);
+      console.log(`  - Prime nette: ${netPrimeValue}`);
+    }
+
+    const { data, error } = await supabase
+      .from('terme')
+      .insert([insertData])
+      .select();
+
+    if (error) {
+      console.error('❌ Erreur lors de la sauvegarde Terme:', error);
+      return false;
+    }
+
+    console.log('✅ Contrat Terme sauvegardé avec succès');
+    return true;
+  } catch (error) {
+    console.error('❌ Erreur générale lors de la sauvegarde Terme:', error);
+    return false;
+  }
+};
+
+// Fonction pour récupérer les contrats Affaire
+export const getAffaireContracts = async (): Promise<any[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('affaire')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Erreur lors de la récupération Affaire:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Erreur générale lors de la récupération Affaire:', error);
+    return [];
+  }
+};
+
+// Fonction pour récupérer les contrats Terme
+export const getTermeContracts = async (): Promise<any[]> => {
+  try {
+    console.log('🔍 Récupération des contrats Terme...');
+    
+    const { data, error } = await supabase
+      .from('terme')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('❌ Erreur lors de la récupération Terme:', error);
+      return [];
+    }
+
+    console.log('✅ Contrats Terme récupérés:', data?.length || 0);
+    return data || [];
+  } catch (error) {
+    console.error('❌ Erreur générale lors de la récupération Terme:', error);
+    return [];
+  }
 };
 
 // Fonction pour récupérer les contrats de la table rapport
@@ -571,13 +761,85 @@ export const getCredits = async (): Promise<CreditData[]> => {
   }
 };
 
+// Fonction utilitaire pour convertir les dates Excel
+const convertExcelDateToISO = (excelDate: string | number): string => {
+  if (typeof excelDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(excelDate)) {
+    return excelDate;
+  }
+  
+  if (typeof excelDate === 'number' || /^\d+$/.test(excelDate.toString())) {
+    const serialNumber = typeof excelDate === 'number' ? excelDate : parseInt(excelDate.toString());
+    const excelEpoch = new Date(1900, 0, 1);
+    const date = new Date(excelEpoch.getTime() + (serialNumber - 2) * 24 * 60 * 60 * 1000);
+    return date.toISOString().split('T')[0];
+  }
+  
+  try {
+    const date = new Date(excelDate);
+    if (!isNaN(date.getTime())) return date.toISOString().split('T')[0];
+  } catch (error) {
+    console.warn('Conversion date impossible:', excelDate);
+  }
+  
+  return new Date().toISOString().split('T')[0];
+};
+
+// Fonction pour enregistrer un chèque
+export const saveCheque = async (chequeData: {
+  numeroContrat: string;
+  assure: string;
+  numeroCheque: string;
+  montant: number;
+  dateEncaissementPrevue: string;
+  banque: string;
+  creePar: string;
+}): Promise<boolean> => {
+  try {
+    console.log('💳 Enregistrement du chèque...');
+
+    const { data, error } = await supabase
+      .from('Cheques')
+      .insert([{
+        Numero_Contrat: chequeData.numeroContrat,
+        Assure: chequeData.assure,
+        Numero_Cheque: chequeData.numeroCheque,
+        Titulaire_Cheque: chequeData.assure,
+        Montant: chequeData.montant,
+        Date_Encaissement_prévue: chequeData.dateEncaissementPrevue,
+        Banque: chequeData.banque,
+        Statut: 'Non Encaissé'
+      }])
+      .select();
+
+    if (error) {
+      console.error('❌ Erreur lors de l\'enregistrement du chèque:', error);
+      return false;
+    }
+
+    console.log('✅ Chèque enregistré avec succès');
+    return true;
+  } catch (error) {
+    console.error('❌ Erreur générale lors de l\'enregistrement du chèque:', error);
+    return false;
+  }
+};
+
 export default {
   saveContractToRapport,
+  saveAffaireContract,
   saveCreditContract,
+  saveTermeContract,
   updateCreditPayment,
   verifyPaymentInBothTables,
   searchCreditByContractNumber,
   searchCreditFlexible,
+  checkAffaireContractExists,
+  checkAffaireInRapport,
+  checkTermeContractExists,
+  checkTermeInRapport,
   getRapportContracts,
-  getCredits
+  getAffaireContracts,
+  getCredits,
+  getTermeContracts,
+  saveCheque
 };
