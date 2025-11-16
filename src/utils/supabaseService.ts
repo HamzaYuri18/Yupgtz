@@ -1164,6 +1164,170 @@ export const deleteTermeContract = async (id: number): Promise<boolean> => {
     return false;
   }
 };
+// Fonction pour récupérer les mois disponibles
+export const getAvailableMonths = async (): Promise<string[]> => {
+  try {
+    console.log('🔍 Récupération des mois disponibles...');
+    
+    // Méthode 1: Utiliser une RPC si elle existe
+    try {
+      const { data, error } = await supabase.rpc('get_table_names');
+      
+      if (!error && data) {
+        const monthlyTables = (data || [])
+          .filter((tableName: string) => tableName.startsWith('table_terme_'))
+          .map((tableName: string) => {
+            const parts = tableName.replace('table_terme_', '').split('_');
+            if (parts.length === 2 && parts[0] && parts[1] && /^\d{4}$/.test(parts[1])) {
+              const month = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+              const year = parts[1];
+              return `${month} ${year}`;
+            }
+            return null;
+          })
+          .filter((month: string | null) => month !== null);
+
+        console.log('📅 Mois disponibles (RPC):', monthlyTables);
+        return monthlyTables;
+      }
+    } catch (rpcError) {
+      console.log('RPC non disponible, utilisation méthode alternative');
+    }
+
+    // Méthode 2: Récupérer depuis les tables existantes dans la base
+    // Cette méthode nécessite que vous ayez des tables nommées "table_terme_mois_année"
+    
+    // Liste des mois en français pour le mapping
+    const monthsFR = [
+      'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
+    ];
+
+    // Générer une liste de mois pour les 12 derniers mois
+    const currentDate = new Date();
+    const availableMonths: string[] = [];
+
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+      const monthName = monthsFR[date.getMonth()];
+      const year = date.getFullYear();
+      availableMonths.push(`${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}`);
+    }
+
+    console.log('📅 Mois disponibles (générés):', availableMonths);
+    return availableMonths;
+
+  } catch (error) {
+    console.error('❌ Erreur générale récupération mois:', error);
+    
+    // Retourner une liste par défaut en cas d'erreur
+    const currentDate = new Date();
+    const monthsFR = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
+    
+    const currentMonth = monthsFR[currentDate.getMonth()];
+    const currentYear = currentDate.getFullYear();
+    
+    return [`${currentMonth} ${currentYear}`];
+  }
+};
+
+// Fonction pour créer une table mensuelle
+export const createMonthlyTable = async (month: string): Promise<void> => {
+  try {
+    const cleanMonth = month.toLowerCase().replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').trim();
+    const tableName = `table_terme_${cleanMonth}`;
+    
+    console.log(`🔧 Création table ${tableName}...`);
+    
+    // Cette fonction nécessite une RPC côté Supabase
+    // Pour l'instant, on log juste l'intention
+    console.log(`📋 Table à créer: ${tableName}`);
+    
+  } catch (error) {
+    console.error('❌ Erreur création table:', error);
+    throw error;
+  }
+};
+
+// Fonction pour insérer des contrats dans une table mensuelle
+export const insertContractsToTable = async (month: string, contracts: any[]): Promise<boolean> => {
+  try {
+    const cleanMonth = month.toLowerCase().replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').trim();
+    const tableName = `table_terme_${cleanMonth}`;
+    
+    console.log(`📝 Insertion ${contracts.length} contrats dans ${tableName}...`);
+    
+    // Vérifier si la table existe
+    const { error: checkError } = await supabase
+      .from(tableName)
+      .select('*')
+      .limit(1);
+
+    if (checkError) {
+      console.error(`❌ Table ${tableName} n'existe pas ou erreur d'accès:`, checkError);
+      return false;
+    }
+
+    const contractsData = contracts.map(contract => ({
+      numero_contrat: contract.contractNumber,
+      prime: contract.premium || 0,
+      echeance: convertExcelDateToISO(contract.maturity),
+      assure: contract.insured
+    }));
+
+    const { error } = await supabase
+      .from(tableName)
+      .insert(contractsData);
+
+    if (error) {
+      console.error('❌ Erreur insertion contrats:', error);
+      return false;
+    }
+
+    console.log(`✅ Contrats insérés dans ${tableName}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Erreur générale insertion contrats:', error);
+    return false;
+  }
+};
+
+// Fonction pour rechercher un contrat dans une table mensuelle
+export const searchContractInTable = async (month: string, contractNumber: string): Promise<any | null> => {
+  try {
+    const monthParts = month.toLowerCase().split(' ');
+    if (monthParts.length < 2) {
+      console.error('Format de mois invalide:', month);
+      return null;
+    }
+    
+    const monthName = monthParts[0];
+    const year = monthParts[1];
+    const tableName = `table_terme_${monthName}_${year}`;
+    
+    console.log(`🔍 Recherche dans ${tableName}...`);
+    
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('*')
+      .eq('numero_contrat', contractNumber)
+      .single();
+
+    if (error) {
+      console.error('Erreur recherche contrat:', error);
+      return null;
+    }
+
+    console.log('✅ Contrat trouvé');
+    return data;
+  } catch (error) {
+    console.error('Erreur générale recherche contrat:', error);
+    return null;
+  }
+};
 
 // Mettez à jour l'export default à la fin du fichier pour inclure toutes les nouvelles fonctions :
 
@@ -1193,5 +1357,10 @@ export default {
   getAffaireContracts,
   getCredits,
   getTermeContracts,
-  saveCheque
+  saveCheque,
+  // Nouvelles fonctions ajoutées
+  getAvailableMonths,
+  createMonthlyTable,
+  insertContractsToTable,
+  searchContractInTable
 };
