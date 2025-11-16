@@ -824,6 +824,349 @@ export const saveCheque = async (chequeData: {
   }
 };
 
+// Fonction pour vérifier si un avenant changement véhicule existe
+export const checkAvenantChangementVehiculeExists = async (
+  numeroContrat: string,
+  dateSession: string
+): Promise<any> => {
+  try {
+    const { data, error } = await supabase
+      .from('Avenant_Changement_véhicule')
+      .select('*')
+      .eq('numero_contrat', numeroContrat)
+      .gte('created_at', dateSession)
+      .lt('created_at', dateSession + 'T23:59:59')
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Erreur lors de la vérification dans Avenant_Changement_véhicule:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Erreur dans checkAvenantChangementVehiculeExists:', error);
+    return null;
+  }
+};
+
+// Fonction pour sauvegarder un avenant changement véhicule
+export const saveAvenantChangementVehicule = async (data: any): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('Avenant_Changement_véhicule')
+      .insert({
+        numero_contrat: data.contractNumber,
+        assure: data.insuredName,
+        prime: data.premiumAmount,
+        branche: data.branch,
+        mode_paiement: data.paymentMode,
+        cree_par: data.createdBy
+      });
+
+    if (error) {
+      console.error('Erreur lors de la sauvegarde dans Avenant_Changement_véhicule:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Erreur dans saveAvenantChangementVehicule:', error);
+    return false;
+  }
+};
+
+// Fonction pour vérifier si un encaissement pour autre code existe
+export const checkEncaissementAutreCodeExists = async (
+  numeroContrat: string,
+  echeance: string
+): Promise<any> => {
+  try {
+    const { data, error } = await supabase
+      .from('encaissement_autre_code')
+      .select('*')
+      .eq('numero_contrat', numeroContrat)
+      .eq('echeance', echeance)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Erreur lors de la vérification dans encaissement_autre_code:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Erreur dans checkEncaissementAutreCodeExists:', error);
+    return null;
+  }
+};
+
+// Fonction pour sauvegarder un encaissement pour autre code
+export const saveEncaissementAutreCode = async (data: any): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('encaissement_autre_code')
+      .insert({
+        numero_contrat: data.contractNumber,
+        assure: data.insuredName,
+        prime: data.premiumAmount,
+        echeance: data.dateEcheance,
+        mode_paiement: data.paymentMode,
+        cree_par: data.createdBy
+      });
+
+    if (error) {
+      console.error('Erreur lors de la sauvegarde dans encaissement_autre_code:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Erreur dans saveEncaissementAutreCode:', error);
+    return false;
+  }
+};
+
+// Fonction pour récupérer les données filtrées depuis Supabase pour l'export
+export const getFilteredDataForExport = async (
+  type: string,
+  dateFrom: string,
+  dateTo: string
+): Promise<any[]> => {
+  try {
+    console.log('🔍 Récupération des données filtrées pour export...');
+
+    let query = supabase
+      .from('rapport')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    // Appliquer le filtre de type si spécifié
+    if (type && type !== 'all') {
+      query = query.eq('type', type);
+    }
+
+    // Appliquer le filtre de date de début
+    if (dateFrom) {
+      query = query.gte('created_at', dateFrom);
+    }
+
+    // Appliquer le filtre de date de fin
+    if (dateTo) {
+      // Ajouter un jour pour inclure la date de fin complète
+      const dateToInclusive = new Date(dateTo);
+      dateToInclusive.setDate(dateToInclusive.getDate() + 1);
+      query = query.lt('created_at', dateToInclusive.toISOString().split('T')[0]);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('❌ Erreur lors de la récupération des données filtrées:', error);
+      return [];
+    }
+
+    console.log('✅ Données filtrées récupérées:', data?.length || 0, 'enregistrements');
+    return data || [];
+  } catch (error) {
+    console.error('❌ Erreur générale lors de la récupération des données filtrées:', error);
+    return [];
+  }
+};
+
+// Fonction pour mettre à jour le statut d'un crédit
+export const updateCreditStatus = async (id: number, newStatus: string, datePaiement?: string): Promise<boolean> => {
+  try {
+    console.log('🔄 Mise à jour statut crédit...');
+
+    const updateData: any = { statut: newStatus };
+    if (datePaiement) updateData.date_paiement_effectif = datePaiement;
+
+    const { error } = await supabase
+      .from('liste_credits')
+      .update(updateData)
+      .eq('id', id);
+
+    if (error) {
+      console.error('❌ Erreur mise à jour statut:', error);
+      return false;
+    }
+
+    console.log('✅ Statut mis à jour');
+    return true;
+  } catch (error) {
+    console.error('❌ Erreur générale mise à jour statut:', error);
+    return false;
+  }
+};
+
+// Fonction pour supprimer un contrat de la table rapport
+export const deleteRapportContract = async (id: number, numeroContrat: string): Promise<boolean> => {
+  try {
+    console.log('🗑️ Suppression du contrat rapport et des tables liées...');
+
+    const { data: contract, error: fetchError } = await supabase
+      .from('rapport')
+      .select('type, numero_contrat')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('❌ Erreur récupération contrat:', fetchError);
+      return false;
+    }
+
+    if (!contract) {
+      console.error('❌ Contrat non trouvé');
+      return false;
+    }
+
+    const { error: rapportError } = await supabase
+      .from('rapport')
+      .delete()
+      .eq('id', id);
+
+    if (rapportError) {
+      console.error('❌ Erreur suppression rapport:', rapportError);
+      return false;
+    }
+
+    if (contract.type === 'Terme') {
+      const { error: termeError } = await supabase
+        .from('terme')
+        .delete()
+        .eq('numero_contrat', contract.numero_contrat);
+
+      if (termeError) {
+        console.warn('⚠️ Erreur suppression terme:', termeError);
+      } else {
+        console.log('✅ Contrat Terme supprimé');
+      }
+    } else if (contract.type === 'Affaire') {
+      const { error: affaireError } = await supabase
+        .from('affaire')
+        .delete()
+        .eq('numero_contrat', contract.numero_contrat);
+
+      if (affaireError) {
+        console.warn('⚠️ Erreur suppression affaire:', affaireError);
+      } else {
+        console.log('✅ Contrat Affaire supprimé');
+      }
+    }
+
+    console.log('✅ Contrat rapport supprimé');
+    return true;
+  } catch (error) {
+    console.error('❌ Erreur générale suppression rapport:', error);
+    return false;
+  }
+};
+
+// Fonction pour supprimer un contrat Affaire (supprime aussi du rapport)
+export const deleteAffaireContract = async (id: number): Promise<boolean> => {
+  try {
+    console.log('🗑️ Suppression du contrat Affaire et du rapport...');
+
+    const { data: contract, error: fetchError } = await supabase
+      .from('affaire')
+      .select('numero_contrat')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('❌ Erreur récupération contrat:', fetchError);
+      return false;
+    }
+
+    if (!contract) {
+      console.error('❌ Contrat non trouvé');
+      return false;
+    }
+
+    const { error: affaireError } = await supabase
+      .from('affaire')
+      .delete()
+      .eq('id', id);
+
+    if (affaireError) {
+      console.error('❌ Erreur suppression Affaire:', affaireError);
+      return false;
+    }
+
+    const { error: rapportError } = await supabase
+      .from('rapport')
+      .delete()
+      .eq('numero_contrat', contract.numero_contrat)
+      .eq('type', 'Affaire');
+
+    if (rapportError) {
+      console.warn('⚠️ Erreur suppression rapport:', rapportError);
+    } else {
+      console.log('✅ Contrat rapport supprimé');
+    }
+
+    console.log('✅ Contrat Affaire supprimé');
+    return true;
+  } catch (error) {
+    console.error('❌ Erreur générale suppression Affaire:', error);
+    return false;
+  }
+};
+
+// Fonction pour supprimer un contrat Terme (supprime aussi du rapport)
+export const deleteTermeContract = async (id: number): Promise<boolean> => {
+  try {
+    console.log('🗑️ Suppression du contrat Terme et du rapport...');
+
+    const { data: contract, error: fetchError } = await supabase
+      .from('terme')
+      .select('numero_contrat')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('❌ Erreur récupération contrat:', fetchError);
+      return false;
+    }
+
+    if (!contract) {
+      console.error('❌ Contrat non trouvé');
+      return false;
+    }
+
+    const { error: termeError } = await supabase
+      .from('terme')
+      .delete()
+      .eq('id', id);
+
+    if (termeError) {
+      console.error('❌ Erreur suppression Terme:', termeError);
+      return false;
+    }
+
+    const { error: rapportError } = await supabase
+      .from('rapport')
+      .delete()
+      .eq('numero_contrat', contract.numero_contrat)
+      .eq('type', 'Terme');
+
+    if (rapportError) {
+      console.warn('⚠️ Erreur suppression rapport:', rapportError);
+    } else {
+      console.log('✅ Contrat rapport supprimé');
+    }
+
+    console.log('✅ Contrat Terme supprimé');
+    return true;
+  } catch (error) {
+    console.error('❌ Erreur générale suppression Terme:', error);
+    return false;
+  }
+};
+
+// Mettez à jour l'export default à la fin du fichier pour inclure toutes les nouvelles fonctions :
+
 export default {
   saveContractToRapport,
   saveAffaireContract,
@@ -837,6 +1180,15 @@ export default {
   checkAffaireInRapport,
   checkTermeContractExists,
   checkTermeInRapport,
+  checkAvenantChangementVehiculeExists,
+  saveAvenantChangementVehicule,
+  checkEncaissementAutreCodeExists,
+  saveEncaissementAutreCode,
+  getFilteredDataForExport,
+  updateCreditStatus,
+  deleteRapportContract,
+  deleteAffaireContract,
+  deleteTermeContract,
   getRapportContracts,
   getAffaireContracts,
   getCredits,
