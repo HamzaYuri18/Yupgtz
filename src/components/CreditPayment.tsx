@@ -1,25 +1,39 @@
 import React, { useState } from 'react';
 import { Search, DollarSign, CheckCircle, AlertCircle, CreditCard, Banknote, Calendar, User } from 'lucide-react';
-import { searchCreditByContractNumber, updateCreditPayment } from '../utils/supabaseService';
-import { searchCreditFlexible } from '../utils/creditSearchService';
+import { searchCreditByContractNumber, updateCreditPayment, searchCreditFlexible, verifyPaymentInBothTables } from '../utils/supabaseService';
+
+interface CreditData {
+  id: number;
+  numero_contrat: string;
+  prime: number;
+  assure: string;
+  branche: string;
+  montant_credit: number;
+  paiement?: number;
+  solde?: number;
+  statut: string;
+  date_paiement_prevue?: string;
+  date_paiement_effectif?: string;
+  created_at: string;
+}
 
 const CreditPayment: React.FC = () => {
-  const [contractNumber, setContractNumber] = useState('');
-  const [insuredName, setInsuredName] = useState('');
-  const [creditDate, setCreditDate] = useState('');
-  const [creditData, setCreditData] = useState<any>(null);
-  const [paymentAmount, setPaymentAmount] = useState('');
+  const [contractNumber, setContractNumber] = useState<string>('');
+  const [insuredName, setInsuredName] = useState<string>('');
+  const [creditDate, setCreditDate] = useState<string>('');
+  const [creditData, setCreditData] = useState<CreditData | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState<string>('');
   const [paymentMode, setPaymentMode] = useState<'Espece' | 'Cheque' | 'Carte Bancaire'>('Espece');
-  const [numeroCheque, setNumeroCheque] = useState('');
-  const [banque, setBanque] = useState('');
-  const [dateEncaissementPrevue, setDateEncaissementPrevue] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [message, setMessage] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [numeroCheque, setNumeroCheque] = useState<string>('');
+  const [banque, setBanque] = useState<string>('');
+  const [dateEncaissementPrevue, setDateEncaissementPrevue] = useState<string>('');
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [message, setMessage] = useState<string>('');
+  const [searchResults, setSearchResults] = useState<CreditData[]>([]);
+  const [verificationDetails, setVerificationDetails] = useState<any>(null);
 
-  const handleSearch = async () => {
-    // Validation: au moins 2 champs doivent être remplis
+  const handleSearch = async (): Promise<void> => {
     const filledFields = [
       contractNumber.trim(),
       insuredName.trim(),
@@ -35,6 +49,7 @@ const CreditPayment: React.FC = () => {
     setMessage('');
     setCreditData(null);
     setSearchResults([]);
+    setVerificationDetails(null);
 
     try {
       const results = await searchCreditFlexible(
@@ -44,15 +59,12 @@ const CreditPayment: React.FC = () => {
       );
 
       if (results.length === 1) {
-        // Un seul résultat trouvé
         setCreditData(results[0]);
         setMessage('Crédit trouvé avec succès');
-        // Pré-remplir avec le montant du crédit si aucun paiement n'a été fait
         if (!results[0].paiement || results[0].paiement === 0) {
           setPaymentAmount(results[0].montant_credit.toString());
         }
       } else if (results.length > 1) {
-        // Plusieurs résultats trouvés
         setSearchResults(results);
         setMessage(`${results.length} crédits trouvés. Veuillez sélectionner le bon crédit.`);
       } else {
@@ -66,17 +78,16 @@ const CreditPayment: React.FC = () => {
     setIsSearching(false);
   };
 
-  const selectCredit = (credit: any) => {
+  const selectCredit = (credit: CreditData): void => {
     setCreditData(credit);
     setSearchResults([]);
     setMessage('Crédit sélectionné avec succès');
-    // Pré-remplir avec le montant du crédit si aucun paiement n'a été fait
     if (!credit.paiement || credit.paiement === 0) {
       setPaymentAmount(credit.montant_credit.toString());
     }
   };
 
-  const handlePayment = async () => {
+  const handlePayment = async (): Promise<void> => {
     if (!creditData || !paymentAmount) {
       setMessage('Veuillez saisir un montant de paiement');
       return;
@@ -109,6 +120,7 @@ const CreditPayment: React.FC = () => {
 
     setIsProcessing(true);
     setMessage('');
+    setVerificationDetails(null);
 
     try {
       const success = await updateCreditPayment(
@@ -125,17 +137,28 @@ const CreditPayment: React.FC = () => {
       );
 
       if (success) {
-        setMessage('✅ Paiement enregistré avec succès');
-        // Recharger les données du crédit
-        const updatedCredit = await searchCreditByContractNumber(contractNumber);
-        if (updatedCredit) {
-          setCreditData(updatedCredit);
+        // Vérification supplémentaire pour confirmer l'enregistrement
+        const verification = await verifyPaymentInBothTables(creditData.id, amount);
+        
+        if (verification.success) {
+          setMessage('✅ Paiement enregistré avec succès dans liste_credits et rapports');
+          setVerificationDetails(verification);
+          
+          // Recharger les données du crédit
+          const updatedCredit = await searchCreditByContractNumber(contractNumber);
+          if (updatedCredit) {
+            setCreditData(updatedCredit);
+          }
+          
+          // Réinitialiser le formulaire
+          setPaymentAmount('');
+          setPaymentMode('Espece');
+          setNumeroCheque('');
+          setBanque('');
+          setDateEncaissementPrevue('');
+        } else {
+          setMessage('⚠️ Paiement enregistré mais vérification incomplète');
         }
-        setPaymentAmount('');
-        setPaymentMode('Espece');
-        setNumeroCheque('');
-        setBanque('');
-        setDateEncaissementPrevue('');
       } else {
         setMessage('❌ Erreur lors de l\'enregistrement du paiement');
       }
@@ -148,11 +171,11 @@ const CreditPayment: React.FC = () => {
     setTimeout(() => setMessage(''), 5000);
   };
 
-  const calculateNewSolde = () => {
+  const calculateNewSolde = (): number | null => {
     if (!creditData || !paymentAmount) return null;
     const amount = parseFloat(paymentAmount);
     if (isNaN(amount)) return null;
-    return creditData.solde - amount;
+    return (creditData.solde || 0) - amount;
   };
 
   return (
@@ -245,6 +268,30 @@ const CreditPayment: React.FC = () => {
           </div>
         )}
 
+        {/* Section de vérification détaillée */}
+        {verificationDetails && (
+          <div className="bg-green-50 rounded-lg p-6 mb-6 border border-green-200">
+            <h3 className="text-lg font-semibold text-green-800 mb-4 flex items-center">
+              <CheckCircle className="w-5 h-5 mr-2" />
+              Vérification Confirmée
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div className="bg-white p-4 rounded-lg">
+                <h4 className="font-semibold text-green-700 mb-2">Liste Credits</h4>
+                <p><span className="font-medium">Solde:</span> {(verificationDetails.listeCredits?.solde || 0).toLocaleString('fr-FR')} DT</p>
+                <p><span className="font-medium">Paiement total:</span> {(verificationDetails.listeCredits?.paiement || 0).toLocaleString('fr-FR')} DT</p>
+                <p><span className="font-medium">Statut:</span> {verificationDetails.listeCredits?.statut}</p>
+              </div>
+              <div className="bg-white p-4 rounded-lg">
+                <h4 className="font-semibold text-green-700 mb-2">Rapport</h4>
+                <p><span className="font-medium">Montant:</span> {(verificationDetails.rapport?.montant || 0).toLocaleString('fr-FR')} DT</p>
+                <p><span className="font-medium">Type:</span> {verificationDetails.rapport?.type}</p>
+                <p><span className="font-medium">Date:</span> {new Date(verificationDetails.rapport?.created_at).toLocaleDateString('fr-FR')}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Liste des résultats multiples */}
         {searchResults.length > 0 && (
           <div className="bg-yellow-50 rounded-lg p-6 mb-6">
@@ -320,7 +367,7 @@ const CreditPayment: React.FC = () => {
               <div>
                 <span className="text-sm font-medium text-blue-700">Statut:</span>
                 <span className={`px-2 py-1 text-xs font-semibold rounded-full ml-2 ${
-                  creditData.statut === 'Payé' 
+                  creditData.statut === 'Payé' || creditData.statut === 'Payé en total'
                     ? 'bg-green-100 text-green-800'
                     : creditData.statut === 'En retard'
                     ? 'bg-red-100 text-red-800'
