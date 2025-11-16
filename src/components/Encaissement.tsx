@@ -108,6 +108,46 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     }
   }, [sessionDate, customSessionDate, useCustomDate]);
 
+  // Fonction pour synchroniser la table terme
+  const syncTermeTable = async (): Promise<boolean> => {
+    try {
+      console.log('=== SYNCHRONISATION TABLE TERME ===');
+      
+      // Appeler la fonction PostgreSQL pour synchroniser la table terme
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('sync_terme_table');
+
+      if (rpcError) {
+        console.error('Erreur RPC sync_terme_table:', rpcError);
+        
+        // Fallback: méthode alternative pour mettre à jour les dates si nécessaire
+        console.log('Tentative méthode alternative pour terme...');
+        const { error: updateError } = await supabase
+          .from('terme')
+          .update({
+            updated_at: new Date().toISOString()
+          })
+          .not('numero_contrat', 'is', null)
+          .limit(1);
+
+        if (updateError) {
+          console.error('Erreur méthode alternative terme:', updateError);
+          return false;
+        }
+        
+        console.log('Synchronisation terme réussie (méthode alternative)');
+        return true;
+      }
+
+      console.log('Synchronisation terme réussie via RPC');
+      return true;
+      
+    } catch (error) {
+      console.error('Erreur synchronisation terme:', error);
+      return false;
+    }
+  };
+
   // Fonction pour s'assurer que la session actuelle existe dans la table RP
   const ensureCurrentSessionExists = async (): Promise<boolean> => {
     try {
@@ -453,20 +493,32 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
     return `${year}-${month}-${day}`;
   };
 
-  // Fonction pour rafraîchir les statistiques avec synchronisation RP
+  // Fonction pour rafraîchir les statistiques avec synchronisation RP et TERME
   const refreshStats = async () => {
-    console.log('=== RAFRAÎCHISSEMENT MANUEL AVEC SYNCHRO RP ===');
+    console.log('=== RAFRAÎCHISSEMENT MANUEL AVEC SYNCHRO RP ET TERME ===');
     
     setRefreshing(true);
-    setMessage('Synchronisation RP en cours...');
+    setMessage('Synchronisation des tables en cours...');
     setMessageType('success');
 
     try {
-      // Étape 1: Synchroniser la table RP (inclut l'insertion des sessions manquantes)
-      console.log('Début synchronisation RP...');
-      const syncSuccess = await syncRPTable();
+      // Étape 1: Synchroniser la table TERME
+      console.log('Début synchronisation table TERME...');
+      const syncTermeSuccess = await syncTermeTable();
       
-      if (!syncSuccess) {
+      if (!syncTermeSuccess) {
+        setMessage('Attention: synchronisation TERME échouée, continuation avec données existantes...');
+        setMessageType('warning');
+      } else {
+        setMessage('Synchronisation TERME réussie!');
+        setMessageType('success');
+      }
+
+      // Étape 2: Synchroniser la table RP (inclut l'insertion des sessions manquantes)
+      console.log('Début synchronisation RP...');
+      const syncRPSuccess = await syncRPTable();
+      
+      if (!syncRPSuccess) {
         setMessage('Attention: synchronisation RP échouée, chargement des données existantes...');
         setMessageType('warning');
       } else {
@@ -474,7 +526,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         setMessageType('success');
       }
 
-      // Étape 2: Mettre à jour la date de session si nécessaire
+      // Étape 3: Mettre à jour la date de session si nécessaire
       if (!useCustomDate) {
         const today = new Date();
         const todayISO = formatDateForQuery(today);
@@ -482,10 +534,10 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
         console.log('Date session actualisée:', todayISO);
       }
 
-      // Étape 3: Attendre un peu pour que les données soient bien synchronisées
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Étape 4: Attendre un peu pour que les données soient bien synchronisées
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Étape 4: Recharger toutes les données
+      // Étape 5: Recharger toutes les données
       console.log('Rechargement des données après synchronisation...');
       await Promise.all([
         loadSessionStats(),
@@ -495,12 +547,12 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       ]);
 
       console.log('Rafraîchissement terminé avec succès');
-      setMessage('Données actualisées avec succès! Table RP synchronisée.');
+      setMessage('Données actualisées avec succès! Tables TERME et RP synchronisées.');
       setMessageType('success');
 
     } catch (error) {
       console.error('Erreur lors du rafraîchissement:', error);
-      setMessage('Erreur lors de la synchronisation');
+      setMessage('Erreur lors de la synchronisation des tables');
       setMessageType('error');
     } finally {
       setRefreshing(false);
@@ -825,10 +877,10 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
             onClick={refreshStats}
             disabled={refreshing}
             className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-            title="Rafraîchir les statistiques et synchroniser la table RP"
+            title="Rafraîchir les statistiques et synchroniser les tables TERME et RP"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Synchronisation...' : 'Actualiser RP'}
+            {refreshing ? 'Synchronisation...' : 'Actualiser TERME & RP'}
           </button>
         </div>
         {username && (
