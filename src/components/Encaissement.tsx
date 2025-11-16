@@ -567,21 +567,27 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       console.log('=== CHARGEMENT STATISTIQUES SESSION ===');
       console.log('Date de session utilisée:', currentSessionDate);
 
+      if (!currentSessionDate) {
+        console.error('Aucune date de session définie');
+        return;
+      }
+
       // 1. Charger les PAIEMENTS de la session actuelle depuis la table terme
+      // CORRECTION: Inclure tous les paiements de la session, peu importe le statut
       const { data: paiementsSessionData, error: paiementsSessionError } = await supabase
         .from('terme')
-        .select('prime, numero_contrat, date_paiement')
-        .eq('date_paiement', currentSessionDate)
-        .is('statut', null);
+        .select('prime, numero_contrat, date_paiement, statut')
+        .eq('date_paiement', currentSessionDate);
 
       if (paiementsSessionError) {
         console.error('Erreur paiements session:', paiementsSessionError);
       }
 
       // 2. Charger les ENCAISSEMENTS de la session actuelle depuis la table terme
+      // CORRECTION: Inclure uniquement les encaissements de la session
       const { data: encaissementsSessionData, error: encaissementsSessionError } = await supabase
         .from('terme')
-        .select('prime, numero_contrat, Date_Encaissement')
+        .select('prime, numero_contrat, Date_Encaissement, statut')
         .eq('Date_Encaissement', currentSessionDate)
         .eq('statut', 'Encaissé');
 
@@ -632,14 +638,22 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       }
 
       // CALCUL DES STATISTIQUES DE SESSION - CORRIGÉ
+      // CORRECTION: Paiements session = tous les paiements de la date de session
       const totalPaiementsSession = paiementsSessionData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
+      
+      // CORRECTION: Encaissements session = uniquement les encaissements de la date de session
       const totalEncaissementsSession = encaissementsSessionData?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
       
       // CORRECTION: Balance de session = Paiements - Encaissements
       const balanceSession = totalPaiementsSession - totalEncaissementsSession;
       
-      const nombreContratsPaiementsSession = paiementsSessionData?.length || 0;
-      const nombreContratsEncaissementsSession = encaissementsSessionData?.length || 0;
+      // CORRECTION: Compter les contrats uniques pour les paiements
+      const contratsPaiementsUniques = new Set(paiementsSessionData?.map(item => item.numero_contrat) || []);
+      const nombreContratsPaiementsSession = contratsPaiementsUniques.size;
+
+      // CORRECTION: Compter les contrats uniques pour les encaissements
+      const contratsEncaissementsUniques = new Set(encaissementsSessionData?.map(item => item.numero_contrat) || []);
+      const nombreContratsEncaissementsSession = contratsEncaissementsUniques.size;
 
       // CALCUL DES STATISTIQUES GLOBALES DEPUIS 25/10/2025
       const totalPaiementsDepuis2510 = paiementsDepuis2510Data?.reduce((sum, item) => sum + (Number(item.prime) || 0), 0) || 0;
@@ -743,7 +757,6 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
           const { data: paiementsData } = await supabase
             .from('terme')
             .select('numero_contrat, prime, assure, echeance, date_paiement, Date_Encaissement, statut')
-            .is('statut', null)
             .eq('date_paiement', currentSessionDate);
           data = paiementsData || [];
           fileName = `paiements_${currentSessionDate}.xlsx`;
@@ -754,7 +767,8 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
           const { data: encaissementsData } = await supabase
             .from('terme')
             .select('numero_contrat, prime, assure, echeance, date_paiement, Date_Encaissement, statut')
-            .eq('Date_Encaissement', currentSessionDate);
+            .eq('Date_Encaissement', currentSessionDate)
+            .eq('statut', 'Encaissé');
           data = encaissementsData || [];
           fileName = `encaissements_${currentSessionDate}.xlsx`;
           sheetName = 'Encaissements Session';
