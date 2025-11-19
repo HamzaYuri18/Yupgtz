@@ -418,6 +418,7 @@ export const searchCreditByContractNumber = async (contractNumber: string): Prom
 // Fonction pour rechercher des crédits de manière flexible avec created_at (date simple)
 // Fonction pour rechercher des crédits de manière flexible avec conversion de timestampz en date
 // Fonction pour rechercher des crédits de manière flexible avec tolérance et correction du mois
+// Fonction pour rechercher des crédits de manière flexible avec tolérance et correction du mois
 export const searchCreditFlexible = async (
   contractNumber?: string | null,
   insuredName?: string | null,
