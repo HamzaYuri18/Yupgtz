@@ -68,7 +68,7 @@ const CreditPayment: React.FC = () => {
     const hasNameAndMonthYear = insuredName.trim() && searchMonth.trim() && searchYear.trim();
 
     if (!hasContractAndDate && !hasNameAndDate && !hasMonthAndYear && !hasContractAndMonthYear && !hasNameAndMonthYear) {
-      setMessage('Veuillez utiliser une de ces combinaisons:\n- Numéro contrat + Date crédit\n- Nom assuré + Date crédit\n- Mois + Année\n- Numéro contrat + Mois + Année\n- Nom assuré + Mois + Année');
+      setMessage('Veuillez utiliser une de ces combinaisons:\n- Numéro contrat + Date création\n- Nom assuré + Date création\n- Mois + Année\n- Numéro contrat + Mois + Année\n- Nom assuré + Mois + Année');
       return;
     }
 
@@ -231,7 +231,7 @@ const CreditPayment: React.FC = () => {
         <div className="bg-gray-50 rounded-lg p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Rechercher un crédit</h3>
           <p className="text-sm text-gray-600 mb-4">
-            Combinaisons possibles: Numéro contrat + Date crédit • Nom assuré + Date crédit • Mois + Année
+            Toutes les recherches se font sur la date de création du crédit
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
@@ -266,7 +266,7 @@ const CreditPayment: React.FC = () => {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <Calendar className="inline w-4 h-4 mr-1" />
-                Date de paiement prévue
+                Date de création
               </label>
               <input
                 type="date"
