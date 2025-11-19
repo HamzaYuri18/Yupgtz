@@ -35,9 +35,9 @@ const CreditPayment: React.FC = () => {
   const [searchResults, setSearchResults] = useState<CreditData[]>([]);
   const [verificationDetails, setVerificationDetails] = useState<any>(null);
 
-  // Générer les années disponibles
+  // Générer les années disponibles (3 ans en arrière jusqu'à l'année en cours)
   const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 5 }, (_, i) => (currentYear - 2 + i).toString());
+  const years = Array.from({ length: 4 }, (_, i) => (currentYear - 3 + i).toString());
   
   // Mois en français
   const months = [
@@ -266,7 +266,7 @@ const CreditPayment: React.FC = () => {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <Calendar className="inline w-4 h-4 mr-1" />
-                Date de création du crédit
+                Date de paiement prévue
               </label>
               <input
                 type="date"
@@ -278,7 +278,7 @@ const CreditPayment: React.FC = () => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Mois
+                Mois de création
               </label>
               <select
                 value={searchMonth}
@@ -294,7 +294,7 @@ const CreditPayment: React.FC = () => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Année
+                Année de création
               </label>
               <select
                 value={searchYear}
@@ -399,9 +399,9 @@ const CreditPayment: React.FC = () => {
                       <p className="text-sm font-semibold text-gray-900">{credit.montant_credit.toLocaleString('fr-FR')} DT</p>
                     </div>
                     <div>
-                      <span className="text-xs font-medium text-gray-600">Date prévue:</span>
+                      <span className="text-xs font-medium text-gray-600">Date création:</span>
                       <p className="text-sm font-semibold text-gray-900">
-                        {credit.date_paiement_prevue ? new Date(credit.date_paiement_prevue).toLocaleDateString('fr-FR') : 'N/A'}
+                        {new Date(credit.created_at).toLocaleDateString('fr-FR')}
                       </p>
                     </div>
                   </div>
