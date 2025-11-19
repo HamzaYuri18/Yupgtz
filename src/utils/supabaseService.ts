@@ -416,6 +416,7 @@ export const searchCreditByContractNumber = async (contractNumber: string): Prom
 };
 
 // Fonction pour rechercher des crédits de manière flexible avec created_at (date simple)
+// Fonction pour rechercher des crédits de manière flexible avec conversion de timestampz en date
 export const searchCreditFlexible = async (
   contractNumber?: string | null,
   insuredName?: string | null,
@@ -432,25 +433,24 @@ export const searchCreditFlexible = async (
       searchYear
     });
 
+    // Pour filtrer sur created_at (timestampz), on utilise les fonctions de date de Supabase
     let query = supabase.from('liste_credits').select('*');
 
-    // Recherche par numéro de contrat + date de création (created_at)
+    // Recherche par numéro de contrat + date de création (created_at converti en date)
     if (contractNumber && creditDate) {
       console.log('🔍 Recherche par numéro contrat + date création');
       query = query
         .ilike('numero_contrat', `%${contractNumber}%`)
-        .gte('created_at', `${creditDate}T00:00:00`)
-        .lte('created_at', `${creditDate}T23:59:59`);
+        .eq('created_at::date', creditDate); // Conversion timestampz -> date
     }
-    // Recherche par nom assuré + date de création (created_at)
+    // Recherche par nom assuré + date de création (created_at converti en date)
     else if (insuredName && creditDate) {
       console.log('🔍 Recherche par nom assuré + date création');
       query = query
         .ilike('assure', `%${insuredName}%`)
-        .gte('created_at', `${creditDate}T00:00:00`)
-        .lte('created_at', `${creditDate}T23:59:59`);
+        .eq('created_at::date', creditDate); // Conversion timestampz -> date
     }
-    // Recherche par mois et année sur created_at
+    // Recherche par mois et année sur created_at (utilisation de extract)
     else if (searchMonth && searchYear) {
       console.log('🔍 Recherche par mois/année sur created_at:', { searchMonth, searchYear });
       
@@ -463,15 +463,12 @@ export const searchCreditFlexible = async (
 
       const monthNumber = monthMapping[searchMonth.toLowerCase()];
       if (monthNumber) {
-        const startDate = `${searchYear}-${monthNumber}-01`;
-        const endDate = `${searchYear}-${monthNumber}-31`;
+        console.log('📅 Filtrage par mois/année:', { month: monthNumber, year: searchYear });
         
-        console.log('📅 Plage de dates created_at:', { startDate, endDate });
-        
-        // Filtrer sur la colonne created_at
+        // Filtrer sur la colonne created_at en utilisant extract pour mois et année
         query = query
-          .gte('created_at', `${startDate}T00:00:00`)
-          .lte('created_at', `${endDate}T23:59:59`);
+          .eq('extract(month from created_at)::text', monthNumber)
+          .eq('extract(year from created_at)::text', searchYear);
       } else {
         console.warn('⚠️ Mois non reconnu:', searchMonth);
       }
@@ -487,13 +484,10 @@ export const searchCreditFlexible = async (
 
       const monthNumber = monthMapping[searchMonth.toLowerCase()];
       if (monthNumber) {
-        const startDate = `${searchYear}-${monthNumber}-01`;
-        const endDate = `${searchYear}-${monthNumber}-31`;
-        
         query = query
           .ilike('numero_contrat', `%${contractNumber}%`)
-          .gte('created_at', `${startDate}T00:00:00`)
-          .lte('created_at', `${endDate}T23:59:59`);
+          .eq('extract(month from created_at)::text', monthNumber)
+          .eq('extract(year from created_at)::text', searchYear);
       }
     }
     // Recherche par nom assuré + mois + année
@@ -507,13 +501,10 @@ export const searchCreditFlexible = async (
 
       const monthNumber = monthMapping[searchMonth.toLowerCase()];
       if (monthNumber) {
-        const startDate = `${searchYear}-${monthNumber}-01`;
-        const endDate = `${searchYear}-${monthNumber}-31`;
-        
         query = query
           .ilike('assure', `%${insuredName}%`)
-          .gte('created_at', `${startDate}T00:00:00`)
-          .lte('created_at', `${endDate}T23:59:59`);
+          .eq('extract(month from created_at)::text', monthNumber)
+          .eq('extract(year from created_at)::text', searchYear);
       }
     }
     // Recherche individuelle (fallback)
@@ -525,9 +516,7 @@ export const searchCreditFlexible = async (
         query = query.ilike('assure', `%${insuredName}%`);
       }
       if (creditDate) {
-        query = query
-          .gte('created_at', `${creditDate}T00:00:00`)
-          .lte('created_at', `${creditDate}T23:59:59`);
+        query = query.eq('created_at::date', creditDate); // Conversion timestampz -> date
       }
     }
 
@@ -535,10 +524,20 @@ export const searchCreditFlexible = async (
 
     if (error) {
       console.error('❌ Erreur recherche flexible crédit:', error);
+      console.error('Détails erreur:', error.message);
       return [];
     }
 
     console.log(`✅ ${data?.length || 0} crédits trouvés`);
+    
+    // Afficher les dates pour debug
+    if (data && data.length > 0) {
+      console.log('📊 Exemple de dates trouvées:');
+      data.slice(0, 3).forEach((credit, index) => {
+        console.log(`  ${index + 1}. created_at: ${credit.created_at}, date simple: ${new Date(credit.created_at).toLocaleDateString('fr-FR')}`);
+      });
+    }
+    
     return data || [];
   } catch (error) {
     console.error('❌ Erreur générale recherche flexible crédit:', error);
