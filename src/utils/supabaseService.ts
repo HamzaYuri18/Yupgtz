@@ -637,6 +637,39 @@ export const searchCreditFlexible = async (
     return [];
   }
 };
+// Fonction utilitaire pour la recherche avec tolérance
+const buildTolerantSearch = (searchTerm: string): string[] => {
+  const cleaned = searchTerm.trim().toLowerCase();
+  const patterns: string[] = [];
+  
+  if (cleaned.length <= 2) {
+    // Pour les très courts termes, recherche simple
+    patterns.push(`%${cleaned}%`);
+  } else if (cleaned.length <= 4) {
+    // Termes courts - permettre la fin tronquée
+    patterns.push(`%${cleaned}%`);
+    patterns.push(`%${cleaned.slice(0, -1)}%`);
+  } else {
+    // Termes longs - permettre plusieurs variations
+    patterns.push(`%${cleaned}%`); // Exact
+    patterns.push(`%${cleaned.slice(0, -1)}%`); // Manque 1 caractère fin
+    patterns.push(`%${cleaned.slice(1)}%`); // Manque 1 caractère début
+    patterns.push(`%${cleaned.slice(0, -2)}%`); // Manque 2 caractères fin
+    patterns.push(`%${cleaned.slice(2)}%`); // Manque 2 caractères début
+    
+    // Pour les noms composés, chercher chaque partie
+    if (cleaned.includes(' ')) {
+      const parts = cleaned.split(' ');
+      parts.forEach(part => {
+        if (part.length >= 2) {
+          patterns.push(`%${part}%`);
+        }
+      });
+    }
+  }
+  
+  return patterns;
+};
 // FONCTIONS MANQUANTES POUR ContractForm.tsx
 
 // Fonction pour vérifier si un contrat Affaire existe déjà dans la table Affaire
