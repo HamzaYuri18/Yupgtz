@@ -417,134 +417,39 @@ export const searchCreditByContractNumber = async (contractNumber: string): Prom
 
 // Fonction pour rechercher des crédits de manière flexible avec created_at (date simple)
 // Fonction pour rechercher des crédits de manière flexible avec conversion de timestampz en date
-export const searchCreditFlexible = async (
-  contractNumber?: string | null,
-  insuredName?: string | null,
-  creditDate?: string | null,
-  searchMonth?: string | null,
-  searchYear?: string | null
-): Promise<CreditData[]> => {
-  try {
-    console.log('🔍 Recherche flexible crédit avec paramètres:', {
-      contractNumber,
-      insuredName,
-      creditDate,
-      searchMonth,
-      searchYear
-    });
-
-    // Pour filtrer sur created_at (timestampz), on utilise les fonctions de date de Supabase
-    let query = supabase.from('liste_credits').select('*');
-
-    // Recherche par numéro de contrat + date de création (created_at converti en date)
-    if (contractNumber && creditDate) {
-      console.log('🔍 Recherche par numéro contrat + date création');
-      query = query
-        .ilike('numero_contrat', `%${contractNumber}%`)
-        .eq('created_at::date', creditDate); // Conversion timestampz -> date
-    }
-    // Recherche par nom assuré + date de création (created_at converti en date)
-    else if (insuredName && creditDate) {
-      console.log('🔍 Recherche par nom assuré + date création');
-      query = query
-        .ilike('assure', `%${insuredName}%`)
-        .eq('created_at::date', creditDate); // Conversion timestampz -> date
-    }
-    // Recherche par mois et année sur created_at (utilisation de extract)
-    else if (searchMonth && searchYear) {
-      console.log('🔍 Recherche par mois/année sur created_at:', { searchMonth, searchYear });
-      
-      // Convertir le mois en français vers le numéro
-      const monthMapping: { [key: string]: string } = {
-        'janvier': '01', 'février': '02', 'mars': '03', 'avril': '04',
-        'mai': '05', 'juin': '06', 'juillet': '07', 'août': '08',
-        'septembre': '09', 'octobre': '10', 'novembre': '11', 'décembre': '12'
-      };
-
-      const monthNumber = monthMapping[searchMonth.toLowerCase()];
-      if (monthNumber) {
-        console.log('📅 Filtrage par mois/année:', { month: monthNumber, year: searchYear });
-        
-        // Filtrer sur la colonne created_at en utilisant extract pour mois et année
-        query = query
-          .eq('extract(month from created_at)::text', monthNumber)
-          .eq('extract(year from created_at)::text', searchYear);
-      } else {
-        console.warn('⚠️ Mois non reconnu:', searchMonth);
-      }
-    }
-    // Recherche par numéro de contrat + mois + année
-    else if (contractNumber && searchMonth && searchYear) {
-      console.log('🔍 Recherche par numéro contrat + mois/année');
-      const monthMapping: { [key: string]: string } = {
-        'janvier': '01', 'février': '02', 'mars': '03', 'avril': '04',
-        'mai': '05', 'juin': '06', 'juillet': '07', 'août': '08',
-        'septembre': '09', 'octobre': '10', 'novembre': '11', 'décembre': '12'
-      };
-
-      const monthNumber = monthMapping[searchMonth.toLowerCase()];
-      if (monthNumber) {
-        query = query
-          .ilike('numero_contrat', `%${contractNumber}%`)
-          .eq('extract(month from created_at)::text', monthNumber)
-          .eq('extract(year from created_at)::text', searchYear);
-      }
-    }
-    // Recherche par nom assuré + mois + année
-    else if (insuredName && searchMonth && searchYear) {
-      console.log('🔍 Recherche par nom assuré + mois/année');
-      const monthMapping: { [key: string]: string } = {
-        'janvier': '01', 'février': '02', 'mars': '03', 'avril': '04',
-        'mai': '05', 'juin': '06', 'juillet': '07', 'août': '08',
-        'septembre': '09', 'octobre': '10', 'novembre': '11', 'décembre': '12'
-      };
-
-      const monthNumber = monthMapping[searchMonth.toLowerCase()];
-      if (monthNumber) {
-        query = query
-          .ilike('assure', `%${insuredName}%`)
-          .eq('extract(month from created_at)::text', monthNumber)
-          .eq('extract(year from created_at)::text', searchYear);
-      }
-    }
-    // Recherche individuelle (fallback)
-    else {
-      if (contractNumber) {
-        query = query.ilike('numero_contrat', `%${contractNumber}%`);
-      }
-      if (insuredName) {
-        query = query.ilike('assure', `%${insuredName}%`);
-      }
-      if (creditDate) {
-        query = query.eq('created_at::date', creditDate); // Conversion timestampz -> date
-      }
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('❌ Erreur recherche flexible crédit:', error);
-      console.error('Détails erreur:', error.message);
-      return [];
-    }
-
-    console.log(`✅ ${data?.length || 0} crédits trouvés`);
+// Fonction utilitaire pour la recherche avec tolérance
+const buildTolerantSearch = (searchTerm: string): string[] => {
+  const cleaned = searchTerm.trim().toLowerCase();
+  const patterns: string[] = [];
+  
+  if (cleaned.length <= 2) {
+    // Pour les très courts termes, recherche simple
+    patterns.push(`%${cleaned}%`);
+  } else if (cleaned.length <= 4) {
+    // Termes courts - permettre la fin tronquée
+    patterns.push(`%${cleaned}%`);
+    patterns.push(`%${cleaned.slice(0, -1)}%`);
+  } else {
+    // Termes longs - permettre plusieurs variations
+    patterns.push(`%${cleaned}%`); // Exact
+    patterns.push(`%${cleaned.slice(0, -1)}%`); // Manque 1 caractère fin
+    patterns.push(`%${cleaned.slice(1)}%`); // Manque 1 caractère début
+    patterns.push(`%${cleaned.slice(0, -2)}%`); // Manque 2 caractères fin
+    patterns.push(`%${cleaned.slice(2)}%`); // Manque 2 caractères début
     
-    // Afficher les dates pour debug
-    if (data && data.length > 0) {
-      console.log('📊 Exemple de dates trouvées:');
-      data.slice(0, 3).forEach((credit, index) => {
-        console.log(`  ${index + 1}. created_at: ${credit.created_at}, date simple: ${new Date(credit.created_at).toLocaleDateString('fr-FR')}`);
+    // Pour les noms composés, chercher chaque partie
+    if (cleaned.includes(' ')) {
+      const parts = cleaned.split(' ');
+      parts.forEach(part => {
+        if (part.length >= 2) {
+          patterns.push(`%${part}%`);
+        }
       });
     }
-    
-    return data || [];
-  } catch (error) {
-    console.error('❌ Erreur générale recherche flexible crédit:', error);
-    return [];
   }
+  
+  return patterns;
 };
-
 // FONCTIONS MANQUANTES POUR ContractForm.tsx
 
 // Fonction pour vérifier si un contrat Affaire existe déjà dans la table Affaire
