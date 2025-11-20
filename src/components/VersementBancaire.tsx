@@ -1,14 +1,109 @@
+
+Add Remarks Feature to Session Management
+Message pour demander une remise
+Api paiement integration tunisia
+Link api gateaway payrnent ksa t
+Création d'application gestion assurance agents
+Demande de réparations provisoires RGA
+Optimizing Credit Payment Data Integrity
+Demande d'accès API Registre National
+Ideas to make money 2025
+Clarifications sur prise en charge LASIK et soins
+Demande de convention de courtage avec BH Assurance
+Proposer avantages exclusifs BRIDGES santé
+Offre d'assurance groupe exclusive et innovante
+Email pour dire que le client a
+Relance pour solution d'assurance groupe KOPP
+Nom de page Instagram pour luxe et pouvoir
+Helping Aspiring Millionaires Achieve Luxury Lifestyle
+Propositions d'assurance santé pour employés
+Proposer signature convocation assurance LinkedIn
+import React, { useState, useEff
+Expertise assurance et technologie avancée
+Entrepreneur Assurance & Développement Applications
+Assurance santé : clé de motivation en Tunisie
+Analyse des paiements et encaissements
+Automating SQL Calculations for Payment Data
+React Encaissement App with Supabase Integration
+PostgreSQL Trigger Error and Solutions
+Adding Remarks to VersementBancaire Component
+Update Payment Type in Financial Management
+Rendre Encaissement accessible à tous
+Enregistrement encaissement dans Supabase
+Transférer données terme vers RP Supabase
+Ajout et calcul cumulatif colonne ReportDeport
+وكالة لسحب الأموال من حساب التوفيز
+Relations entre tables dans Supabase
+React Encaissement System with Supabase Integration
+Je veux inserer dans la lage d’a
+Ajouter bouton export XLSX aux données
+import React, { useState } from
+Je veux qu’apres la connexion un
+Vérification des données Excel avec couleur
+comment verifier l'existance des
+أساسيات حصص جماعية للمدربين
+import { supabase } from '../lib
+أساسيات قيادة حصص جماعية ناجحة
+Post linked in pour promoumoire
+React Financial Management System Code Implementation
+Fixing Remise Saving Error in React
+تحليل تمارين الكور بلاست والبطن
+مقارنة بين كور بلاست وتمارين البطن
+React Encaissement Component with Supabase Integration
+Ajout de vérification paiement crédit
+Prostate Pain During Farting Explained
+Douleur après application d'eau froide prostatique
+React Logout Confirmation Button Locking Logic
+React Component for Session Total Verification
+Post surgery linked in pour prom
+import { DollarSign, Calendar, B
+حماية محاصيلك من تقلبات الطقس
+Demande d'autorisation souscription tracteur classe 5
+Analyse technique boursière : principes et outils
+قضية خيانة مؤتمن تونس
+Vérifier niveau huile moteur voiture
+Migration du parc vers contrats flotte
+Proposition d'échelonnement des primes et IRDS
+Ebe vs ebitda
+Fonctionnement du chèque-cadeau expliqué
+import { supabase } from '../lib
+Create Home Page with STAR Assurances Logo
+Update code for credit expiration handling
+Assurance Auto Premium : Offre Exclusivité
+Reconfiguring Training Schedule Table Layout
+Supabase Credit Search with Timestamps
+React Credit Payment System Implementation
+TypeScript Syntax Error: Unexpected Closing Brace
+Supabase Free Tier and Pricing Details
+Lock Payment Dates in Financial Management
+Ajout d'export Excel pour termes Supabase
+React Component for Credit Search and Export
+Optimisez votre fiscalité avec assurance épargne
+Tableau PDF paysage GX Training Schedule
+Amélioration du thème et des couleurs
+Verrouiller la date de paiement sinistre
+import React, { useState, useEff
+Ouverture de comptes en devises Tunisie
+Idées de projets en ligne à haut revenu
+Erreur insertion contrats PostgreSQL : solutions
+Demande d'annulation et réparations à domicile
+Ouverture de filiales en France et Arabie Saoudite
+Financial Management System with User Input
+Acceptation de l'offre et souscription prochaine
+Proposition d'offre d'assurance révisée
+Bonjou epi esplike ki jan mwen ka asistew.
+Modern Dark Green Login Form Design
+زيارة عائلية السعودية: تعليمات ومتطلبات
+Dépôt quittance règlement Tabarki Kais
+Validation devis véhicule X, informations complémentaires
+Garantie vol incluse pour engins de chantier
+Nouvelle Garantie Protection Juridique Professionnelle
+Rachat total contrat assurance-vie 7ayya
+ممارسة العادة السرية أثناء الحمل
+Add Remarks Feature to Session Management
 import { useState, useEffect } from 'react';
-import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw, Edit, Save, X, MessageSquare } from 'lucide-react';
-import { 
-  getRecentSessions, 
-  getSessionsByDateRange, 
-  updateSessionVersement, 
-  getMonthlyStats, 
-  verifyAndSyncSessionTotals, 
-  calculateTotalEspeceFromRapport,
-  updateSessionRemarque 
-} from '../utils/sessionService';
+import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw } from 'lucide-react';
+import { getRecentSessions, getSessionsByDateRange, updateSessionVersement, getMonthlyStats, verifyAndSyncSessionTotals, calculateTotalEspeceFromRapport } from '../utils/sessionService';
 import * as XLSX from 'xlsx';
 
 interface VersementBancaireProps {
@@ -25,7 +120,6 @@ interface SessionData {
   banque: string | null;
   statut: string;
   cree_par: string;
-  remarques: string | null;
 }
 
 interface QuinzaineStats {
@@ -45,10 +139,6 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [quinzaineStats, setQuinzaineStats] = useState<QuinzaineStats>({ premiere: 0, deuxieme: 0, total: 0 });
   const [isVerifying, setIsVerifying] = useState(false);
-  
-  // État pour la gestion des remarques en édition
-  const [editingRemarque, setEditingRemarque] = useState<number | null>(null);
-  const [tempRemarque, setTempRemarque] = useState('');
 
   const [formData, setFormData] = useState({
     sessionId: '',
@@ -119,70 +209,6 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       premiere: `1-15 ${monthNames[selectedMonth - 1]} ${selectedYear}`,
       deuxieme: `16-${new Date(selectedYear, selectedMonth, 0).getDate()} ${monthNames[selectedMonth - 1]} ${selectedYear}`
     };
-  };
-
-  // Fonctions pour la gestion des remarques
-  const startEditingRemarque = (sessionId: number, currentRemarque: string | null) => {
-    setEditingRemarque(sessionId);
-    setTempRemarque(currentRemarque || '');
-  };
-
-  const cancelEditingRemarque = () => {
-    setEditingRemarque(null);
-    setTempRemarque('');
-  };
-
-  const saveRemarque = async (sessionId: number) => {
-    try {
-      const success = await updateSessionRemarque(sessionId, tempRemarque.trim());
-      
-      if (success) {
-        setMessage('Remarque enregistrée avec succès');
-        // Mettre à jour l'état local
-        const updatedSessions = sessions.map(session =>
-          session.id === sessionId 
-            ? { ...session, remarques: tempRemarque.trim() } 
-            : session
-        );
-        setSessions(updatedSessions);
-        setFilteredSessions(updatedSessions);
-        
-        setEditingRemarque(null);
-        setTempRemarque('');
-      } else {
-        setMessage('Erreur lors de l\'enregistrement de la remarque');
-      }
-    } catch (error) {
-      setMessage('Erreur lors de l\'enregistrement de la remarque');
-      console.error('Erreur sauvegarde remarque:', error);
-    }
-    
-    setTimeout(() => setMessage(''), 3000);
-  };
-
-  const deleteRemarque = async (sessionId: number) => {
-    try {
-      const success = await updateSessionRemarque(sessionId, null);
-      
-      if (success) {
-        setMessage('Remarque supprimée avec succès');
-        // Mettre à jour l'état local
-        const updatedSessions = sessions.map(session =>
-          session.id === sessionId 
-            ? { ...session, remarques: null } 
-            : session
-        );
-        setSessions(updatedSessions);
-        setFilteredSessions(updatedSessions);
-      } else {
-        setMessage('Erreur lors de la suppression de la remarque');
-      }
-    } catch (error) {
-      setMessage('Erreur lors de la suppression de la remarque');
-      console.error('Erreur suppression remarque:', error);
-    }
-    
-    setTimeout(() => setMessage(''), 3000);
   };
 
   // Fonction pour vérifier et synchroniser tous les totaux espèce
@@ -339,7 +365,6 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       'Banque': session.banque || '',
       'Solde': calculateSolde(session),
       'Statut': session.statut,
-      'Remarques': session.remarques || '',
       'Créé par': session.cree_par
     }));
 
@@ -582,7 +607,6 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date Versement</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Banque</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Solde</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Remarques</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
               </tr>
             </thead>
@@ -599,58 +623,6 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.banque || '-'}</td>
                     <td className={`px-4 py-3 whitespace-nowrap text-sm font-semibold ${solde < 0 ? 'text-red-600' : 'text-green-600'}`}>
                       {solde.toFixed(2)} DT
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
-                      {editingRemarque === session.id ? (
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="text"
-                            value={tempRemarque}
-                            onChange={(e) => setTempRemarque(e.target.value)}
-                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                            placeholder="Saisir une remarque..."
-                            autoFocus
-                          />
-                          <button
-                            onClick={() => saveRemarque(session.id)}
-                            className="p-1 text-green-600 hover:text-green-800"
-                            title="Enregistrer"
-                          >
-                            <Save className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={cancelEditingRemarque}
-                            className="p-1 text-gray-600 hover:text-gray-800"
-                            title="Annuler"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between">
-                          <span className={`${!session.remarques ? 'text-gray-400 italic' : ''}`}>
-                            {session.remarques || 'Aucune remarque'}
-                          </span>
-                          <div className="flex items-center space-x-1 ml-2">
-                            <button
-                              onClick={() => startEditingRemarque(session.id, session.remarques)}
-                              className="p-1 text-blue-600 hover:text-blue-800"
-                              title="Modifier la remarque"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            {session.remarques && (
-                              <button
-                                onClick={() => deleteRemarque(session.id)}
-                                className="p-1 text-red-600 hover:text-red-800"
-                                title="Supprimer la remarque"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
