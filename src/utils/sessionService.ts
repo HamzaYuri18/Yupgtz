@@ -98,19 +98,24 @@ export const getMonthlyStats = async (month: number, year: number) => {
   };
 };
 
-export const getRecentSessions = async (limit: number = 10) => {
-  const { data, error } = await supabase
-    .from('sessions')
-    .select('*')
-    .order('date_session', { ascending: false })
-    .limit(limit);
+export const getRecentSessions = async (limit: number = 15): Promise<SessionData[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('sessions')
+      .select('*') // Assurez-vous que c'est '*' pour sélectionner toutes les colonnes
+      .order('date_session', { ascending: false })
+      .limit(limit);
 
-  if (error) {
-    console.error('Erreur lors de la récupération des sessions:', error);
+    if (error) {
+      console.error('Erreur récupération sessions:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Erreur récupération sessions:', error);
     return [];
   }
-
-  return data || [];
 };
 
 export const getSessionsByDateRange = async (dateDebut: string, dateFin: string) => {
