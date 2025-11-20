@@ -1546,6 +1546,28 @@ export const searchContractInTable = async (month: string, contractNumber: strin
     return null;
   }
 };
+// Fonction pour mettre à jour les remarques d'une session
+export const updateSessionRemarque = async (sessionId: number, remarques: string | null): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase
+      .from('sessions')
+      .update({ 
+        remarques: remarques,
+        modifie_le: new Date().toISOString()
+      })
+      .eq('id', sessionId);
+
+    if (error) {
+      console.error('Erreur mise à jour remarques:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Erreur mise à jour remarques:', error);
+    return false;
+  }
+};
 
 // Mettez à jour l'export default à la fin du fichier pour inclure toutes les nouvelles fonctions :
 
