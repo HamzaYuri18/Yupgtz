@@ -133,58 +133,68 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     setTempRemarque('');
   };
 
-  const saveRemarque = async (sessionId: number) => {
-    try {
-      const success = await updateSessionRemarques(sessionId, tempRemarque.trim());
+const saveRemarque = async (sessionId: number) => {
+  try {
+    console.log('💾 Sauvegarde remarque pour session:', sessionId, 'remarque:', tempRemarque);
+    
+    const success = await updateSessionRemarques(sessionId, tempRemarque.trim());
+    
+    if (success) {
+      setMessage('Remarque enregistrée avec succès');
+      // Mettre à jour l'état local
+      const updatedSessions = sessions.map(session =>
+        session.id === sessionId 
+          ? { ...session, Remarques: tempRemarque.trim() } 
+          : session
+      );
+      setSessions(updatedSessions);
+      setFilteredSessions(updatedSessions);
       
-      if (success) {
-        setMessage('Remarque enregistrée avec succès');
-        // Mettre à jour l'état local
-        const updatedSessions = sessions.map(session =>
-          session.id === sessionId 
-            ? { ...session, Remarques: tempRemarque.trim() } 
-            : session
-        );
-        setSessions(updatedSessions);
-        setFilteredSessions(updatedSessions);
-        
-        setEditingRemarque(null);
-        setTempRemarque('');
-      } else {
-        setMessage('Erreur lors de l\'enregistrement de la remarque');
-      }
-    } catch (error) {
+      setEditingRemarque(null);
+      setTempRemarque('');
+      
+      console.log('✅ Remarque sauvegardée localement');
+    } else {
       setMessage('Erreur lors de l\'enregistrement de la remarque');
-      console.error('Erreur sauvegarde remarque:', error);
+      console.error('❌ Erreur lors de la sauvegarde');
     }
-    
-    setTimeout(() => setMessage(''), 3000);
-  };
+  } catch (error) {
+    setMessage('Erreur lors de l\'enregistrement de la remarque');
+    console.error('❌ Erreur sauvegarde remarque:', error);
+  }
+  
+  setTimeout(() => setMessage(''), 3000);
+};
 
-  const deleteRemarque = async (sessionId: number) => {
-    try {
-      const success = await updateSessionRemarques(sessionId, null);
-      
-      if (success) {
-        setMessage('Remarque supprimée avec succès');
-        // Mettre à jour l'état local
-        const updatedSessions = sessions.map(session =>
-          session.id === sessionId 
-            ? { ...session, Remarques: null } 
-            : session
-        );
-        setSessions(updatedSessions);
-        setFilteredSessions(updatedSessions);
-      } else {
-        setMessage('Erreur lors de la suppression de la remarque');
-      }
-    } catch (error) {
-      setMessage('Erreur lors de la suppression de la remarque');
-      console.error('Erreur suppression remarque:', error);
-    }
+const deleteRemarque = async (sessionId: number) => {
+  try {
+    console.log('🗑️ Suppression remarque pour session:', sessionId);
     
-    setTimeout(() => setMessage(''), 3000);
-  };
+    const success = await updateSessionRemarques(sessionId, null);
+    
+    if (success) {
+      setMessage('Remarque supprimée avec succès');
+      // Mettre à jour l'état local
+      const updatedSessions = sessions.map(session =>
+        session.id === sessionId 
+          ? { ...session, Remarques: null } 
+          : session
+      );
+      setSessions(updatedSessions);
+      setFilteredSessions(updatedSessions);
+      
+      console.log('✅ Remarque supprimée localement');
+    } else {
+      setMessage('Erreur lors de la suppression de la remarque');
+      console.error('❌ Erreur lors de la suppression');
+    }
+  } catch (error) {
+    setMessage('Erreur lors de la suppression de la remarque');
+    console.error('❌ Erreur suppression remarque:', error);
+  }
+  
+  setTimeout(() => setMessage(''), 3000);
+};
 
   // Fonction pour vérifier et synchroniser tous les totaux espèce
   const verifySessionTotals = async () => {
