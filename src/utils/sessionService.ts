@@ -340,24 +340,29 @@ export const getSessionTransactionsDetail = async (dateSession: string) => {
   }
 };
 // Fonction pour mettre à jour les remarques d'une session
+// Fonction pour mettre à jour les remarques d'une session
 export const updateSessionRemarques = async (sessionId: number, Remarques: string | null): Promise<boolean> => {
   try {
+    console.log('🔄 Tentative de mise à jour des remarques:', { sessionId, Remarques });
+    
     const { data, error } = await supabase
       .from('sessions')
       .update({ 
         Remarques: Remarques,
         modifie_le: new Date().toISOString()
       })
-      .eq('id', sessionId);
+      .eq('id', sessionId)
+      .select();
 
     if (error) {
-      console.error('Erreur mise à jour remarques:', error);
+      console.error('❌ Erreur mise à jour remarques:', error);
       return false;
     }
 
+    console.log('✅ Remarques mises à jour avec succès:', data);
     return true;
   } catch (error) {
-    console.error('Erreur mise à jour remarques:', error);
+    console.error('❌ Erreur mise à jour remarques:', error);
     return false;
   }
 };
