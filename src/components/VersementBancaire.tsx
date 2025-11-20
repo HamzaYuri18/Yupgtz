@@ -8,7 +8,7 @@ import {
   getMonthlyStats, 
   verifyAndSyncSessionTotals, 
   calculateTotalEspeceFromRapport,
-  updateSessionRemarque 
+  updateSessionRemarques 
 } from '../utils/sessionService';
 import * as XLSX from 'xlsx';
 
@@ -135,14 +135,14 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
 
   const saveRemarque = async (sessionId: number) => {
     try {
-      const success = await updateSessionRemarque(sessionId, tempRemarque.trim());
+      const success = await updateSessionRemarques(sessionId, tempRemarque.trim());
       
       if (success) {
         setMessage('Remarque enregistrée avec succès');
         // Mettre à jour l'état local
         const updatedSessions = sessions.map(session =>
           session.id === sessionId 
-            ? { ...session, remarques: tempRemarque.trim() } 
+            ? { ...session, Remarques: tempRemarque.trim() } 
             : session
         );
         setSessions(updatedSessions);
@@ -163,14 +163,14 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
 
   const deleteRemarque = async (sessionId: number) => {
     try {
-      const success = await updateSessionRemarque(sessionId, null);
+      const success = await updateSessionRemarques(sessionId, null);
       
       if (success) {
         setMessage('Remarque supprimée avec succès');
         // Mettre à jour l'état local
         const updatedSessions = sessions.map(session =>
           session.id === sessionId 
-            ? { ...session, remarques: null } 
+            ? { ...session, Remarques: null } 
             : session
         );
         setSessions(updatedSessions);
@@ -340,7 +340,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       'Banque': session.banque || '',
       'Solde': calculateSolde(session),
       'Statut': session.statut,
-      'Remarques': session.remarques || '',
+      'Remarques': session.Remarques || '',
       'Créé par': session.cree_par
     }));
 
@@ -629,18 +629,18 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                         </div>
                       ) : (
                         <div className="flex items-center justify-between">
-                          <span className={`${!session.remarques ? 'text-gray-400 italic' : ''}`}>
-                            {session.remarques || 'Aucune remarque'}
+                          <span className={`${!session.Remarques ? 'text-gray-400 italic' : ''}`}>
+                            {session.Remarques || 'Aucune remarque'}
                           </span>
                           <div className="flex items-center space-x-1 ml-2">
                             <button
-                              onClick={() => startEditingRemarque(session.id, session.remarques)}
+                              onClick={() => startEditingRemarque(session.id, session.Remarques)}
                               className="p-1 text-blue-600 hover:text-blue-800"
                               title="Modifier la remarque"
                             >
                               <Edit className="w-4 h-4" />
                             </button>
-                            {session.remarques && (
+                            {session.Remarques && (
                               <button
                                 onClick={() => deleteRemarque(session.id)}
                                 className="p-1 text-red-600 hover:text-red-800"
