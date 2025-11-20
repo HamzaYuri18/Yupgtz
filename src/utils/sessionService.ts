@@ -340,12 +340,12 @@ export const getSessionTransactionsDetail = async (dateSession: string) => {
   }
 };
 // Fonction pour mettre à jour les remarques d'une session
-export const updateSessionRemarque = async (sessionId: number, remarques: string | null): Promise<boolean> => {
+export const updateSessionRemarques = async (sessionId: number, Remarques: string | null): Promise<boolean> => {
   try {
     const { data, error } = await supabase
       .from('sessions')
       .update({ 
-        remarques: remarques,
+        Remarques: Remarques,
         modifie_le: new Date().toISOString()
       })
       .eq('id', sessionId);
