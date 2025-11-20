@@ -1602,5 +1602,6 @@ export default {
   getAvailableMonths,
   createMonthlyTable,
   insertContractsToTable,
-  searchContractInTable
+  searchContractInTable,
+  updateSessionRemarque
 };
