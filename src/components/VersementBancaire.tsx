@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw } from 'lucide-react';
-import { getRecentSessions, getSessionsByDateRange, updateSessionVersement, getMonthlyStats, verifyAndSyncSessionTotals, calculateTotalEspeceFromRapport } from '../utils/sessionService';
+import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw, Edit, Save, X, MessageSquare } from 'lucide-react';
+import { 
+  getRecentSessions, 
+  getSessionsByDateRange, 
+  updateSessionVersement, 
+  getMonthlyStats, 
+  verifyAndSyncSessionTotals, 
+  calculateTotalEspeceFromRapport,
+  updateSessionRemarque 
+} from '../utils/sessionService';
 import * as XLSX from 'xlsx';
 
 interface VersementBancaireProps {
@@ -17,6 +25,7 @@ interface SessionData {
   banque: string | null;
   statut: string;
   cree_par: string;
+  remarques: string | null;
 }
 
 interface QuinzaineStats {
@@ -36,6 +45,10 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [quinzaineStats, setQuinzaineStats] = useState<QuinzaineStats>({ premiere: 0, deuxieme: 0, total: 0 });
   const [isVerifying, setIsVerifying] = useState(false);
+  
+  // État pour la gestion des remarques en édition
+  const [editingRemarque, setEditingRemarque] = useState<number | null>(null);
+  const [tempRemarque, setTempRemarque] = useState('');
 
   const [formData, setFormData] = useState({
     sessionId: '',
@@ -106,6 +119,70 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       premiere: `1-15 ${monthNames[selectedMonth - 1]} ${selectedYear}`,
       deuxieme: `16-${new Date(selectedYear, selectedMonth, 0).getDate()} ${monthNames[selectedMonth - 1]} ${selectedYear}`
     };
+  };
+
+  // Fonctions pour la gestion des remarques
+  const startEditingRemarque = (sessionId: number, currentRemarque: string | null) => {
+    setEditingRemarque(sessionId);
+    setTempRemarque(currentRemarque || '');
+  };
+
+  const cancelEditingRemarque = () => {
+    setEditingRemarque(null);
+    setTempRemarque('');
+  };
+
+  const saveRemarque = async (sessionId: number) => {
+    try {
+      const success = await updateSessionRemarque(sessionId, tempRemarque.trim());
+      
+      if (success) {
+        setMessage('Remarque enregistrée avec succès');
+        // Mettre à jour l'état local
+        const updatedSessions = sessions.map(session =>
+          session.id === sessionId 
+            ? { ...session, remarques: tempRemarque.trim() } 
+            : session
+        );
+        setSessions(updatedSessions);
+        setFilteredSessions(updatedSessions);
+        
+        setEditingRemarque(null);
+        setTempRemarque('');
+      } else {
+        setMessage('Erreur lors de l\'enregistrement de la remarque');
+      }
+    } catch (error) {
+      setMessage('Erreur lors de l\'enregistrement de la remarque');
+      console.error('Erreur sauvegarde remarque:', error);
+    }
+    
+    setTimeout(() => setMessage(''), 3000);
+  };
+
+  const deleteRemarque = async (sessionId: number) => {
+    try {
+      const success = await updateSessionRemarque(sessionId, null);
+      
+      if (success) {
+        setMessage('Remarque supprimée avec succès');
+        // Mettre à jour l'état local
+        const updatedSessions = sessions.map(session =>
+          session.id === sessionId 
+            ? { ...session, remarques: null } 
+            : session
+        );
+        setSessions(updatedSessions);
+        setFilteredSessions(updatedSessions);
+      } else {
+        setMessage('Erreur lors de la suppression de la remarque');
+      }
+    } catch (error) {
+      setMessage('Erreur lors de la suppression de la remarque');
+      console.error('Erreur suppression remarque:', error);
+    }
+    
+    setTimeout(() => setMessage(''), 3000);
   };
 
   // Fonction pour vérifier et synchroniser tous les totaux espèce
@@ -262,6 +339,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       'Banque': session.banque || '',
       'Solde': calculateSolde(session),
       'Statut': session.statut,
+      'Remarques': session.remarques || '',
       'Créé par': session.cree_par
     }));
 
@@ -504,6 +582,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date Versement</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Banque</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Solde</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Remarques</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
               </tr>
             </thead>
@@ -520,6 +599,58 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.banque || '-'}</td>
                     <td className={`px-4 py-3 whitespace-nowrap text-sm font-semibold ${solde < 0 ? 'text-red-600' : 'text-green-600'}`}>
                       {solde.toFixed(2)} DT
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
+                      {editingRemarque === session.id ? (
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="text"
+                            value={tempRemarque}
+                            onChange={(e) => setTempRemarque(e.target.value)}
+                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                            placeholder="Saisir une remarque..."
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => saveRemarque(session.id)}
+                            className="p-1 text-green-600 hover:text-green-800"
+                            title="Enregistrer"
+                          >
+                            <Save className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={cancelEditingRemarque}
+                            className="p-1 text-gray-600 hover:text-gray-800"
+                            title="Annuler"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <span className={`${!session.remarques ? 'text-gray-400 italic' : ''}`}>
+                            {session.remarques || 'Aucune remarque'}
+                          </span>
+                          <div className="flex items-center space-x-1 ml-2">
+                            <button
+                              onClick={() => startEditingRemarque(session.id, session.remarques)}
+                              className="p-1 text-blue-600 hover:text-blue-800"
+                              title="Modifier la remarque"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            {session.remarques && (
+                              <button
+                                onClick={() => deleteRemarque(session.id)}
+                                className="p-1 text-red-600 hover:text-red-800"
+                                title="Supprimer la remarque"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
@@ -539,4 +670,4 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   );
 };
 
-export default VersementBancaire; 
+export default VersementBancaire;
