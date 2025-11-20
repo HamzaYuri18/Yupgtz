@@ -26,7 +26,7 @@ interface SessionData {
   banque: string | null;
   statut: string;
   cree_par: string;
-  remarques: string | null;
+  Remarques: string | null;
 }
 
 interface QuinzaineStats {
