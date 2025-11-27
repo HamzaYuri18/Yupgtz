@@ -415,7 +415,9 @@ const saveToRapport = async (baseData: any, additionalData?: any): Promise<void>
   console.log('📊 Sauvegarde dans la table rapport...');
   console.log('📋 Données de base:', baseData);
   console.log('📋 Données additionnelles:', additionalData);
-  
+
+  const sessionDate = new Date().toISOString().split('T')[0];
+
   // Préparer les données avec TOUTES les colonnes explicitement définies
   const rapportData = {
     // Colonnes de base (obligatoires)
@@ -424,16 +426,18 @@ const saveToRapport = async (baseData: any, additionalData?: any): Promise<void>
     numero_contrat: baseData.numero_contrat,
     prime: baseData.montant || 0, // Utiliser montant pour prime aussi
     montant: baseData.montant, // Colonne unifiée pour tous les montants
+    montant_recu: baseData.montant || 0,
+    date_operation: sessionDate,
     assure: baseData.assure,
     mode_paiement: baseData.mode_paiement, // Ici on utilise directement le mode_paiement passé en paramètre
     type_paiement: baseData.type_paiement,
     cree_par: baseData.cree_par,
-    
+
     // Colonnes optionnelles des contrats
     montant_credit: null,
     date_paiement_prevue: null,
     echeance: null,
-    
+
     // Colonnes financières (toutes à null par défaut)
     date_depense: null,
     type_depense: null,
@@ -445,7 +449,7 @@ const saveToRapport = async (baseData: any, additionalData?: any): Promise<void>
     date_sinistre: null,
     date_paiement_sinistre: null,
     numero_sinistre: null,
-    
+
     // Fusionner avec les données additionnelles (écrase les valeurs null si nécessaire)
     ...additionalData
   };

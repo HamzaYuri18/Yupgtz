@@ -49,6 +49,8 @@ interface RapportData {
   numero_contrat: string;
   prime: number;
   montant: number;
+  montant_recu: number;
+  date_operation: string;
   assure: string;
   mode_paiement: string | null;
   type_paiement: string | null;
@@ -98,19 +100,22 @@ export const saveContractToRapport = async (contractData: ContractData): Promise
     }
 
     // Préparer les données
+    const sessionDate = new Date().toISOString().split('T')[0];
     const insertData: RapportData = {
       type: rapportType || null,
       branche: contractData.branch || null,
       numero_contrat: contractData.contractNumber || '',
       prime: primeValue,
       montant: primeValue,
+      montant_recu: primeValue,
+      date_operation: sessionDate,
       assure: contractData.insuredName || '',
       mode_paiement: contractData.paymentMode || null,
       type_paiement: contractData.paymentType || null,
       cree_par: contractData.createdBy || '',
       montant_credit: montantCreditValue,
       date_paiement_prevue: contractData.paymentType === 'Crédit' ? contractData.paymentDate : null,
-      echeance: contractData.type === 'Terme' && contractData.xmlData?.maturity ? 
+      echeance: contractData.type === 'Terme' && contractData.xmlData?.maturity ?
         convertExcelDateToISO(contractData.xmlData.maturity) : null,
       date_depense: null,
       type_depense: null,
@@ -234,6 +239,7 @@ export const updateCreditPayment = async (
 
     // 7. Enregistrer le paiement dans la table rapport
     const datePaiement = new Date().toISOString();
+    const sessionDate = new Date().toISOString().split('T')[0];
 
     const rapportData: RapportData = {
       type: 'Paiement Crédit',
@@ -241,6 +247,8 @@ export const updateCreditPayment = async (
       numero_contrat: creditActuel.numero_contrat,
       prime: montantPaiement,
       montant: montantPaiement,
+      montant_recu: montantPaiement,
+      date_operation: sessionDate,
       assure: assure,
       mode_paiement: modePaiement,
       type_paiement: 'Au comptant',
