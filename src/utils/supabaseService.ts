@@ -1465,13 +1465,33 @@ export const createMonthlyTable = async (month: string): Promise<void> => {
   try {
     const cleanMonth = month.toLowerCase().replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').trim();
     const tableName = `table_terme_${cleanMonth}`;
-    
-    console.log(`🔧 Création table ${tableName}...`);
-    
-    // Cette fonction nécessite une RPC côté Supabase
-    // Pour l'instant, on log juste l'intention
-    console.log(`📋 Table à créer: ${tableName}`);
-    
+
+    console.log(`🔧 Vérification/Création table ${tableName}...`);
+
+    // Essayons d'abord de vérifier si la table existe
+    const { error: checkError } = await supabase
+      .from(tableName)
+      .select('id')
+      .limit(1);
+
+    if (!checkError) {
+      console.log(`✅ Table ${tableName} existe déjà`);
+      return;
+    }
+
+    // Si la table n'existe pas, la créer via la fonction RPC
+    console.log(`📝 Création de la table ${tableName} via RPC...`);
+    const { error: rpcError } = await supabase.rpc('create_terme_table', {
+      table_name: tableName
+    });
+
+    if (rpcError) {
+      console.error(`❌ Erreur lors de la création de la table ${tableName}:`, rpcError);
+      throw rpcError;
+    }
+
+    console.log(`✅ Table ${tableName} créée avec succès`);
+
   } catch (error) {
     console.error('❌ Erreur création table:', error);
     throw error;
