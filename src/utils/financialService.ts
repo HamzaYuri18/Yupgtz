@@ -32,6 +32,7 @@ export interface Ristourne {
   date_ristourne?: string;
   date_paiement_ristourne?: string;
   type_paiement?: 'Espece' | 'Cheque' | 'Banque';
+  type_ristourne?: 'BNS' | 'Ristourne';
   cree_par: string;
   created_at?: string;
 }
@@ -252,6 +253,7 @@ export const saveRistourne = async (ristourne: Ristourne): Promise<boolean> => {
         date_ristourne: ristourne.date_ristourne || new Date().toISOString().split('T')[0],
         date_paiement_ristourne: ristourne.date_paiement_ristourne,
         type_paiement: ristourne.type_paiement || 'Espece',
+        type_ristourne: ristourne.type_ristourne || 'Ristourne',
         created_at: new Date().toISOString().split('T')[0],
         cree_par: ristourne.cree_par
       }])

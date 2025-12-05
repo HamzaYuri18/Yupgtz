@@ -62,7 +62,8 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     montant_ristourne: '',
     date_ristourne: new Date().toISOString().split('T')[0],
     date_paiement_ristourne: getSessionDate(),
-    type_paiement: 'Espece' as 'Espece' | 'Cheque' | 'Banque'
+    type_paiement: 'Espece' as 'Espece' | 'Cheque' | 'Banque',
+    type_ristourne: 'Ristourne' as 'BNS' | 'Ristourne'
   });
   const [ristourneDateFilter, setRistourneDateFilter] = useState({
     dateFrom: '',
@@ -557,7 +558,8 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         montant_ristourne: '',
         date_ristourne: new Date().toISOString().split('T')[0],
         date_paiement_ristourne: getSessionDate(),
-        type_paiement: 'Espece'
+        type_paiement: 'Espece',
+        type_ristourne: 'Ristourne'
       });
       setRistourneCheckMessage('');
       loadData();
@@ -1128,6 +1130,17 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
               <option value="Banque">Banque</option>
             </select>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Type de ristourne</label>
+            <select
+              value={newRistourne.type_ristourne}
+              onChange={(e) => setNewRistourne({...newRistourne, type_ristourne: e.target.value as 'BNS' | 'Ristourne'})}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            >
+              <option value="Ristourne">Ristourne</option>
+              <option value="BNS">BNS</option>
+            </select>
+          </div>
         </div>
 
         {ristourneCheckMessage && (
@@ -1458,6 +1471,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       'Date ristourne': r.date_ristourne,
       'Date paiement': r.date_paiement_ristourne ? new Date(r.date_paiement_ristourne).toLocaleDateString('fr-FR') : '',
       'Type paiement': r.type_paiement,
+      'Type ristourne': r.type_ristourne || 'Ristourne',
       'Créé par': r.cree_par,
       'Date création': r.created_at ? new Date(r.created_at).toLocaleString('fr-FR') : ''
     }));
