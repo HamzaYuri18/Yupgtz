@@ -136,7 +136,7 @@ const ReportGenerator: React.FC = () => {
       .reduce((sum, contract) => sum + (contract.montant || 0), 0);
 
     const totalCheque = filteredContracts
-      .filter(contract => contract.mode_paiement === 'Cheque')
+      .filter(contract => contract.mode_paiement === 'Cheque' && (contract.montant || 0) > 0)
       .reduce((sum, contract) => sum + (contract.montant || 0), 0);
 
     const totalBanque = filteredContracts

@@ -108,7 +108,7 @@ const TransactionReport: React.FC = () => {
       }
 
       // Calculer Total Chèque
-      if (transaction.mode_paiement === 'Cheque') {
+      if (transaction.mode_paiement === 'Cheque' && montant > 0) {
         stats.totalCheque += montant;
         stats.countCheque++;
       }
