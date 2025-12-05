@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Gift, AlertTriangle, Save, Plus, Trash2, Search, Calendar } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Gift, AlertTriangle, Save, Plus, Trash2, Search, Calendar, FileSpreadsheet } from 'lucide-react';
 import { getSessionDate } from '../utils/auth';
 import { supabase } from '../lib/supabase';
+import * as XLSX from 'xlsx';
 import { 
   saveDepense, 
   getDepenses, 
@@ -77,8 +78,21 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     montant: '',
     client: '',
     date_sinistre: new Date().toISOString().split('T')[0],
-    date_paiement_sinistre: getSessionDate()
+    date_paiement_sinistre: getSessionDate(),
+    type_paiement: 'Espece' as 'Espece' | 'Cheque' | 'Banque'
   });
+  const [sinistreDateFilter, setSinistreDateFilter] = useState({
+    dateFrom: getSessionDate(),
+    dateTo: getSessionDate()
+  });
+  const [showSinistreDateFilter, setShowSinistreDateFilter] = useState(false);
+
+  // États pour les recettes exceptionnelles - filtres de date
+  const [recetteDateFilter, setRecetteDateFilter] = useState({
+    dateFrom: getSessionDate(),
+    dateTo: getSessionDate()
+  });
+  const [showRecetteDateFilter, setShowRecetteDateFilter] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -92,7 +106,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
   useEffect(() => {
     loadData();
-  }, [activeSection, monthFilter, showRistourneDateFilter, ristourneDateFilter.dateFrom, ristourneDateFilter.dateTo]);
+  }, [activeSection, monthFilter, showRistourneDateFilter, ristourneDateFilter.dateFrom, ristourneDateFilter.dateTo, showSinistreDateFilter, sinistreDateFilter.dateFrom, sinistreDateFilter.dateTo, showRecetteDateFilter, recetteDateFilter.dateFrom, recetteDateFilter.dateTo]);
 
   useEffect(() => {
     loadAvailableMonths();
@@ -144,7 +158,24 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
           setDepenses(depensesData);
           break;
         case 'recettes':
-          const recettesData = await getRecettesExceptionnelles();
+          let recettesData = await getRecettesExceptionnelles();
+
+          // Filtrer par date de session ou par plage de dates
+          if (showRecetteDateFilter && recetteDateFilter.dateFrom && recetteDateFilter.dateTo) {
+            // Filtre par plage de dates
+            recettesData = recettesData.filter(r => {
+              if (!r.created_at) return false;
+              const createdDate = r.created_at.split('T')[0];
+              return createdDate >= recetteDateFilter.dateFrom && createdDate <= recetteDateFilter.dateTo;
+            });
+          } else {
+            // Filtre par date de session (par défaut)
+            const sessionDate = getSessionDate();
+            recettesData = recettesData.filter(r =>
+              r.created_at && r.created_at.startsWith(sessionDate)
+            );
+          }
+
           setRecettes(recettesData);
           break;
         case 'ristournes':
@@ -169,7 +200,24 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
           setRistournes(ristournesData);
           break;
         case 'sinistres':
-          const sinistresData = await getSinistres();
+          let sinistresData = await getSinistres();
+
+          // Filtrer par date de session ou par plage de dates
+          if (showSinistreDateFilter && sinistreDateFilter.dateFrom && sinistreDateFilter.dateTo) {
+            // Filtre par plage de dates
+            sinistresData = sinistresData.filter(s => {
+              if (!s.created_at) return false;
+              const createdDate = s.created_at.split('T')[0];
+              return createdDate >= sinistreDateFilter.dateFrom && createdDate <= sinistreDateFilter.dateTo;
+            });
+          } else {
+            // Filtre par date de session (par défaut)
+            const sessionDate = getSessionDate();
+            sinistresData = sinistresData.filter(s =>
+              s.created_at && s.created_at.startsWith(sessionDate)
+            );
+          }
+
           setSinistres(sinistresData);
           break;
       }
@@ -562,7 +610,16 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
   const renderDepensesContent = () => (
     <div className="bg-red-50 rounded-lg p-6">
-      <h3 className="text-lg font-semibold text-red-800 mb-4">Gestion des Dépenses</h3>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-semibold text-red-800">Gestion des Dépenses</h3>
+        <button
+          onClick={exportDepenses}
+          className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+        >
+          <FileSpreadsheet className="w-4 h-4" />
+          <span>Exporter Excel</span>
+        </button>
+      </div>
       
       {/* Formulaire de saisie */}
       <div className="bg-white rounded-lg p-4 mb-6 border border-red-200">
@@ -584,6 +641,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
               <option value="Reprise sur Avance Client">Reprise sur Avance Client</option>
               <option value="Versement Bancaire">Versement Bancaire</option>
               <option value="Remise">Remise</option>
+              <option value="Hamza">Hamza</option>
             </select>
           </div>
           <div>
@@ -795,8 +853,51 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
   const renderRecettesContent = () => (
     <div className="bg-green-50 rounded-lg p-6">
-      <h3 className="text-lg font-semibold text-green-800 mb-4">Recettes Exceptionnelles</h3>
-      
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-semibold text-green-800">Recettes Exceptionnelles</h3>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setShowRecetteDateFilter(!showRecetteDateFilter)}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Calendar className="w-4 h-4" />
+            <span>{showRecetteDateFilter ? 'Session' : 'Filtrer'}</span>
+          </button>
+          <button
+            onClick={exportRecettes}
+            className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Exporter Excel</span>
+          </button>
+        </div>
+      </div>
+
+      {showRecetteDateFilter && (
+        <div className="bg-white rounded-lg p-4 mb-4 border border-green-200">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date début</label>
+              <input
+                type="date"
+                value={recetteDateFilter.dateFrom}
+                onChange={(e) => setRecetteDateFilter({...recetteDateFilter, dateFrom: e.target.value})}
+                className="w-full p-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date fin</label>
+              <input
+                type="date"
+                value={recetteDateFilter.dateTo}
+                onChange={(e) => setRecetteDateFilter({...recetteDateFilter, dateTo: e.target.value})}
+                className="w-full p-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Formulaire de saisie */}
       <div className="bg-white rounded-lg p-4 mb-6 border border-green-200">
         <h4 className="font-medium text-green-700 mb-4">Nouvelle Recette Exceptionnelle</h4>
@@ -917,8 +1018,51 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
   const renderRistournesContent = () => (
     <div className="bg-purple-50 rounded-lg p-6">
-      <h3 className="text-lg font-semibold text-purple-800 mb-4">Gestion des Ristournes</h3>
-      
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-semibold text-purple-800">Gestion des Ristournes</h3>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setShowRistourneDateFilter(!showRistourneDateFilter)}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Calendar className="w-4 h-4" />
+            <span>{showRistourneDateFilter ? 'Session' : 'Filtrer'}</span>
+          </button>
+          <button
+            onClick={exportRistournes}
+            className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Exporter Excel</span>
+          </button>
+        </div>
+      </div>
+
+      {showRistourneDateFilter && (
+        <div className="bg-white rounded-lg p-4 mb-4 border border-purple-200">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date début</label>
+              <input
+                type="date"
+                value={ristourneDateFilter.dateFrom}
+                onChange={(e) => setRistourneDateFilter({...ristourneDateFilter, dateFrom: e.target.value})}
+                className="w-full p-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date fin</label>
+              <input
+                type="date"
+                value={ristourneDateFilter.dateTo}
+                onChange={(e) => setRistourneDateFilter({...ristourneDateFilter, dateTo: e.target.value})}
+                className="w-full p-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Formulaire de saisie */}
       <div className="bg-white rounded-lg p-4 mb-6 border border-purple-200">
         <h4 className="font-medium text-purple-700 mb-4">Nouvelle Ristourne</h4>
@@ -1109,8 +1253,51 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
   const renderSinistresContent = () => (
     <div className="bg-orange-50 rounded-lg p-6">
-      <h3 className="text-lg font-semibold text-orange-800 mb-4">Gestion des Sinistres</h3>
-      
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-semibold text-orange-800">Gestion des Sinistres</h3>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setShowSinistreDateFilter(!showSinistreDateFilter)}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Calendar className="w-4 h-4" />
+            <span>{showSinistreDateFilter ? 'Session' : 'Filtrer'}</span>
+          </button>
+          <button
+            onClick={exportSinistres}
+            className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Exporter Excel</span>
+          </button>
+        </div>
+      </div>
+
+      {showSinistreDateFilter && (
+        <div className="bg-white rounded-lg p-4 mb-4 border border-orange-200">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date début</label>
+              <input
+                type="date"
+                value={sinistreDateFilter.dateFrom}
+                onChange={(e) => setSinistreDateFilter({...sinistreDateFilter, dateFrom: e.target.value})}
+                className="w-full p-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date fin</label>
+              <input
+                type="date"
+                value={sinistreDateFilter.dateTo}
+                onChange={(e) => setSinistreDateFilter({...sinistreDateFilter, dateTo: e.target.value})}
+                className="w-full p-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Formulaire de saisie */}
       <div className="bg-white rounded-lg p-4 mb-6 border border-orange-200">
         <h4 className="font-medium text-orange-700 mb-4">Nouveau Sinistre</h4>
@@ -1164,6 +1351,18 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
               className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Type de paiement</label>
+            <select
+              value={newSinistre.type_paiement}
+              onChange={(e) => setNewSinistre({...newSinistre, type_paiement: e.target.value as 'Espece' | 'Cheque' | 'Banque'})}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            >
+              <option value="Espece">Espèce</option>
+              <option value="Cheque">Chèque</option>
+              <option value="Banque">Banque</option>
+            </select>
+          </div>
         </div>
         <button
           onClick={handleSaveSinistre}
@@ -1215,6 +1414,69 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       </div>
     </div>
   );
+
+  const exportToExcel = (data: any[], filename: string, sheetName: string) => {
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, `${filename}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const exportDepenses = () => {
+    const dataToExport = depenses.map(d => ({
+      'Type de dépense': d.type_depense,
+      'Montant': d.montant,
+      'Date': d.date_depense,
+      'N° Contrat': d.Numero_Contrat || '',
+      'Client': d.Client || '',
+      'Créé par': d.cree_par,
+      'Date création': d.created_at ? new Date(d.created_at).toLocaleString('fr-FR') : ''
+    }));
+    exportToExcel(dataToExport, 'depenses', 'Dépenses');
+  };
+
+  const exportRecettes = () => {
+    const dataToExport = recettes.map(r => ({
+      'Type de recette': r.type_recette,
+      'Montant': r.montant,
+      'Date': r.date_recette,
+      'N° Contrat': r.Numero_Contrat || '',
+      'Echéance': r.Echeance || '',
+      'Assuré': r.Assure || '',
+      'Statut': r.Statut || '',
+      'Créé par': r.cree_par,
+      'Date création': r.created_at ? new Date(r.created_at).toLocaleString('fr-FR') : ''
+    }));
+    exportToExcel(dataToExport, 'recettes_exceptionnelles', 'Recettes');
+  };
+
+  const exportRistournes = () => {
+    const dataToExport = ristournes.map(r => ({
+      'N° Contrat': r.numero_contrat,
+      'Client': r.client,
+      'Montant': r.montant_ristourne,
+      'Date ristourne': r.date_ristourne,
+      'Date paiement': r.date_paiement_ristourne ? new Date(r.date_paiement_ristourne).toLocaleDateString('fr-FR') : '',
+      'Type paiement': r.type_paiement,
+      'Créé par': r.cree_par,
+      'Date création': r.created_at ? new Date(r.created_at).toLocaleString('fr-FR') : ''
+    }));
+    exportToExcel(dataToExport, 'ristournes', 'Ristournes');
+  };
+
+  const exportSinistres = () => {
+    const dataToExport = sinistres.map(s => ({
+      'N° Sinistre': s.numero_sinistre,
+      'Montant': s.montant,
+      'Client': s.client,
+      'Date sinistre': s.date_sinistre,
+      'Date paiement': s.date_paiement_sinistre || '',
+      'Type paiement': s.type_paiement || '',
+      'Créé par': s.cree_par,
+      'Date création': s.created_at ? new Date(s.created_at).toLocaleString('fr-FR') : ''
+    }));
+    exportToExcel(dataToExport, 'sinistres', 'Sinistres');
+  };
 
   const renderContent = () => {
     switch (activeSection) {

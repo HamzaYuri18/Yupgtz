@@ -43,6 +43,7 @@ export interface Sinistre {
   client: string;
   date_sinistre?: string;
   date_paiement_sinistre?: string;
+  type_paiement?: string;
   cree_par: string;
   created_at?: string;
 }
@@ -351,6 +352,7 @@ export const saveSinistre = async (sinistre: Sinistre): Promise<boolean> => {
         client: sinistre.client,
         date_sinistre: sinistre.date_sinistre || new Date().toISOString().split('T')[0],
         date_paiement_sinistre: sinistre.date_paiement_sinistre,
+        type_paiement: sinistre.type_paiement || 'Espece',
         created_at: new Date().toISOString().split('T')[0],
         cree_par: sinistre.cree_par
       }])
