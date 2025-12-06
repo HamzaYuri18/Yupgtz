@@ -97,10 +97,10 @@ const TransactionReport: React.FC = () => {
         stats.countCredits++;
       }
 
-      // Calculer Total Espèces Net (Espèce - Dépenses - Ristournes)
+      // Calculer Total Espèces Net (Espèce - Dépenses - Ristournes - Sinistres)
       if (transaction.mode_paiement === 'Espece') {
         stats.countEspeces++;
-        if (transaction.type === 'Dépense' || transaction.type === 'Ristourne') {
+        if (transaction.type === 'Dépense' || transaction.type === 'Ristourne' || transaction.type === 'Sinistre') {
           stats.totalEspecesNet -= montant;
         } else {
           stats.totalEspecesNet += montant;
