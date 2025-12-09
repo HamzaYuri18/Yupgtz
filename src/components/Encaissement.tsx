@@ -91,6 +91,9 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   const [previousRpData, setPreviousRpData] = useState<RPData | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [sessionExists, setSessionExists] = useState<boolean>(true);
+  const [dateDebut, setDateDebut] = useState<string>('');
+  const [dateFin, setDateFin] = useState<string>('');
+  const [exportRangeLoading, setExportRangeLoading] = useState<string | null>(null);
 
   useEffect(() => {
     initializeSessionDate();
@@ -742,10 +745,10 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
   // Fonction pour exporter les données en Excel
   const exportToExcel = async (type: 'paiements' | 'encaissements' | 'statut_null' | 'encaisses') => {
     setExportLoading(type);
-    
+
     try {
       const currentSessionDate = useCustomDate ? customSessionDate : sessionDate;
-      
+
       let data: ContratData[] = [];
       let fileName = '';
       let sheetName = '';
@@ -834,6 +837,188 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       setMessageType('error');
     } finally {
       setExportLoading(null);
+    }
+  };
+
+  const exportRangeToExcel = async (type: 'paiements_range' | 'encaissements_range' | 'rp_range') => {
+    if (!dateDebut || !dateFin) {
+      setMessage('Veuillez sélectionner les dates de début et de fin');
+      setMessageType('error');
+      return;
+    }
+
+    if (dateDebut > dateFin) {
+      setMessage('La date de début doit être antérieure à la date de fin');
+      setMessageType('error');
+      return;
+    }
+
+    setExportRangeLoading(type);
+
+    try {
+      console.log(`Export plage ${type} - Du ${dateDebut} au ${dateFin}`);
+
+      switch (type) {
+        case 'paiements_range': {
+          const { data: paiementsData } = await supabase
+            .from('terme')
+            .select('numero_contrat, prime, assure, echeance, date_paiement, Date_Encaissement, statut, branche')
+            .gte('date_paiement', dateDebut)
+            .lte('date_paiement', dateFin)
+            .order('date_paiement', { ascending: true });
+
+          if (!paiementsData || paiementsData.length === 0) {
+            setMessage('Aucun paiement trouvé pour cette période');
+            setMessageType('warning');
+            setExportRangeLoading(null);
+            return;
+          }
+
+          const excelData = paiementsData.map(contrat => ({
+            'Numéro Contrat': contrat.numero_contrat,
+            'Assuré': contrat.assure,
+            'Prime': Number(contrat.prime),
+            'Branche': contrat.branche,
+            'Échéance': formatDate(contrat.echeance),
+            'Date Paiement': contrat.date_paiement ? formatDate(contrat.date_paiement) : 'Non payé',
+            'Date Encaissement': contrat.Date_Encaissement ? formatDate(contrat.Date_Encaissement) : 'Non encaissé',
+            'Statut': contrat.statut || 'En attente'
+          }));
+
+          const totalPaiements = paiementsData.reduce((sum, c) => sum + Number(c.prime), 0);
+
+          const wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.json_to_sheet(excelData);
+
+          XLSX.utils.sheet_add_json(ws, [{
+            'Numéro Contrat': '',
+            'Assuré': '',
+            'Prime': '',
+            'Branche': '',
+            'Échéance': '',
+            'Date Paiement': 'TOTAL:',
+            'Date Encaissement': totalPaiements,
+            'Statut': ''
+          }], { skipHeader: true, origin: -1 });
+
+          XLSX.utils.book_append_sheet(wb, ws, 'Paiements');
+
+          const fileName = `paiements_${dateDebut}_au_${dateFin}.xlsx`;
+          XLSX.writeFile(wb, fileName);
+
+          setMessage(`${paiementsData.length} paiement(s) exporté(s) avec succès!`);
+          setMessageType('success');
+          break;
+        }
+
+        case 'encaissements_range': {
+          const { data: encaissementsData } = await supabase
+            .from('terme')
+            .select('numero_contrat, prime, assure, echeance, date_paiement, Date_Encaissement, statut, branche')
+            .gte('Date_Encaissement', dateDebut)
+            .lte('Date_Encaissement', dateFin)
+            .eq('statut', 'Encaissé')
+            .order('Date_Encaissement', { ascending: true });
+
+          if (!encaissementsData || encaissementsData.length === 0) {
+            setMessage('Aucun encaissement trouvé pour cette période');
+            setMessageType('warning');
+            setExportRangeLoading(null);
+            return;
+          }
+
+          const excelData = encaissementsData.map(contrat => ({
+            'Numéro Contrat': contrat.numero_contrat,
+            'Assuré': contrat.assure,
+            'Prime': Number(contrat.prime),
+            'Branche': contrat.branche,
+            'Échéance': formatDate(contrat.echeance),
+            'Date Paiement': contrat.date_paiement ? formatDate(contrat.date_paiement) : 'Non payé',
+            'Date Encaissement': contrat.Date_Encaissement ? formatDate(contrat.Date_Encaissement) : 'Non encaissé',
+            'Statut': contrat.statut || 'En attente'
+          }));
+
+          const totalEncaissements = encaissementsData.reduce((sum, c) => sum + Number(c.prime), 0);
+
+          const wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.json_to_sheet(excelData);
+
+          XLSX.utils.sheet_add_json(ws, [{
+            'Numéro Contrat': '',
+            'Assuré': '',
+            'Prime': '',
+            'Branche': '',
+            'Échéance': '',
+            'Date Paiement': 'TOTAL:',
+            'Date Encaissement': totalEncaissements,
+            'Statut': ''
+          }], { skipHeader: true, origin: -1 });
+
+          XLSX.utils.book_append_sheet(wb, ws, 'Encaissements');
+
+          const fileName = `encaissements_${dateDebut}_au_${dateFin}.xlsx`;
+          XLSX.writeFile(wb, fileName);
+
+          setMessage(`${encaissementsData.length} encaissement(s) exporté(s) avec succès!`);
+          setMessageType('success');
+          break;
+        }
+
+        case 'rp_range': {
+          const { data: rpRangeData } = await supabase
+            .from('rp')
+            .select('session, paiement, encaissement, difference, reportdeport')
+            .gte('session', dateDebut)
+            .lte('session', dateFin)
+            .order('session', { ascending: true });
+
+          if (!rpRangeData || rpRangeData.length === 0) {
+            setMessage('Aucune donnée RP trouvée pour cette période');
+            setMessageType('warning');
+            setExportRangeLoading(null);
+            return;
+          }
+
+          const excelData = rpRangeData.map(rp => ({
+            'Session': formatDate(rp.session),
+            'Paiement (TND)': Number(rp.paiement),
+            'Encaissement (TND)': Number(rp.encaissement),
+            'Différence (TND)': Number(rp.difference),
+            'Report/Déport (TND)': Number(rp.reportdeport)
+          }));
+
+          const totalPaiements = rpRangeData.reduce((sum, rp) => sum + Number(rp.paiement), 0);
+          const totalEncaissements = rpRangeData.reduce((sum, rp) => sum + Number(rp.encaissement), 0);
+          const totalDifferences = rpRangeData.reduce((sum, rp) => sum + Number(rp.difference), 0);
+
+          const wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.json_to_sheet(excelData);
+
+          XLSX.utils.sheet_add_json(ws, [{
+            'Session': 'TOTAL:',
+            'Paiement (TND)': totalPaiements,
+            'Encaissement (TND)': totalEncaissements,
+            'Différence (TND)': totalDifferences,
+            'Report/Déport (TND)': rpRangeData[rpRangeData.length - 1]?.reportdeport || 0
+          }], { skipHeader: true, origin: -1 });
+
+          XLSX.utils.book_append_sheet(wb, ws, 'Données RP');
+
+          const fileName = `rp_${dateDebut}_au_${dateFin}.xlsx`;
+          XLSX.writeFile(wb, fileName);
+
+          setMessage(`${rpRangeData.length} session(s) RP exportée(s) avec succès!`);
+          setMessageType('success');
+          break;
+        }
+      }
+
+    } catch (error) {
+      console.error('Erreur lors de l\'export plage Excel:', error);
+      setMessage('Erreur lors de l\'export Excel');
+      setMessageType('error');
+    } finally {
+      setExportRangeLoading(null);
     }
   };
 
@@ -1246,6 +1431,87 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
             <strong>Informations techniques:</strong> Session ID: {getTechnicalDate()} | 
             Données chargées depuis table TERME | 
             Dernier chargement: {new Date().toLocaleTimeString('fr-FR')}
+          </p>
+        </div>
+      </div>
+
+      {/* Filtre et Export par Plage de Dates */}
+      <div className="bg-gradient-to-r from-teal-50 to-cyan-50 p-6 rounded-lg border-2 border-teal-200 mb-6">
+        <h3 className="text-lg font-semibold text-teal-800 mb-4 flex items-center">
+          <Calendar className="w-5 h-5 mr-2" />
+          Export par Plage de Dates
+        </h3>
+        <p className="text-sm text-teal-600 mb-4">
+          Filtrez et exportez les paiements, encaissements ou données RP pour une période spécifique
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-teal-700 mb-2">
+              Date de début
+            </label>
+            <input
+              type="date"
+              value={dateDebut}
+              onChange={(e) => setDateDebut(e.target.value)}
+              className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-teal-700 mb-2">
+              Date de fin
+            </label>
+            <input
+              type="date"
+              value={dateFin}
+              onChange={(e) => setDateFin(e.target.value)}
+              className="w-full px-3 py-2 border border-teal-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+            />
+          </div>
+          <div className="flex items-end">
+            <div className="text-sm text-teal-600">
+              {dateDebut && dateFin && (
+                <p>
+                  Période: du {formatDate(dateDebut)} au {formatDate(dateFin)}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button
+            onClick={() => exportRangeToExcel('paiements_range')}
+            disabled={!dateDebut || !dateFin || exportRangeLoading === 'paiements_range'}
+            className="flex items-center justify-center px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:from-orange-600 hover:to-orange-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
+          >
+            <Download className="w-5 h-5 mr-2" />
+            {exportRangeLoading === 'paiements_range' ? 'Export en cours...' : 'Exporter Paiements'}
+          </button>
+
+          <button
+            onClick={() => exportRangeToExcel('encaissements_range')}
+            disabled={!dateDebut || !dateFin || exportRangeLoading === 'encaissements_range'}
+            className="flex items-center justify-center px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
+          >
+            <Download className="w-5 h-5 mr-2" />
+            {exportRangeLoading === 'encaissements_range' ? 'Export en cours...' : 'Exporter Encaissements'}
+          </button>
+
+          <button
+            onClick={() => exportRangeToExcel('rp_range')}
+            disabled={!dateDebut || !dateFin || exportRangeLoading === 'rp_range'}
+            className="flex items-center justify-center px-4 py-3 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-teal-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
+          >
+            <Download className="w-5 h-5 mr-2" />
+            {exportRangeLoading === 'rp_range' ? 'Export en cours...' : 'Exporter Données RP'}
+          </button>
+        </div>
+
+        <div className="mt-4 bg-teal-100 border border-teal-300 rounded-lg p-3">
+          <p className="text-sm text-teal-800">
+            <strong>Astuce:</strong> Les exports incluent automatiquement les totaux et sont triés par date.
+            Les fichiers XLSX sont prêts pour l'analyse dans Excel.
           </p>
         </div>
       </div>
