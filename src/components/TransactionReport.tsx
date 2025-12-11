@@ -14,7 +14,6 @@ interface Transaction {
   type_paiement: string;
   montant_credit: number | null;
   montant: number;
-  montant_recu: number | null;
   date_paiement_prevue: string | null;
   cree_par: string;
   created_at: string;
@@ -98,11 +97,10 @@ const TransactionReport: React.FC = () => {
         stats.countCredits++;
       }
 
-      // Calculer Total Espèces Net (montant_recu pour Espèce + Au Comptant uniquement)
+      // Calculer Total Espèces Net (montant pour Espèce + Au Comptant uniquement)
       if (transaction.mode_paiement === 'Espece' && transaction.type_paiement === 'Au Comptant') {
         stats.countEspeces++;
-        const montantRecu = transaction.montant_recu || 0;
-        stats.totalEspecesNet += montantRecu;
+        stats.totalEspecesNet += montant;
       }
 
       // Calculer Total Chèque
@@ -198,24 +196,26 @@ const TransactionReport: React.FC = () => {
     setError('');
 
     try {
-      const startDate = new Date(dateFrom);
-      startDate.setHours(0, 0, 0, 0);
-
-      const endDate = new Date(dateTo);
-      endDate.setHours(23, 59, 59, 999);
-
       const { data, error: fetchError } = await supabase
         .from('rapport')
         .select('*')
-        .gte('created_at', startDate.toISOString())
-        .lte('created_at', endDate.toISOString())
         .order('created_at', { ascending: false });
 
       if (fetchError) throw fetchError;
 
+      // Filtrer par date (conversion timestamp vers date simple)
+      const filteredData = (data || []).filter(transaction => {
+        const transactionDate = new Date(transaction.created_at);
+        const transactionDateOnly = new Date(transactionDate.getFullYear(), transactionDate.getMonth(), transactionDate.getDate());
+        const startDateOnly = new Date(dateFrom);
+        const endDateOnly = new Date(dateTo);
+
+        return transactionDateOnly >= startDateOnly && transactionDateOnly <= endDateOnly;
+      });
+
       // Enrichir les transactions de type "Terme" avec les informations de retour
       const enrichedData = await Promise.all(
-        (data || []).map(async (transaction) => {
+        filteredData.map(async (transaction) => {
           if (transaction.type === 'Terme' && transaction.numero_contrat && transaction.echeance) {
             try {
               // Normaliser la date d'échéance (format YYYY-MM-DD)
@@ -282,7 +282,6 @@ const TransactionReport: React.FC = () => {
       'Type Paiement': t.type_paiement,
       'Montant Crédit': t.montant_credit || '',
       'Montant': t.montant,
-      'Montant Reçu': t.montant_recu || '',
       'Date Paiement Prévue': t.date_paiement_prevue || '',
       'Créé Par': t.cree_par,
       'Date Création': new Date(t.created_at).toLocaleString('fr-FR')
