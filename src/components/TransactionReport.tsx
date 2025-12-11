@@ -97,17 +97,10 @@ const TransactionReport: React.FC = () => {
         stats.countCredits++;
       }
 
-      // Calculer Total Espèces Net (toutes transactions en Espèce - Dépenses)
-      // Exclure les transactions avec montant = 0
-      if (transaction.mode_paiement === 'Espece' && montant !== 0) {
+      // Calculer Total Espèces Net (seulement mode_paiement=Espece ET type_paiement=Au Comptant)
+      if (transaction.mode_paiement === 'Espece' && transaction.type_paiement === 'Au Comptant') {
+        stats.totalEspecesNet += montant;
         stats.countEspeces++;
-        // Ajouter les encaissements en espèces (transactions positives)
-        if (transaction.type !== 'Dépense') {
-          stats.totalEspecesNet += montant;
-        } else {
-          // Soustraire les dépenses en espèces
-          stats.totalEspecesNet -= montant;
-        }
       }
 
       // Calculer Total Chèque
