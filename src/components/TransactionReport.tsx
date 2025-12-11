@@ -300,6 +300,46 @@ const TransactionReport: React.FC = () => {
     XLSX.writeFile(wb, fileName);
   };
 
+  const handleExportEspecesNet = () => {
+    if (transactions.length === 0) {
+      setError('Aucune transaction à exporter');
+      return;
+    }
+
+    // Filtrer les transactions en espèces
+    const especesTransactions = transactions.filter(t => t.mode_paiement === 'Espece');
+
+    if (especesTransactions.length === 0) {
+      setError('Aucune transaction en espèces à exporter');
+      return;
+    }
+
+    const exportData = especesTransactions.map(t => ({
+      'ID': t.id,
+      'Type': t.type,
+      'Retour': t.retour_type ? (t.retour_type === 'Technique' ? 'RT' : 'RCX') : '',
+      'Branche': t.branche,
+      'Numéro Contrat': t.numero_contrat,
+      'Prime': t.prime,
+      'Prime Avant Retour': t.prime_avant_retour || '',
+      'Assuré': t.assure,
+      'Mode Paiement': t.mode_paiement,
+      'Type Paiement': t.type_paiement,
+      'Montant Crédit': t.montant_credit || '',
+      'Montant': t.montant,
+      'Date Paiement Prévue': t.date_paiement_prevue || '',
+      'Créé Par': t.cree_par,
+      'Date Création': new Date(t.created_at).toLocaleString('fr-FR')
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Espèces');
+
+    const fileName = `especes_net_${dateFrom}_au_${dateTo}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
+
   const formatCurrency = (amount: number) => {
     return `${new Intl.NumberFormat('fr-FR', {
       minimumFractionDigits: 3,
@@ -409,7 +449,11 @@ const TransactionReport: React.FC = () => {
               <p className="text-orange-100 text-xs font-medium">Total Crédits</p>
             </div>
 
-            <div className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl shadow-sm p-4 text-white">
+            <div
+              onClick={handleExportEspecesNet}
+              className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl shadow-sm p-4 text-white cursor-pointer hover:scale-105 transition-transform hover:shadow-lg"
+              title="Cliquer pour exporter les transactions en espèces"
+            >
               <div className="flex items-center justify-between mb-2">
                 <DollarSign className="w-6 h-6 opacity-80" />
                 <div className="text-right">
@@ -417,7 +461,10 @@ const TransactionReport: React.FC = () => {
                   <span className="text-sm opacity-90">({statistics.countEspeces} opérations)</span>
                 </div>
               </div>
-              <p className="text-teal-100 text-xs font-medium">Total Espèces Net</p>
+              <p className="text-teal-100 text-xs font-medium flex items-center justify-between">
+                <span>Total Espèces Net</span>
+                <Download className="w-4 h-4 opacity-70" />
+              </p>
             </div>
 
             <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl shadow-sm p-4 text-white">
