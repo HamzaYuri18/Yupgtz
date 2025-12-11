@@ -14,6 +14,7 @@ interface Transaction {
   type_paiement: string;
   montant_credit: number | null;
   montant: number;
+  montant_recu: number | null;
   date_paiement_prevue: string | null;
   cree_par: string;
   created_at: string;
@@ -97,14 +98,11 @@ const TransactionReport: React.FC = () => {
         stats.countCredits++;
       }
 
-      // Calculer Total Espèces Net (Espèce - Dépenses - Ristournes - Sinistres)
-      if (transaction.mode_paiement === 'Espece') {
+      // Calculer Total Espèces Net (montant_recu pour Espèce + Au Comptant uniquement)
+      if (transaction.mode_paiement === 'Espece' && transaction.type_paiement === 'Au Comptant') {
         stats.countEspeces++;
-        if (transaction.type === 'Dépense' || transaction.type === 'Ristourne' || transaction.type === 'Sinistre') {
-          stats.totalEspecesNet -= montant;
-        } else {
-          stats.totalEspecesNet += montant;
-        }
+        const montantRecu = transaction.montant_recu || 0;
+        stats.totalEspecesNet += montantRecu;
       }
 
       // Calculer Total Chèque
@@ -284,6 +282,7 @@ const TransactionReport: React.FC = () => {
       'Type Paiement': t.type_paiement,
       'Montant Crédit': t.montant_credit || '',
       'Montant': t.montant,
+      'Montant Reçu': t.montant_recu || '',
       'Date Paiement Prévue': t.date_paiement_prevue || '',
       'Créé Par': t.cree_par,
       'Date Création': new Date(t.created_at).toLocaleString('fr-FR')
