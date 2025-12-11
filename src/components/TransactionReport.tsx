@@ -203,14 +203,13 @@ const TransactionReport: React.FC = () => {
 
       if (fetchError) throw fetchError;
 
-      // Filtrer par date (conversion timestamp vers date simple)
+      // Filtrer par date (conversion timestamp vers date simple YYYY-MM-DD)
       const filteredData = (data || []).filter(transaction => {
-        const transactionDate = new Date(transaction.created_at);
-        const transactionDateOnly = new Date(transactionDate.getFullYear(), transactionDate.getMonth(), transactionDate.getDate());
-        const startDateOnly = new Date(dateFrom);
-        const endDateOnly = new Date(dateTo);
+        // Extraire la partie date de created_at (format YYYY-MM-DD)
+        const transactionDateStr = transaction.created_at.split('T')[0];
 
-        return transactionDateOnly >= startDateOnly && transactionDateOnly <= endDateOnly;
+        // Comparer les dates au format YYYY-MM-DD
+        return transactionDateStr >= dateFrom && transactionDateStr <= dateTo;
       });
 
       // Enrichir les transactions de type "Terme" avec les informations de retour
