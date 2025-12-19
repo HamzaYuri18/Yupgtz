@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Save, Edit2, Check, X, DollarSign, TrendingDown, TrendingUp, FileText } from 'lucide-react';
+import { Calendar, Save, Edit2, Check, X, DollarSign, TrendingDown, TrendingUp, FileText, Download, Filter } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import * as XLSX from 'xlsx';
 
 interface QuinzaineData {
   id?: string;
@@ -22,11 +23,14 @@ interface QuinzaineData {
 
 const EtatCommissions: React.FC = () => {
   const [quinzaines, setQuinzaines] = useState<QuinzaineData[]>([]);
+  const [filteredQuinzaines, setFilteredQuinzaines] = useState<QuinzaineData[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<QuinzaineData>>({});
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [filterAnnee, setFilterAnnee] = useState<string>('all');
+  const [filterQuinzaine, setFilterQuinzaine] = useState<string>('all');
 
   const moisNoms = [
     'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -281,9 +285,103 @@ const EtatCommissions: React.FC = () => {
     setEditData({});
   };
 
+  const exportCharges = async (quinzaine: QuinzaineData) => {
+    try {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('*')
+        .gte('date_session', quinzaine.date_debut)
+        .lte('date_session', quinzaine.date_fin)
+        .order('date_session', { ascending: false });
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        setError('Aucune charge trouvée pour cette période');
+        return;
+      }
+
+      const exportData = data.map(session => ({
+        'Date Session': session.date_session,
+        'Charges': Number(session.charges) || 0,
+        'Statut': session.statut,
+        'Remarques': session.remarques || ''
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Charges');
+
+      const fileName = `charges_${moisNoms[quinzaine.mois - 1]}_${quinzaine.annee}_Q${quinzaine.quinzaine}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } catch (err) {
+      console.error('Erreur export charges:', err);
+      setError('Erreur lors de l\'export des charges');
+    }
+  };
+
+  const exportDepenses = async (quinzaine: QuinzaineData) => {
+    try {
+      const excludedTypes = ['Versement Bancaire', 'A/S Ahlem', 'A/S Islem', 'Reprise sur Avance Client'];
+
+      const { data, error } = await supabase
+        .from('depenses')
+        .select('*')
+        .gte('date_depense', quinzaine.date_debut)
+        .lte('date_depense', quinzaine.date_fin)
+        .order('date_depense', { ascending: false });
+
+      if (error) throw error;
+
+      const filteredData = data?.filter(d => !excludedTypes.includes(d.type_depense));
+
+      if (!filteredData || filteredData.length === 0) {
+        setError('Aucune dépense trouvée pour cette période');
+        return;
+      }
+
+      const exportData = filteredData.map(depense => ({
+        'Date Dépense': depense.date_depense,
+        'Type Dépense': depense.type_depense,
+        'Montant': Number(depense.montant) || 0,
+        'Client': depense.Client || '',
+        'Numéro Contrat': depense.Numero_Contrat || '',
+        'Créé Par': depense.cree_par
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Dépenses');
+
+      const fileName = `depenses_${moisNoms[quinzaine.mois - 1]}_${quinzaine.annee}_Q${quinzaine.quinzaine}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } catch (err) {
+      console.error('Erreur export dépenses:', err);
+      setError('Erreur lors de l\'export des dépenses');
+    }
+  };
+
+  const applyFilters = () => {
+    let filtered = [...quinzaines];
+
+    if (filterAnnee !== 'all') {
+      filtered = filtered.filter(q => q.annee === Number(filterAnnee));
+    }
+
+    if (filterQuinzaine !== 'all') {
+      filtered = filtered.filter(q => q.quinzaine === Number(filterQuinzaine));
+    }
+
+    setFilteredQuinzaines(filtered);
+  };
+
   useEffect(() => {
     loadQuinzaines();
   }, []);
+
+  useEffect(() => {
+    applyFilters();
+  }, [quinzaines, filterAnnee, filterQuinzaine]);
 
   const formatCurrency = (amount: number) => {
     return `${new Intl.NumberFormat('fr-FR', {
@@ -334,6 +432,52 @@ const EtatCommissions: React.FC = () => {
             {success}
           </div>
         )}
+
+        <div className="flex items-center space-x-4 mt-4">
+          <div className="flex items-center space-x-2">
+            <Filter className="w-4 h-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Filtres:</span>
+          </div>
+
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Année</label>
+            <select
+              value={filterAnnee}
+              onChange={(e) => setFilterAnnee(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+            >
+              <option value="all">Toutes les années</option>
+              {Array.from(new Set(quinzaines.map(q => q.annee))).sort((a, b) => b - a).map(annee => (
+                <option key={annee} value={annee}>{annee}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Quinzaine</label>
+            <select
+              value={filterQuinzaine}
+              onChange={(e) => setFilterQuinzaine(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+            >
+              <option value="all">Toutes les quinzaines</option>
+              <option value="1">Quinzaine 1</option>
+              <option value="2">Quinzaine 2</option>
+            </select>
+          </div>
+
+          {(filterAnnee !== 'all' || filterQuinzaine !== 'all') && (
+            <button
+              onClick={() => {
+                setFilterAnnee('all');
+                setFilterQuinzaine('all');
+              }}
+              className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Réinitialiser
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -353,7 +497,7 @@ const EtatCommissions: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {quinzaines.map((quinzaine) => (
+              {filteredQuinzaines.map((quinzaine) => (
                 <tr key={`${quinzaine.annee}-${quinzaine.mois}-${quinzaine.quinzaine}`} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm">
                     <div className="font-medium text-gray-900">
@@ -376,11 +520,25 @@ const EtatCommissions: React.FC = () => {
                       <span className="font-semibold text-blue-600">{formatCurrency(quinzaine.commission)}</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm text-right">
-                    <span className="font-semibold text-red-600">{formatCurrency(quinzaine.total_charges)}</span>
+                  <td
+                    className="px-4 py-3 text-sm text-right cursor-pointer hover:bg-red-50 transition-colors group"
+                    onClick={() => exportCharges(quinzaine)}
+                    title="Cliquer pour exporter les détails"
+                  >
+                    <div className="flex items-center justify-end space-x-1">
+                      <span className="font-semibold text-red-600">{formatCurrency(quinzaine.total_charges)}</span>
+                      <Download className="w-3 h-3 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-sm text-right">
-                    <span className="font-semibold text-orange-600">{formatCurrency(quinzaine.total_depenses)}</span>
+                  <td
+                    className="px-4 py-3 text-sm text-right cursor-pointer hover:bg-orange-50 transition-colors group"
+                    onClick={() => exportDepenses(quinzaine)}
+                    title="Cliquer pour exporter les détails"
+                  >
+                    <div className="flex items-center justify-end space-x-1">
+                      <span className="font-semibold text-orange-600">{formatCurrency(quinzaine.total_depenses)}</span>
+                      <Download className="w-3 h-3 text-orange-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-right">
                     <span className={`font-bold ${quinzaine.commission_nette >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -496,7 +654,7 @@ const EtatCommissions: React.FC = () => {
           <div className="flex items-center justify-between mb-2">
             <DollarSign className="w-6 h-6 opacity-80" />
             <span className="text-xl font-bold">
-              {formatCurrency(quinzaines.reduce((sum, q) => sum + q.commission, 0))}
+              {formatCurrency(filteredQuinzaines.reduce((sum, q) => sum + q.commission, 0))}
             </span>
           </div>
           <p className="text-blue-100 text-xs font-medium">Total Commissions</p>
@@ -506,7 +664,7 @@ const EtatCommissions: React.FC = () => {
           <div className="flex items-center justify-between mb-2">
             <TrendingDown className="w-6 h-6 opacity-80" />
             <span className="text-xl font-bold">
-              {formatCurrency(quinzaines.reduce((sum, q) => sum + q.total_charges, 0))}
+              {formatCurrency(filteredQuinzaines.reduce((sum, q) => sum + q.total_charges, 0))}
             </span>
           </div>
           <p className="text-red-100 text-xs font-medium">Total Charges</p>
@@ -516,7 +674,7 @@ const EtatCommissions: React.FC = () => {
           <div className="flex items-center justify-between mb-2">
             <TrendingDown className="w-6 h-6 opacity-80" />
             <span className="text-xl font-bold">
-              {formatCurrency(quinzaines.reduce((sum, q) => sum + q.total_depenses, 0))}
+              {formatCurrency(filteredQuinzaines.reduce((sum, q) => sum + q.total_depenses, 0))}
             </span>
           </div>
           <p className="text-orange-100 text-xs font-medium">Total Dépenses</p>
@@ -526,7 +684,7 @@ const EtatCommissions: React.FC = () => {
           <div className="flex items-center justify-between mb-2">
             <TrendingUp className="w-6 h-6 opacity-80" />
             <span className="text-xl font-bold">
-              {formatCurrency(quinzaines.reduce((sum, q) => sum + q.commission_nette, 0))}
+              {formatCurrency(filteredQuinzaines.reduce((sum, q) => sum + q.commission_nette, 0))}
             </span>
           </div>
           <p className="text-green-100 text-xs font-medium">Total Net</p>
