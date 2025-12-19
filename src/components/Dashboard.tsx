@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, FileText, Upload, BarChart3, Clock, User, Search, Calendar, Receipt, Building2, DollarSign } from 'lucide-react';
+import { LogOut, FileText, Upload, BarChart3, Clock, User, Search, Calendar, Receipt, Building2, DollarSign, TrendingUp } from 'lucide-react';
 import { getSession, clearSession, isAdmin } from '../utils/auth';
 import LogoutConfirmation from './LogoutConfirmation';
 import { shouldShowLogoutConfirmation } from '../utils/auth';
@@ -14,6 +14,7 @@ import TransactionReport from './TransactionReport';
 import ChequesManagement from './ChequesManagement';
 import VersementBancaire from './VersementBancaire';
 import Encaissement from './Encaissement';
+import EtatCommissions from './EtatCommissions';
 
 interface DashboardProps {
   username: string;
@@ -21,7 +22,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'contract' | 'xml' | 'reports' | 'credits' | 'financial' | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement' | 'encaissement'>('contract');
+  const [activeTab, setActiveTab] = useState<'contract' | 'xml' | 'reports' | 'credits' | 'financial' | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement' | 'encaissement' | 'commissions'>('contract');
   const [sessionInfo, setSessionInfo] = useState<any>(null);
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false);
 
@@ -240,6 +241,18 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
                   <Building2 className="w-4 h-4" />
                   <span>Versement Bancaire</span>
                 </button>
+
+                <button
+                  onClick={() => setActiveTab('commissions')}
+                  className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
+                    activeTab === 'commissions'
+                      ? 'border-emerald-500 text-emerald-600 bg-emerald-50/50'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  <span>Etat des Commissions</span>
+                </button>
               </>
             )}
 
@@ -272,6 +285,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
         {activeTab === 'cheques' && isHamza && <ChequesManagement />}
         {activeTab === 'versement' && isHamza && <VersementBancaire username={username} />}
         {activeTab === 'encaissement' && <Encaissement username={username} />}
+        {activeTab === 'commissions' && isHamza && <EtatCommissions />}
       </main>
 
       {/* Modal de confirmation de déconnexion */}
