@@ -124,26 +124,39 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
     setAvailableYears(years);
 
+    const monthsFR = [
+      'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
+    ];
+
     const sessionDate = getSessionDate();
     const currentDate = sessionDate ? new Date(sessionDate) : new Date();
-    const currentMonthName = currentDate.toLocaleString('fr-FR', { month: 'long' });
+    const currentMonthIndex = currentDate.getMonth();
+    const currentMonthName = monthsFR[currentMonthIndex];
     const currentYear = currentDate.getFullYear().toString();
     const currentMonthYear = `${currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1)} ${currentYear}`;
+
+    console.log('Date de session:', sessionDate);
+    console.log('Mois calculé:', currentMonthYear);
+    console.log('Mois disponibles:', months);
 
     setSelectedYear(currentYear);
 
     if (months.includes(currentMonthYear)) {
       setSelectedMonth(currentMonthYear);
+      console.log('Mois trouvé et sélectionné:', currentMonthYear);
     } else if (months.length > 0) {
       const currentYearMonths = months.filter(m => m.includes(currentYear));
       if (currentYearMonths.length > 0) {
         setSelectedMonth(currentYearMonths[0]);
+        console.log('Mois de l\'année en cours sélectionné:', currentYearMonths[0]);
       } else {
         setSelectedMonth(months[0]);
         const parts = months[0].split(' ');
         if (parts[1]) {
           setSelectedYear(parts[1]);
         }
+        console.log('Premier mois disponible sélectionné:', months[0]);
       }
     }
   };
