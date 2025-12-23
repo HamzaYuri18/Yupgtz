@@ -34,7 +34,9 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
   const [xmlSearchResult, setXmlSearchResult] = useState<any>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [selectedYear, setSelectedYear] = useState<string>('');
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
+  const [availableYears, setAvailableYears] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [isRetourTechniqueMode, setIsRetourTechniqueMode] = useState(false);
@@ -49,6 +51,15 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const loadAvailableMonths = async () => {
     const months = await getAvailableMonths();
     setAvailableMonths(months);
+
+    const years = Array.from(new Set(
+      months.map(month => {
+        const parts = month.split(' ');
+        return parts[1];
+      }).filter(year => year)
+    )).sort((a, b) => parseInt(b) - parseInt(a));
+
+    setAvailableYears(years);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -186,6 +197,8 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       dateEcheance: ''
     });
     setXmlSearchResult(null);
+    setSelectedMonth('');
+    setSelectedYear('');
     setIsRetourTechniqueMode(false);
     setIsRetourContentieuxMode(false);
     setOriginalPremiumAmount('');
@@ -604,6 +617,10 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                   } else {
                     setShowAutreCodeMessage(false);
                   }
+                  if (e.target.value !== 'Terme') {
+                    setSelectedYear('');
+                    setSelectedMonth('');
+                  }
                 }}
                 className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 required
@@ -639,20 +656,51 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           {formData.type === 'Terme' && availableMonths.length > 0 && (
             <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-4">
               <label className="block text-sm font-medium text-blue-700 mb-2">
-                📅 Sélectionner le mois pour la recherche des contrats Terme
+                📅 Sélectionner l'année et le mois pour la recherche des contrats Terme
               </label>
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
-              >
-                <option value="">Choisir un mois...</option>
-                {availableMonths.map((month, index) => (
-                  <option key={index} value={month}>{month}</option>
-                ))}
-              </select>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Année
+                  </label>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => {
+                      setSelectedYear(e.target.value);
+                      setSelectedMonth('');
+                    }}
+                    className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                  >
+                    <option value="">Choisir une année...</option>
+                    {availableYears.map((year, index) => (
+                      <option key={index} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Mois
+                  </label>
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    disabled={!selectedYear}
+                    className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Choisir un mois...</option>
+                    {availableMonths
+                      .filter(month => month.includes(selectedYear))
+                      .map((month, index) => (
+                        <option key={index} value={month}>{month}</option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
               <p className="text-xs text-blue-600 mt-2">
-                Sélectionnez un mois pour rechercher automatiquement les données du contrat
+                Sélectionnez d'abord une année, puis un mois pour rechercher automatiquement les données du contrat
               </p>
             </div>
           )}
