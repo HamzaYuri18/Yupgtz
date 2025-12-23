@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter } from 'lucide-react';
-import { getAvailableMonths, getUnpaidTermesByMonth, getOverdueUnpaidTermes, getPaidTermesByMonth, getUpcomingTermes } from '../utils/supabaseService';
+import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, RefreshCw } from 'lucide-react';
+import { getAvailableMonths, getUnpaidTermesByMonth, getOverdueUnpaidTermes, getPaidTermesByMonth, getUpcomingTermes, syncTermeStatusesWithMainTable } from '../utils/supabaseService';
 
-const HomePage: React.FC = () => {
+interface HomePageProps {
+  username?: string;
+}
+
+const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<string>('');
@@ -20,6 +24,11 @@ const HomePage: React.FC = () => {
 
   const [daysFilter, setDaysFilter] = useState<number>(7);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string>('');
+  const [showSyncMessage, setShowSyncMessage] = useState(false);
+
+  const isHamza = username?.toLowerCase() === 'hamza';
 
   useEffect(() => {
     loadAvailableMonths();
@@ -98,6 +107,49 @@ const HomePage: React.FC = () => {
     return date.toLocaleDateString('fr-FR');
   };
 
+  const handleSyncStatuses = async () => {
+    if (!selectedMonth || !selectedYear) {
+      setSyncMessage('Veuillez sélectionner un mois et une année avant de synchroniser');
+      setShowSyncMessage(true);
+      setTimeout(() => setShowSyncMessage(false), 5000);
+      return;
+    }
+
+    setIsSyncing(true);
+    setSyncMessage('');
+    setShowSyncMessage(false);
+
+    try {
+      const monthParts = selectedMonth.toLowerCase().split(' ');
+      const monthName = monthParts[0];
+      const year = monthParts[1];
+
+      const result = await syncTermeStatusesWithMainTable(monthName, year);
+
+      if (result.success) {
+        setSyncMessage(
+          `${result.message}\n` +
+          `Tables traitées: ${result.details.totalTables}\n` +
+          `Contrats vérifiés: ${result.details.totalContracts}\n` +
+          `Statuts mis à jour: ${result.details.updated}\n` +
+          `Erreurs: ${result.details.errors}`
+        );
+        setShowSyncMessage(true);
+        await loadTermesData();
+      } else {
+        setSyncMessage(`Erreur: ${result.message}`);
+        setShowSyncMessage(true);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la synchronisation:', error);
+      setSyncMessage('Erreur lors de la synchronisation des statuts');
+      setShowSyncMessage(true);
+    } finally {
+      setIsSyncing(false);
+      setTimeout(() => setShowSyncMessage(false), 10000);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="mb-8">
@@ -165,7 +217,31 @@ const HomePage: React.FC = () => {
             </select>
           </div>
         </div>
+
+        {isHamza && (
+          <div className="mt-6">
+            <button
+              onClick={handleSyncStatuses}
+              disabled={isSyncing || !selectedMonth || !selectedYear}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+            >
+              <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>{isSyncing ? 'Synchronisation en cours...' : 'Synchroniser les statuts'}</span>
+            </button>
+            <p className="text-sm text-gray-600 mt-2">
+              Compare les contrats de ce mois avec la table principale et met à jour les statuts
+            </p>
+          </div>
+        )}
       </div>
+
+      {showSyncMessage && (
+        <div className={`mb-6 p-4 rounded-lg ${syncMessage.includes('Erreur') ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
+          <pre className={`text-sm whitespace-pre-wrap ${syncMessage.includes('Erreur') ? 'text-red-800' : 'text-green-800'}`}>
+            {syncMessage}
+          </pre>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center items-center py-12">

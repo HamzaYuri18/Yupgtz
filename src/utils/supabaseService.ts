@@ -1825,6 +1825,122 @@ export const getUpcomingTermes = async (monthName: string, year: string, daysAhe
   }
 };
 
+export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: string): Promise<{
+  success: boolean;
+  message: string;
+  details: {
+    totalTables: number;
+    totalContracts: number;
+    updated: number;
+    errors: number;
+  };
+}> => {
+  try {
+    console.log('🔄 Démarrage de la synchronisation des statuts...');
+
+    const { data: paidContracts, error: termeError } = await supabase
+      .from('terme')
+      .select('numero_contrat');
+
+    if (termeError) {
+      console.error('❌ Erreur lors de la récupération de la table terme:', termeError);
+      return {
+        success: false,
+        message: 'Erreur lors de la récupération des contrats payés',
+        details: { totalTables: 0, totalContracts: 0, updated: 0, errors: 1 }
+      };
+    }
+
+    const paidContractNumbers = new Set(paidContracts?.map(c => c.numero_contrat) || []);
+    console.log(`📋 ${paidContractNumbers.size} contrats payés trouvés dans la table principale`);
+
+    let availableTables: string[] = [];
+    if (monthName && year) {
+      availableTables = [`${monthName}_${year}`];
+    } else {
+      const months = await getAvailableMonths();
+      availableTables = months.map(month => {
+        const parts = month.toLowerCase().split(' ');
+        return `${parts[0]}_${parts[1]}`;
+      });
+    }
+
+    let totalContracts = 0;
+    let updated = 0;
+    let errors = 0;
+
+    for (const tableSuffix of availableTables) {
+      const tableName = `table_terme_${tableSuffix}`;
+      console.log(`📊 Traitement de ${tableName}...`);
+
+      try {
+        const { data: contracts, error: selectError } = await supabase
+          .from(tableName)
+          .select('id, numero_contrat, statut');
+
+        if (selectError) {
+          console.error(`❌ Erreur lors de la lecture de ${tableName}:`, selectError);
+          errors++;
+          continue;
+        }
+
+        if (!contracts || contracts.length === 0) {
+          console.log(`ℹ️ Aucun contrat dans ${tableName}`);
+          continue;
+        }
+
+        totalContracts += contracts.length;
+
+        for (const contract of contracts) {
+          const shouldBePaid = paidContractNumbers.has(contract.numero_contrat);
+          const newStatus = shouldBePaid ? 'payé' : 'non payé';
+
+          if (contract.statut !== newStatus) {
+            const { error: updateError } = await supabase
+              .from(tableName)
+              .update({ statut: newStatus })
+              .eq('id', contract.id);
+
+            if (updateError) {
+              console.error(`❌ Erreur mise à jour ${contract.numero_contrat}:`, updateError);
+              errors++;
+            } else {
+              console.log(`✅ ${contract.numero_contrat}: ${contract.statut} → ${newStatus}`);
+              updated++;
+            }
+          }
+        }
+
+        console.log(`✅ ${tableName} traité avec succès`);
+      } catch (tableError) {
+        console.error(`❌ Erreur sur ${tableName}:`, tableError);
+        errors++;
+      }
+    }
+
+    const message = `Synchronisation terminée: ${updated} contrats mis à jour sur ${totalContracts} vérifiés dans ${availableTables.length} tables`;
+    console.log(`✅ ${message}`);
+
+    return {
+      success: true,
+      message,
+      details: {
+        totalTables: availableTables.length,
+        totalContracts,
+        updated,
+        errors
+      }
+    };
+  } catch (error) {
+    console.error('❌ Erreur générale lors de la synchronisation:', error);
+    return {
+      success: false,
+      message: 'Erreur lors de la synchronisation',
+      details: { totalTables: 0, totalContracts: 0, updated: 0, errors: 1 }
+    };
+  }
+};
+
 // Mettez à jour l'export default à la fin du fichier pour inclure toutes les nouvelles fonctions :
 
 export default {
@@ -1863,5 +1979,6 @@ export default {
   getUnpaidTermesByMonth,
   getOverdueUnpaidTermes,
   getPaidTermesByMonth,
-  getUpcomingTermes
+  getUpcomingTermes,
+  syncTermeStatusesWithMainTable
 };
