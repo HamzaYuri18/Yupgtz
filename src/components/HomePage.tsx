@@ -130,10 +130,21 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     ];
 
     const sessionDate = getSessionDate();
-    const currentDate = sessionDate ? new Date(sessionDate) : new Date();
-    const currentMonthIndex = currentDate.getMonth();
+
+    let currentMonthIndex: number;
+    let currentYear: string;
+
+    if (sessionDate) {
+      const dateParts = sessionDate.split('-');
+      currentYear = dateParts[0];
+      currentMonthIndex = parseInt(dateParts[1], 10) - 1;
+    } else {
+      const now = new Date();
+      currentYear = now.getFullYear().toString();
+      currentMonthIndex = now.getMonth();
+    }
+
     const currentMonthName = monthsFR[currentMonthIndex];
-    const currentYear = currentDate.getFullYear().toString();
     const currentMonthYear = `${currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1)} ${currentYear}`;
 
     console.log('Date de session:', sessionDate);
