@@ -897,9 +897,53 @@ export const saveTermeContract = async (
     }
 
     console.log('✅ Contrat Terme sauvegardé avec succès');
+
+    if (contractData.xmlData?.maturity) {
+      const maturityDate = contractData.xmlData.maturity;
+      const dateObj = new Date(maturityDate);
+      const monthName = dateObj.toLocaleString('fr-FR', { month: 'long' }).toLowerCase();
+      const year = dateObj.getFullYear().toString();
+
+      await updateTermeStatus(contractData.contractNumber, monthName, year, 'payé');
+    }
+
     return true;
   } catch (error) {
     console.error('❌ Erreur générale lors de la sauvegarde Terme:', error);
+    return false;
+  }
+};
+
+export const updateTermeStatus = async (
+  contractNumber: string,
+  monthName: string,
+  year: string,
+  status: 'payé' | 'non payé'
+): Promise<boolean> => {
+  try {
+    const tableName = `table_terme_${monthName}_${year}`;
+    console.log(`📝 Mise à jour du statut dans ${tableName} pour le contrat ${contractNumber}...`);
+
+    const { error } = await supabase.rpc('execute_sql_query', {
+      query: `UPDATE ${tableName} SET statut = '${status}' WHERE numero_contrat = '${contractNumber}'`
+    });
+
+    if (error) {
+      const { error: directError } = await supabase
+        .from(tableName)
+        .update({ statut: status })
+        .eq('numero_contrat', contractNumber);
+
+      if (directError) {
+        console.error('❌ Erreur lors de la mise à jour du statut:', directError);
+        return false;
+      }
+    }
+
+    console.log(`✅ Statut mis à jour: ${status}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Erreur générale lors de la mise à jour du statut:', error);
     return false;
   }
 };
@@ -1678,6 +1722,109 @@ export const searchContractInTable = async (month: string, contractNumber: strin
 };
 
 
+export const getUnpaidTermesByMonth = async (monthName: string, year: string): Promise<any[]> => {
+  try {
+    const tableName = `table_terme_${monthName}_${year}`;
+    console.log(`🔍 Récupération des termes non payés depuis ${tableName}...`);
+
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('*')
+      .eq('statut', 'non payé');
+
+    if (error) {
+      console.error(`❌ Erreur lors de la récupération des termes non payés:`, error);
+      return [];
+    }
+
+    console.log(`✅ Termes non payés récupérés: ${data?.length || 0}`);
+    return data || [];
+  } catch (error) {
+    console.error('❌ Erreur générale:', error);
+    return [];
+  }
+};
+
+export const getOverdueUnpaidTermes = async (monthName: string, year: string): Promise<any[]> => {
+  try {
+    const tableName = `table_terme_${monthName}_${year}`;
+    const today = new Date().toISOString().split('T')[0];
+    console.log(`🔍 Récupération des termes échus et non payés depuis ${tableName}...`);
+
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('*')
+      .eq('statut', 'non payé')
+      .lt('echeance', today);
+
+    if (error) {
+      console.error(`❌ Erreur lors de la récupération des termes échus:`, error);
+      return [];
+    }
+
+    console.log(`✅ Termes échus récupérés: ${data?.length || 0}`);
+    return data || [];
+  } catch (error) {
+    console.error('❌ Erreur générale:', error);
+    return [];
+  }
+};
+
+export const getPaidTermesByMonth = async (monthName: string, year: string): Promise<any[]> => {
+  try {
+    const tableName = `table_terme_${monthName}_${year}`;
+    console.log(`🔍 Récupération des termes payés depuis ${tableName}...`);
+
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('*')
+      .eq('statut', 'payé');
+
+    if (error) {
+      console.error(`❌ Erreur lors de la récupération des termes payés:`, error);
+      return [];
+    }
+
+    console.log(`✅ Termes payés récupérés: ${data?.length || 0}`);
+    return data || [];
+  } catch (error) {
+    console.error('❌ Erreur générale:', error);
+    return [];
+  }
+};
+
+export const getUpcomingTermes = async (monthName: string, year: string, daysAhead: number = 7): Promise<any[]> => {
+  try {
+    const tableName = `table_terme_${monthName}_${year}`;
+    const today = new Date();
+    const futureDate = new Date();
+    futureDate.setDate(today.getDate() + daysAhead);
+
+    const todayStr = today.toISOString().split('T')[0];
+    const futureDateStr = futureDate.toISOString().split('T')[0];
+
+    console.log(`🔍 Récupération des termes à venir depuis ${tableName}...`);
+
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('*')
+      .eq('statut', 'non payé')
+      .gte('echeance', todayStr)
+      .lte('echeance', futureDateStr);
+
+    if (error) {
+      console.error(`❌ Erreur lors de la récupération des termes à venir:`, error);
+      return [];
+    }
+
+    console.log(`✅ Termes à venir récupérés: ${data?.length || 0}`);
+    return data || [];
+  } catch (error) {
+    console.error('❌ Erreur générale:', error);
+    return [];
+  }
+};
+
 // Mettez à jour l'export default à la fin du fichier pour inclure toutes les nouvelles fonctions :
 
 export default {
@@ -1711,6 +1858,10 @@ export default {
   getAvailableMonths,
   createMonthlyTable,
   insertContractsToTable,
-  searchContractInTable
-  
+  searchContractInTable,
+  updateTermeStatus,
+  getUnpaidTermesByMonth,
+  getOverdueUnpaidTermes,
+  getPaidTermesByMonth,
+  getUpcomingTermes
 };

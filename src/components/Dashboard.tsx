@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, FileText, Upload, BarChart3, Clock, User, Search, Calendar, Receipt, Building2, DollarSign, TrendingUp } from 'lucide-react';
+import { LogOut, FileText, Upload, BarChart3, Clock, User, Search, Calendar, Receipt, Building2, DollarSign, TrendingUp, Home } from 'lucide-react';
 import { getSession, clearSession, isAdmin } from '../utils/auth';
 import LogoutConfirmation from './LogoutConfirmation';
 import { shouldShowLogoutConfirmation } from '../utils/auth';
+import HomePage from './HomePage';
 import ContractForm from './ContractForm';
 import XLSXUploader from './XMLUploader';
 import ReportGenerator from './ReportGenerator';
@@ -22,7 +23,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'contract' | 'xml' | 'reports' | 'credits' | 'financial' | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement' | 'encaissement' | 'commissions'>('contract');
+  const [activeTab, setActiveTab] = useState<'home' | 'contract' | 'xml' | 'reports' | 'credits' | 'financial' | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement' | 'encaissement' | 'commissions'>('home');
   const [sessionInfo, setSessionInfo] = useState<any>(null);
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false);
 
@@ -117,6 +118,18 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
       <nav className="bg-white/70 backdrop-blur-md border-b border-white/30 shadow-sm overflow-x-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex space-x-4 sm:space-x-8 min-w-max">
+            <button
+              onClick={() => setActiveTab('home')}
+              className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
+                activeTab === 'home'
+                  ? 'border-blue-500 text-blue-600 bg-blue-50/50'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Home className="w-4 h-4" />
+              <span>Accueil</span>
+            </button>
+
             <button
               onClick={() => setActiveTab('contract')}
               className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
@@ -274,6 +287,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
 
       {/* Content */}
       <main className="max-w-7xl mx-auto py-3 sm:py-6 px-2 sm:px-4 lg:px-8">
+        {activeTab === 'home' && <HomePage />}
         {activeTab === 'contract' && <ContractForm username={username} />}
         {activeTab === 'xml' && isUserAdmin && <XLSXUploader />}
         {activeTab === 'reports' && <ReportGenerator />}
