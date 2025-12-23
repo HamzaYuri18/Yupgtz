@@ -989,24 +989,27 @@ export const getCredits = async (): Promise<CreditData[]> => {
 
 // Fonction utilitaire pour convertir les dates Excel
 const convertExcelDateToISO = (excelDate: string | number): string => {
-  if (typeof excelDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(excelDate)) {
-    return excelDate;
+  if (typeof excelDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(excelDate)) {
+    return excelDate.split('T')[0];
   }
-  
+
   if (typeof excelDate === 'number' || /^\d+$/.test(excelDate.toString())) {
     const serialNumber = typeof excelDate === 'number' ? excelDate : parseInt(excelDate.toString());
-    const excelEpoch = new Date(1900, 0, 1);
-    const date = new Date(excelEpoch.getTime() + (serialNumber - 2) * 24 * 60 * 60 * 1000);
-    return date.toISOString().split('T')[0];
+    const excelEpoch = new Date(1899, 11, 30);
+    const date = new Date(excelEpoch.getTime() + serialNumber * 86400000);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
-  
+
   try {
     const date = new Date(excelDate);
     if (!isNaN(date.getTime())) return date.toISOString().split('T')[0];
   } catch (error) {
     console.warn('Conversion date impossible:', excelDate);
   }
-  
+
   return new Date().toISOString().split('T')[0];
 };
 
