@@ -36,4 +36,6 @@ export interface XMLContract {
   premium: number;
   maturity: string;
   insured: string;
+  numTel?: string;
+  numTel2?: string;
 }

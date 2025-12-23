@@ -113,9 +113,11 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           ...supabaseResult,
           premium: supabaseResult.prime,
           insured: supabaseResult.assure,
-          maturity: supabaseResult.echeance
+          maturity: supabaseResult.echeance,
+          numTel: supabaseResult.num_tel,
+          numTel2: supabaseResult.num_tel_2
         };
-        
+
         setXmlSearchResult(normalizedResult);
         setFormData(prev => ({
           ...prev,
@@ -739,6 +741,16 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 <div className="col-span-2">
                   <span className="font-medium text-green-700">Assuré:</span> {xmlSearchResult.insured}
                 </div>
+                {xmlSearchResult.numTel && (
+                  <div>
+                    <span className="font-medium text-green-700">Tél 1:</span> {xmlSearchResult.numTel}
+                  </div>
+                )}
+                {xmlSearchResult.numTel2 && (
+                  <div>
+                    <span className="font-medium text-green-700">Tél 2:</span> {xmlSearchResult.numTel2}
+                  </div>
+                )}
               </div>
               {selectedMonth && (
                 <p className="text-xs text-green-600 mt-2">Source: Table Supabase "{selectedMonth}"</p>

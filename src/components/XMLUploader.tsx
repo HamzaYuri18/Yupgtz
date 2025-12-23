@@ -235,12 +235,12 @@ const XLSXUploader: React.FC = () => {
           <pre className="bg-gradient-to-r from-white to-gray-50 p-4 rounded-lg border border-gray-200 text-sm overflow-x-auto shadow-sm">
 {`Fichier Excel (.xlsx) avec les colonnes suivantes:
 
-| Numéro Contrat | Prime (DT) | Échéance   | Assuré      |
-|----------------|------------|------------|-------------|
-| CTR-001        | 1500.00    | 2024-12-31 | Jean Dupont |
-| CTR-002        | 2000.00    | 2025-06-15 | Marie Martin|
+| Numéro Contrat | Prime (DT) | Échéance   | Assuré       | NUM_TEL    | NUM_TEL_2  |
+|----------------|------------|------------|--------------|------------|------------|
+| CTR-001        | 1500.00    | 2024-12-31 | Jean Dupont  | 12345678   | 87654321   |
+| CTR-002        | 2000.00    | 2025-06-15 | Marie Martin | 23456789   | 98765432   |
 
-Note: La première ligne doit contenir les en-têtes`}
+Note: La première ligne doit contenir les en-têtes. Les colonnes NUM_TEL et NUM_TEL_2 sont optionnelles.`}
           </pre>
         </div>
 
@@ -266,6 +266,12 @@ Note: La première ligne doit contenir les en-têtes`}
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Assuré
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      NUM_TEL
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      NUM_TEL_2
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -282,6 +288,12 @@ Note: La première ligne doit contenir les en-têtes`}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {contract.insured}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {contract.numTel || '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {contract.numTel2 || '-'}
                       </td>
                     </tr>
                   ))}

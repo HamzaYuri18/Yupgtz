@@ -1618,7 +1618,9 @@ export const insertContractsToTable = async (month: string, contracts: any[]): P
       numero_contrat: contract.contractNumber,
       prime: contract.premium || 0,
       echeance: convertExcelDateToISO(contract.maturity),
-      assure: contract.insured
+      assure: contract.insured,
+      num_tel: contract.numTel || null,
+      num_tel_2: contract.numTel2 || null
     }));
 
     const { error } = await supabase

@@ -29,29 +29,35 @@ export const parseXLSXFile = (file: File): Promise<XMLContract[]> => {
         // Ignorer la première ligne (en-têtes) et traiter les données
         for (let i = 1; i < jsonData.length; i++) {
           const row = jsonData[i] as any[];
-          
+
           if (row && row.length >= 4) {
             const contractNumber = row[0]?.toString() || '';
             const premiumStr = row[1]?.toString() || '0';
             const premium = parseFloat(premiumStr.replace(',', '.'));
             const maturity = row[2]?.toString() || '';
             const insured = row[3]?.toString() || '';
-            
+            const numTel = row[4]?.toString() || '';
+            const numTel2 = row[5]?.toString() || '';
+
             console.log(`  Ligne ${i + 1}:`, {
               contractNumber,
               premiumStr,
               premium,
               maturity,
               insured,
+              numTel,
+              numTel2,
               isValidPremium: !isNaN(premium)
             });
-            
+
             if (contractNumber) {
               contracts.push({
                 contractNumber,
                 premium,
                 maturity,
-                insured
+                insured,
+                numTel,
+                numTel2
               });
             }
           }
