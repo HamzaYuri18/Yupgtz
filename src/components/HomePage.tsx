@@ -125,8 +125,8 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     setAvailableYears(years);
 
     const monthsFR = [
-      'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
+      'janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin',
+      'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'
     ];
 
     const sessionDate = getSessionDate();
