@@ -74,7 +74,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
       {/* Header */}
-      <header className="bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-700 shadow-lg">
+      <header className="bg-gradient-to-r from-emerald-600 via-gray-700 to-gray-900 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 sm:h-16">
             <div className="flex items-center space-x-2 sm:space-x-4">
@@ -93,7 +93,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
               <div className="text-right">
                 <p className="text-xs sm:text-sm font-semibold text-white">{username}</p>
                 {isUserAdmin && (
-                  <span className="text-xs text-yellow-300 font-semibold">Admin</span>
+                  <span className="text-xs text-emerald-300 font-semibold">Admin</span>
                 )}
               </div>
               {sessionInfo && (
@@ -115,14 +115,14 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
       </header>
 
       {/* Navigation */}
-      <nav className="bg-gradient-to-r from-purple-500 via-purple-600 to-indigo-600 shadow-md overflow-x-auto">
+      <nav className="bg-gradient-to-r from-emerald-500 via-gray-600 to-gray-800 shadow-md overflow-x-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex space-x-1 sm:space-x-2 min-w-max">
             <button
               onClick={() => setActiveTab('home')}
               className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'home'
-                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
                   : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
@@ -134,7 +134,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
               onClick={() => setActiveTab('contract')}
               className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'contract'
-                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
                   : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
@@ -147,7 +147,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
                 onClick={() => setActiveTab('xml')}
                 className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                   activeTab === 'xml'
-                    ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                    ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
                     : 'text-white/90 hover:bg-white/20 hover:text-white'
                 }`}
               >
@@ -160,7 +160,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
               onClick={() => setActiveTab('reports')}
               className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'reports'
-                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
                   : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
@@ -172,7 +172,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
               onClick={() => setActiveTab('credits')}
               className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'credits'
-                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
                   : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
@@ -184,7 +184,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
               onClick={() => setActiveTab('financial')}
               className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'financial'
-                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
                   : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
@@ -196,7 +196,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
               onClick={() => setActiveTab('payment')}
               className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'payment'
-                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
                   : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
@@ -208,7 +208,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
               onClick={() => setActiveTab('terme')}
               className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'terme'
-                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
                   : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
@@ -220,7 +220,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
               onClick={() => setActiveTab('transactions')}
               className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'transactions'
-                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
                   : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
@@ -235,7 +235,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
                   onClick={() => setActiveTab('cheques')}
                   className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                     activeTab === 'cheques'
-                      ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                      ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
                       : 'text-white/90 hover:bg-white/20 hover:text-white'
                   }`}
                 >
@@ -247,7 +247,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
                   onClick={() => setActiveTab('versement')}
                   className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                     activeTab === 'versement'
-                      ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                      ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
                       : 'text-white/90 hover:bg-white/20 hover:text-white'
                   }`}
                 >
@@ -259,7 +259,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
                   onClick={() => setActiveTab('commissions')}
                   className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                     activeTab === 'commissions'
-                      ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                      ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
                       : 'text-white/90 hover:bg-white/20 hover:text-white'
                   }`}
                 >
@@ -274,7 +274,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
               onClick={() => setActiveTab('encaissement')}
               className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'encaissement'
-                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
                   : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
