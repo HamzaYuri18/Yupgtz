@@ -1,6 +1,77 @@
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, RefreshCw } from 'lucide-react';
 import { getAvailableMonths, getUnpaidTermesByMonth, getOverdueUnpaidTermes, getPaidTermesByMonth, getUpcomingTermes, syncTermeStatusesWithMainTable } from '../utils/supabaseService';
+import { getSessionDate } from '../utils/auth';
+
+interface CircularStatCardProps {
+  title: string;
+  subtitle: string;
+  count: number;
+  total: number;
+  percentage: number;
+  color: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+}
+
+const CircularStatCard: React.FC<CircularStatCardProps> = ({
+  title,
+  subtitle,
+  count,
+  total,
+  percentage,
+  color,
+  icon,
+  onClick
+}) => {
+  const radius = 70;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+  return (
+    <div
+      onClick={onClick}
+      className="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-all duration-200 transform hover:-translate-y-1 border border-gray-100"
+    >
+      <div className="flex flex-col items-center">
+        <div className="relative w-40 h-40 mb-4">
+          <svg className="transform -rotate-90 w-40 h-40">
+            <circle
+              cx="80"
+              cy="80"
+              r={radius}
+              stroke="#E5E7EB"
+              strokeWidth="12"
+              fill="none"
+            />
+            <circle
+              cx="80"
+              cy="80"
+              r={radius}
+              stroke={color}
+              strokeWidth="12"
+              fill="none"
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+              className="transition-all duration-1000 ease-out"
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <div style={{ color }} className="mb-1">
+              {icon}
+            </div>
+            <span className="text-3xl font-bold text-gray-900">{count}</span>
+            <span className="text-sm text-gray-500 mt-1">{percentage.toFixed(1)}%</span>
+          </div>
+        </div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-1 text-center">{title}</h3>
+        <p className="text-sm text-gray-500 mb-2 text-center">{subtitle}</p>
+        <div className="text-2xl font-bold" style={{ color }}>{total.toFixed(2)} DT</div>
+      </div>
+    </div>
+  );
+};
 
 interface HomePageProps {
   username?: string;
@@ -53,7 +124,8 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
     setAvailableYears(years);
 
-    const currentDate = new Date();
+    const sessionDate = getSessionDate();
+    const currentDate = sessionDate ? new Date(sessionDate) : new Date();
     const currentMonthName = currentDate.toLocaleString('fr-FR', { month: 'long' });
     const currentYear = currentDate.getFullYear().toString();
     const currentMonthYear = `${currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1)} ${currentYear}`;
@@ -263,57 +335,58 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
       ) : selectedMonth ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div
-              onClick={() => setShowOverdueDetails(!showOverdueDetails)}
-              className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-xl transition-all duration-200 transform hover:-translate-y-1"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <AlertCircle className="w-8 h-8" />
-                <span className="text-3xl font-bold">{overdueTermes.length}</span>
-              </div>
-              <h3 className="text-lg font-semibold mb-1">Termes Échus</h3>
-              <p className="text-red-100 text-sm mb-2">Non payés et en retard</p>
-              <div className="text-2xl font-bold">{calculateTotal(overdueTermes).toFixed(2)} DT</div>
-            </div>
+            {(() => {
+              const totalCount = overdueTermes.length + unpaidTermes.length + upcomingTermes.length + paidTermes.length;
+              const overduePercentage = totalCount > 0 ? (overdueTermes.length / totalCount) * 100 : 0;
+              const unpaidPercentage = totalCount > 0 ? (unpaidTermes.length / totalCount) * 100 : 0;
+              const upcomingPercentage = totalCount > 0 ? (upcomingTermes.length / totalCount) * 100 : 0;
+              const paidPercentage = totalCount > 0 ? (paidTermes.length / totalCount) * 100 : 0;
 
-            <div
-              onClick={() => setShowUnpaidDetails(!showUnpaidDetails)}
-              className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-xl transition-all duration-200 transform hover:-translate-y-1"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <Clock className="w-8 h-8" />
-                <span className="text-3xl font-bold">{unpaidTermes.length}</span>
-              </div>
-              <h3 className="text-lg font-semibold mb-1">Termes Non Payés</h3>
-              <p className="text-orange-100 text-sm mb-2">Total dans le mois</p>
-              <div className="text-2xl font-bold">{calculateTotal(unpaidTermes).toFixed(2)} DT</div>
-            </div>
-
-            <div
-              onClick={() => setShowUpcomingDetails(!showUpcomingDetails)}
-              className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-xl transition-all duration-200 transform hover:-translate-y-1"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <Calendar className="w-8 h-8" />
-                <span className="text-3xl font-bold">{upcomingTermes.length}</span>
-              </div>
-              <h3 className="text-lg font-semibold mb-1">Échéances Proches</h3>
-              <p className="text-blue-100 text-sm mb-2">{daysFilter} prochains jours</p>
-              <div className="text-2xl font-bold">{calculateTotal(upcomingTermes).toFixed(2)} DT</div>
-            </div>
-
-            <div
-              onClick={() => setShowPaidDetails(!showPaidDetails)}
-              className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-xl transition-all duration-200 transform hover:-translate-y-1"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <CheckCircle className="w-8 h-8" />
-                <span className="text-3xl font-bold">{paidTermes.length}</span>
-              </div>
-              <h3 className="text-lg font-semibold mb-1">Termes Payés</h3>
-              <p className="text-green-100 text-sm mb-2">Total dans le mois</p>
-              <div className="text-2xl font-bold">{calculateTotal(paidTermes).toFixed(2)} DT</div>
-            </div>
+              return (
+                <>
+                  <CircularStatCard
+                    title="Termes Échus"
+                    subtitle="Non payés et en retard"
+                    count={overdueTermes.length}
+                    total={calculateTotal(overdueTermes)}
+                    percentage={overduePercentage}
+                    color="#EF4444"
+                    icon={<AlertCircle className="w-8 h-8" />}
+                    onClick={() => setShowOverdueDetails(!showOverdueDetails)}
+                  />
+                  <CircularStatCard
+                    title="Termes Non Payés"
+                    subtitle="Total dans le mois"
+                    count={unpaidTermes.length}
+                    total={calculateTotal(unpaidTermes)}
+                    percentage={unpaidPercentage}
+                    color="#F97316"
+                    icon={<Clock className="w-8 h-8" />}
+                    onClick={() => setShowUnpaidDetails(!showUnpaidDetails)}
+                  />
+                  <CircularStatCard
+                    title="Échéances Proches"
+                    subtitle={`${daysFilter} prochains jours`}
+                    count={upcomingTermes.length}
+                    total={calculateTotal(upcomingTermes)}
+                    percentage={upcomingPercentage}
+                    color="#3B82F6"
+                    icon={<Calendar className="w-8 h-8" />}
+                    onClick={() => setShowUpcomingDetails(!showUpcomingDetails)}
+                  />
+                  <CircularStatCard
+                    title="Termes Payés"
+                    subtitle="Total dans le mois"
+                    count={paidTermes.length}
+                    total={calculateTotal(paidTermes)}
+                    percentage={paidPercentage}
+                    color="#10B981"
+                    icon={<CheckCircle className="w-8 h-8" />}
+                    onClick={() => setShowPaidDetails(!showPaidDetails)}
+                  />
+                </>
+              );
+            })()}
           </div>
 
           {showOverdueDetails && overdueTermes.length > 0 && (
