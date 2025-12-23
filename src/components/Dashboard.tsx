@@ -74,40 +74,40 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-md shadow-lg border-b border-white/20">
+      <header className="bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-700 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 sm:h-16">
             <div className="flex items-center space-x-2 sm:space-x-4">
               <div className="flex items-center space-x-2">
-                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center shadow-md">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center shadow-md">
                   <User className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </div>
                 <div className="hidden sm:block">
-                  <h1 className="text-base sm:text-lg font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">SHIRI FARES HAMZA</h1>
-                  <p className="text-xs text-gray-600 font-medium">Gestion d'Agence</p>
+                  <h1 className="text-base sm:text-lg font-bold text-white">SHIRI FARES HAMZA</h1>
+                  <p className="text-xs text-white/80 font-medium">Gestion d'Agence</p>
                 </div>
               </div>
             </div>
 
             <div className="flex items-center space-x-2 sm:space-x-4">
               <div className="text-right">
-                <p className="text-xs sm:text-sm font-semibold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">{username}</p>
+                <p className="text-xs sm:text-sm font-semibold text-white">{username}</p>
                 {isUserAdmin && (
-                  <span className="text-xs bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent font-semibold">Admin</span>
+                  <span className="text-xs text-yellow-300 font-semibold">Admin</span>
                 )}
               </div>
               {sessionInfo && (
-                <div className="hidden md:flex items-center text-xs text-gray-600">
-                  <Clock className="w-4 h-4 mr-1 text-indigo-500" />
-                  <span>Connecté depuis {formatDate(sessionInfo.loginTime)}</span>
+                <div className="hidden md:flex items-center text-xs text-white/90">
+                  <Clock className="w-4 h-4 mr-1 text-white/80" />
+                  <span>Connecte depuis {formatDate(sessionInfo.loginTime)}</span>
                 </div>
               )}
               <button
                 onClick={handleLogout}
-                className="flex items-center space-x-1 sm:space-x-2 text-gray-700 hover:text-red-600 transition-all duration-200 px-2 sm:px-3 py-2 rounded-lg hover:bg-red-50"
+                className="flex items-center space-x-1 sm:space-x-2 text-white hover:text-red-300 transition-all duration-200 px-2 sm:px-3 py-2 rounded-lg hover:bg-white/10 backdrop-blur-sm"
               >
                 <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="hidden sm:inline">Déconnexion</span>
+                <span className="hidden sm:inline">Deconnexion</span>
               </button>
             </div>
           </div>
@@ -115,15 +115,15 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
       </header>
 
       {/* Navigation */}
-      <nav className="bg-white/70 backdrop-blur-md border-b border-white/30 shadow-sm overflow-x-auto">
+      <nav className="bg-gradient-to-r from-purple-500 via-purple-600 to-indigo-600 shadow-md overflow-x-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-4 sm:space-x-8 min-w-max">
+          <div className="flex space-x-1 sm:space-x-2 min-w-max">
             <button
               onClick={() => setActiveTab('home')}
-              className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
+              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'home'
-                  ? 'border-blue-500 text-blue-600 bg-blue-50/50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
               <Home className="w-4 h-4" />
@@ -132,10 +132,10 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
 
             <button
               onClick={() => setActiveTab('contract')}
-              className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
+              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'contract'
-                  ? 'border-indigo-500 text-indigo-600 bg-indigo-50/50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
               <FileText className="w-4 h-4" />
@@ -145,10 +145,10 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
             {isUserAdmin && (
               <button
                 onClick={() => setActiveTab('xml')}
-                className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
+                className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                   activeTab === 'xml'
-                    ? 'border-green-500 text-green-600 bg-green-50/50'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                    : 'text-white/90 hover:bg-white/20 hover:text-white'
                 }`}
               >
                 <Upload className="w-4 h-4" />
@@ -158,10 +158,10 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
 
             <button
               onClick={() => setActiveTab('reports')}
-              className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center space-x-2 ${
+              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'reports'
-                  ? 'border-purple-500 text-purple-600 bg-purple-50/50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
               <BarChart3 className="w-4 h-4" />
@@ -170,46 +170,46 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
 
             <button
               onClick={() => setActiveTab('credits')}
-              className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center space-x-2 ${
+              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'credits'
-                  ? 'border-orange-500 text-orange-600 bg-orange-50/50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
               <FileText className="w-4 h-4" />
-              <span>Liste des Crédits</span>
+              <span>Liste des Credits</span>
             </button>
 
             <button
               onClick={() => setActiveTab('financial')}
-              className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center space-x-2 ${
+              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'financial'
-                  ? 'border-emerald-500 text-emerald-600 bg-emerald-50/50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
               <DollarSign className="w-4 h-4" />
-              <span>Gestion Financière</span>
+              <span>Gestion Financiere</span>
             </button>
 
             <button
               onClick={() => setActiveTab('payment')}
-              className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center space-x-2 ${
+              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'payment'
-                  ? 'border-pink-500 text-pink-600 bg-pink-50/50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
               <DollarSign className="w-4 h-4" />
-              <span>Paiement Crédit</span>
+              <span>Paiement Credit</span>
             </button>
 
             <button
               onClick={() => setActiveTab('terme')}
-              className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center space-x-2 ${
+              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'terme'
-                  ? 'border-sky-500 text-sky-600 bg-sky-50/50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
               <Search className="w-4 h-4" />
@@ -218,37 +218,37 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
 
             <button
               onClick={() => setActiveTab('transactions')}
-              className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center space-x-2 ${
+              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'transactions'
-                  ? 'border-blue-500 text-blue-600 bg-blue-50/50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
               <Calendar className="w-4 h-4" />
               <span>Rapport Transactions</span>
             </button>
 
-            {/* Section réservée à Hamza */}
+            {/* Section reservee a Hamza */}
             {isHamza && (
               <>
                 <button
                   onClick={() => setActiveTab('cheques')}
-                  className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
+                  className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                     activeTab === 'cheques'
-                      ? 'border-teal-500 text-teal-600 bg-teal-50/50'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                      : 'text-white/90 hover:bg-white/20 hover:text-white'
                   }`}
                 >
                   <Receipt className="w-4 h-4" />
-                  <span>Chèques</span>
+                  <span>Cheques</span>
                 </button>
 
                 <button
                   onClick={() => setActiveTab('versement')}
-                  className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
+                  className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                     activeTab === 'versement'
-                      ? 'border-green-500 text-green-600 bg-green-50/50'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                      : 'text-white/90 hover:bg-white/20 hover:text-white'
                   }`}
                 >
                   <Building2 className="w-4 h-4" />
@@ -257,10 +257,10 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
 
                 <button
                   onClick={() => setActiveTab('commissions')}
-                  className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
+                  className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                     activeTab === 'commissions'
-                      ? 'border-emerald-500 text-emerald-600 bg-emerald-50/50'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                      : 'text-white/90 hover:bg-white/20 hover:text-white'
                   }`}
                 >
                   <TrendingUp className="w-4 h-4" />
@@ -272,10 +272,10 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
             {/* Encaissement - visible pour tous les utilisateurs */}
             <button
               onClick={() => setActiveTab('encaissement')}
-              className={`py-3 sm:py-4 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap ${
+              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'encaissement'
-                  ? 'border-green-500 text-green-600 bg-green-50/50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-white text-purple-700 shadow-lg transform scale-105'
+                  : 'text-white/90 hover:bg-white/20 hover:text-white'
               }`}
             >
               <DollarSign className="w-4 h-4" />
