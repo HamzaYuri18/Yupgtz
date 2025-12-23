@@ -164,7 +164,7 @@ export const updateCreditPayment = async (
       .from('liste_credits')
       .select('*')
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
     if (fetchError || !creditActuel) {
       console.error('❌ Erreur récupération crédit:', fetchError);
@@ -230,7 +230,7 @@ export const updateCreditPayment = async (
       .from('liste_credits')
       .select('*')
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
     if (verifyError) {
       console.error('❌ Erreur vérification mise à jour liste_credits:', verifyError);
@@ -326,7 +326,7 @@ export const verifyPaymentInBothTables = async (
       .from('liste_credits')
       .select('*')
       .eq('id', creditId)
-      .single();
+      .maybeSingle();
 
     if (creditError) {
       console.error('❌ Erreur vérification liste_credits:', creditError);
@@ -342,7 +342,7 @@ export const verifyPaymentInBothTables = async (
       .eq('montant', montantPaiement)
       .order('created_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (rapportError) {
       console.error('❌ Erreur vérification rapport:', rapportError);
@@ -413,7 +413,7 @@ export const searchCreditByContractNumber = async (contractNumber: string): Prom
       .from('liste_credits')
       .select('*')
       .eq('numero_contrat', contractNumber)
-      .single();
+      .maybeSingle();
 
     if (error) return null;
     return data;
@@ -1701,12 +1701,12 @@ export const searchContractInTable = async (month: string, contractNumber: strin
     const tableName = `table_terme_${monthName}_${year}`;
     
     console.log(`🔍 Recherche dans ${tableName}...`);
-    
+
     const { data, error } = await supabase
       .from(tableName)
       .select('*')
       .eq('numero_contrat', contractNumber)
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('Erreur recherche contrat:', error);

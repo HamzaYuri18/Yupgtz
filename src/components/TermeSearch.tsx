@@ -25,7 +25,7 @@ const TermeSearch: React.FC = () => {
         .eq('numero_contrat', contractNumber)
         .eq('type', 'Terme')
         .eq('echeance', echeance)
-        .single();
+        .maybeSingle();
 
       if (error) {
         setError(`Erreur lors de la recherche: ${error.message}`);
