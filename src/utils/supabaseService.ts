@@ -1833,6 +1833,8 @@ export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: 
     totalContracts: number;
     updated: number;
     errors: number;
+    paidCount: number;
+    unpaidCount: number;
   };
 }> => {
   try {
@@ -1847,12 +1849,15 @@ export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: 
       return {
         success: false,
         message: 'Erreur lors de la récupération des contrats payés',
-        details: { totalTables: 0, totalContracts: 0, updated: 0, errors: 1 }
+        details: { totalTables: 0, totalContracts: 0, updated: 0, errors: 1, paidCount: 0, unpaidCount: 0 }
       };
     }
 
-    const paidContractNumbers = new Set(paidContracts?.map(c => c.numero_contrat) || []);
+    const paidContractNumbers = new Set(
+      paidContracts?.map(c => c.numero_contrat?.trim()?.toUpperCase()) || []
+    );
     console.log(`📋 ${paidContractNumbers.size} contrats payés trouvés dans la table principale`);
+    console.log('📝 Exemples de contrats payés:', Array.from(paidContractNumbers).slice(0, 5));
 
     let availableTables: string[] = [];
     if (monthName && year) {
@@ -1868,6 +1873,8 @@ export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: 
     let totalContracts = 0;
     let updated = 0;
     let errors = 0;
+    let paidCount = 0;
+    let unpaidCount = 0;
 
     for (const tableSuffix of availableTables) {
       const tableName = `table_terme_${tableSuffix}`;
@@ -1890,12 +1897,22 @@ export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: 
         }
 
         totalContracts += contracts.length;
+        console.log(`📋 ${contracts.length} contrats trouvés dans ${tableName}`);
 
         for (const contract of contracts) {
-          const shouldBePaid = paidContractNumbers.has(contract.numero_contrat);
+          const normalizedContractNumber = contract.numero_contrat?.trim()?.toUpperCase();
+          const shouldBePaid = paidContractNumbers.has(normalizedContractNumber);
           const newStatus = shouldBePaid ? 'payé' : 'non payé';
 
+          if (shouldBePaid) {
+            paidCount++;
+          } else {
+            unpaidCount++;
+          }
+
           if (contract.statut !== newStatus) {
+            console.log(`🔄 Mise à jour: ${contract.numero_contrat} de "${contract.statut}" vers "${newStatus}"`);
+
             const { error: updateError } = await supabase
               .from(tableName)
               .update({ statut: newStatus })
@@ -1908,6 +1925,8 @@ export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: 
               console.log(`✅ ${contract.numero_contrat}: ${contract.statut} → ${newStatus}`);
               updated++;
             }
+          } else {
+            console.log(`ℹ️ ${contract.numero_contrat}: statut déjà correct (${contract.statut})`);
           }
         }
 
@@ -1918,7 +1937,7 @@ export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: 
       }
     }
 
-    const message = `Synchronisation terminée: ${updated} contrats mis à jour sur ${totalContracts} vérifiés dans ${availableTables.length} tables`;
+    const message = `Synchronisation terminée: ${updated} contrats mis à jour sur ${totalContracts} vérifiés (${paidCount} payés, ${unpaidCount} non payés)`;
     console.log(`✅ ${message}`);
 
     return {
@@ -1928,7 +1947,9 @@ export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: 
         totalTables: availableTables.length,
         totalContracts,
         updated,
-        errors
+        errors,
+        paidCount,
+        unpaidCount
       }
     };
   } catch (error) {
@@ -1936,7 +1957,7 @@ export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: 
     return {
       success: false,
       message: 'Erreur lors de la synchronisation',
-      details: { totalTables: 0, totalContracts: 0, updated: 0, errors: 1 }
+      details: { totalTables: 0, totalContracts: 0, updated: 0, errors: 1, paidCount: 0, unpaidCount: 0 }
     };
   }
 };

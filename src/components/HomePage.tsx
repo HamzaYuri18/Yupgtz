@@ -58,14 +58,20 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     const currentYear = currentDate.getFullYear().toString();
     const currentMonthYear = `${currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1)} ${currentYear}`;
 
+    setSelectedYear(currentYear);
+
     if (months.includes(currentMonthYear)) {
       setSelectedMonth(currentMonthYear);
-      setSelectedYear(currentYear);
     } else if (months.length > 0) {
-      setSelectedMonth(months[0]);
-      const parts = months[0].split(' ');
-      if (parts[1]) {
-        setSelectedYear(parts[1]);
+      const currentYearMonths = months.filter(m => m.includes(currentYear));
+      if (currentYearMonths.length > 0) {
+        setSelectedMonth(currentYearMonths[0]);
+      } else {
+        setSelectedMonth(months[0]);
+        const parts = months[0].split(' ');
+        if (parts[1]) {
+          setSelectedYear(parts[1]);
+        }
       }
     }
   };
@@ -124,29 +130,36 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
       const monthName = monthParts[0];
       const year = monthParts[1];
 
+      console.log(`🔄 Synchronisation pour ${monthName} ${year}...`);
+
       const result = await syncTermeStatusesWithMainTable(monthName, year);
 
       if (result.success) {
         setSyncMessage(
-          `${result.message}\n` +
-          `Tables traitées: ${result.details.totalTables}\n` +
-          `Contrats vérifiés: ${result.details.totalContracts}\n` +
-          `Statuts mis à jour: ${result.details.updated}\n` +
-          `Erreurs: ${result.details.errors}`
+          `✅ ${result.message}\n\n` +
+          `📊 Statistiques:\n` +
+          `   • Tables traitées: ${result.details.totalTables}\n` +
+          `   • Contrats vérifiés: ${result.details.totalContracts}\n` +
+          `   • Contrats payés: ${result.details.paidCount}\n` +
+          `   • Contrats non payés: ${result.details.unpaidCount}\n` +
+          `   • Statuts mis à jour: ${result.details.updated}\n` +
+          `   • Erreurs: ${result.details.errors}`
         );
         setShowSyncMessage(true);
+
+        console.log('✅ Synchronisation terminée, rechargement des statistiques...');
         await loadTermesData();
       } else {
-        setSyncMessage(`Erreur: ${result.message}`);
+        setSyncMessage(`❌ Erreur: ${result.message}`);
         setShowSyncMessage(true);
       }
     } catch (error) {
-      console.error('Erreur lors de la synchronisation:', error);
-      setSyncMessage('Erreur lors de la synchronisation des statuts');
+      console.error('❌ Erreur lors de la synchronisation:', error);
+      setSyncMessage('❌ Erreur lors de la synchronisation des statuts');
       setShowSyncMessage(true);
     } finally {
       setIsSyncing(false);
-      setTimeout(() => setShowSyncMessage(false), 10000);
+      setTimeout(() => setShowSyncMessage(false), 15000);
     }
   };
 
