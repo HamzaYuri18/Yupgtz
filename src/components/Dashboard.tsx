@@ -16,6 +16,7 @@ import ChequesManagement from './ChequesManagement';
 import VersementBancaire from './VersementBancaire';
 import Encaissement from './Encaissement';
 import EtatCommissions from './EtatCommissions';
+import ChristmasModal from './ChristmasModal';
 
 interface DashboardProps {
   username: string;
@@ -26,11 +27,25 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'contract' | 'xml' | 'reports' | 'credits' | 'financial' | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement' | 'encaissement' | 'commissions'>('home');
   const [sessionInfo, setSessionInfo] = useState<any>(null);
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false);
+  const [showChristmasModal, setShowChristmasModal] = useState(false);
 
   useEffect(() => {
     const session = getSession();
     if (session) {
       setSessionInfo(session);
+    }
+
+    const isHamza = username.toLowerCase() === 'hamza';
+    const currentDate = new Date();
+    const christmasEndDate = new Date('2026-01-01');
+    const sessionKey = `christmas_modal_shown_${username}_${currentDate.toDateString()}`;
+    const hasShownToday = localStorage.getItem(sessionKey);
+
+    if (isHamza && currentDate < christmasEndDate && !hasShownToday) {
+      setTimeout(() => {
+        setShowChristmasModal(true);
+        localStorage.setItem(sessionKey, 'true');
+      }, 1000);
     }
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -43,7 +58,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [onLogout]);
+  }, [onLogout, username]);
 
   const handleLogout = () => {
     if (shouldShowLogoutConfirmation(username)) {
@@ -308,6 +323,14 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
           username={username}
           onConfirm={handleConfirmLogout}
           onCancel={handleCancelLogout}
+        />
+      )}
+
+      {/* Modal de Noël pour Hamza */}
+      {showChristmasModal && (
+        <ChristmasModal
+          username={username}
+          onClose={() => setShowChristmasModal(false)}
         />
       )}
     </div>
