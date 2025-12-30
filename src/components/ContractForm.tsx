@@ -12,7 +12,7 @@ interface ContractFormProps {
 
 // Fonction de nettoyage des espaces pour le numéro de contrat uniquement
 const trimSpaces = (value: string): string => {
-  return value.trim();
+  return value.trim().replace(/\s+/g, ' ');
 };
 
 const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
@@ -105,19 +105,32 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   };
 
   const searchInXML = async () => {
+    // Réinitialiser les résultats précédents
+    setXmlSearchResult(null);
+    setMessage('');
+
     // Nettoyer le numéro de contrat avant la recherche
     const cleanedContractNumber = trimSpaces(formData.contractNumber);
-    
+
+    if (!cleanedContractNumber) {
+      setMessage('⚠️ Veuillez saisir un numéro de contrat');
+      return;
+    }
+
     if (formData.type === 'Terme' && cleanedContractNumber && selectedMonth) {
       // Mettre à jour le formulaire avec la valeur nettoyée
       setFormData(prev => ({
         ...prev,
-        contractNumber: cleanedContractNumber
+        contractNumber: cleanedContractNumber,
+        premiumAmount: '',
+        insuredName: ''
       }));
-      
+
+      setIsLoading(true);
+
       // Rechercher d'abord dans Supabase
       const supabaseResult = await searchContractInTable(selectedMonth, cleanedContractNumber);
-      
+
       if (supabaseResult) {
         // Normaliser le résultat Supabase pour correspondre à l'interface XMLContract
         const normalizedResult = {
@@ -135,14 +148,15 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           premiumAmount: supabaseResult.prime.toString(),
           insuredName: supabaseResult.assure
         }));
-        setMessage(`Contrat trouvé dans la table Supabase "${selectedMonth}"`);
+        setMessage(`✅ Contrat trouvé dans la table Supabase "${selectedMonth}"`);
+        setIsLoading(false);
         return;
       }
 
       // Si pas trouvé dans Supabase, chercher localement
       const xmlContracts = getXMLContracts();
       const result = findContractInXLSX(xmlContracts, cleanedContractNumber);
-      
+
       if (result) {
         setXmlSearchResult(result);
         setFormData(prev => ({
@@ -150,13 +164,19 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           premiumAmount: result.premium.toString(),
           insuredName: result.insured
         }));
-        setMessage('Contrat trouvé dans les données XLSX locales');
+        setMessage('✅ Contrat trouvé dans les données XLSX locales');
       } else {
         setXmlSearchResult(null);
-        setMessage('Contrat non trouvé dans les données XLSX');
+        setFormData(prev => ({
+          ...prev,
+          premiumAmount: '',
+          insuredName: ''
+        }));
+        setMessage('❌ Contrat non trouvé. Veuillez vérifier le numéro et réessayer.');
       }
+      setIsLoading(false);
     } else if (formData.type === 'Terme' && !selectedMonth) {
-      setMessage('Veuillez sélectionner un mois pour la recherche');
+      setMessage('⚠️ Veuillez sélectionner un mois pour la recherche');
     }
   };
 
@@ -181,6 +201,11 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   };
 
   const resetForm = () => {
+    const form = document.querySelector('form') as HTMLFormElement;
+    if (form) {
+      form.reset();
+    }
+
     setFormData({
       type: 'Affaire',
       branch: 'Auto',
@@ -203,6 +228,12 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     setIsRetourContentieuxMode(false);
     setOriginalPremiumAmount('');
     setShowAutreCodeMessage(false);
+    setMessage('');
+
+    const inputs = document.querySelectorAll('input');
+    inputs.forEach(input => {
+      input.value = '';
+    });
   };
 
   // Fonction pour déterminer si les champs doivent être verrouillés
@@ -620,7 +651,24 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                   if (e.target.value !== 'Terme') {
                     setSelectedYear('');
                     setSelectedMonth('');
+                    setXmlSearchResult(null);
                   }
+                  setFormData(prev => ({
+                    ...prev,
+                    type: e.target.value as 'Terme' | 'Affaire' | 'Avenant changement de véhicule' | 'Encaissement pour autre code',
+                    contractNumber: '',
+                    premiumAmount: '',
+                    insuredName: '',
+                    paymentMode: 'Espece',
+                    paymentType: 'Au comptant',
+                    creditAmount: '',
+                    paymentDate: '',
+                    numeroCheque: '',
+                    banque: '',
+                    dateEncaissementPrevue: '',
+                    dateEcheance: ''
+                  }));
+                  setMessage('');
                 }}
                 className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 required

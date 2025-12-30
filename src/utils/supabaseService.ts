@@ -1695,26 +1695,42 @@ export const searchContractInTable = async (month: string, contractNumber: strin
       console.error('Format de mois invalide:', month);
       return null;
     }
-    
+
     const monthName = monthParts[0];
     const year = monthParts[1];
     const tableName = `table_terme_${monthName}_${year}`;
-    
-    console.log(`🔍 Recherche dans ${tableName}...`);
 
-    const { data, error } = await supabase
+    const cleanedContractNumber = contractNumber.trim().replace(/\s+/g, ' ');
+    console.log(`🔍 Recherche dans ${tableName}... Numero: "${cleanedContractNumber}"`);
+
+    const { data: allData, error: allError } = await supabase
       .from(tableName)
-      .select('*')
-      .eq('numero_contrat', contractNumber)
-      .maybeSingle();
+      .select('*');
 
-    if (error) {
-      console.error('Erreur recherche contrat:', error);
+    if (allError) {
+      console.error('Erreur recherche contrat:', allError);
       return null;
     }
 
-    console.log('✅ Contrat trouvé');
-    return data;
+    if (!allData || allData.length === 0) {
+      console.log('⚠️ Aucun contrat trouvé dans la table');
+      return null;
+    }
+
+    const foundContract = allData.find(contract => {
+      if (!contract.numero_contrat) return false;
+      const dbNumber = contract.numero_contrat.trim().replace(/\s+/g, ' ');
+      const searchNumber = cleanedContractNumber;
+      return dbNumber.toLowerCase() === searchNumber.toLowerCase();
+    });
+
+    if (foundContract) {
+      console.log('✅ Contrat trouvé');
+      return foundContract;
+    }
+
+    console.log('⚠️ Contrat non trouvé dans la table');
+    return null;
   } catch (error) {
     console.error('Erreur générale recherche contrat:', error);
     return null;
