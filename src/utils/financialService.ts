@@ -12,6 +12,7 @@ export interface Depense {
   Client?: string;
   libelle?: string;
   date_recuperation_prevue?: string;
+  statut_depense?: string | null;
 }
 
 export interface RecetteExceptionnelle {

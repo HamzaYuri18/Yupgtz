@@ -392,6 +392,12 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         return;
       }
 
+      if (data.statut_depense === 'Payé') {
+        setMessage('❌ Cette dépense est déjà payée');
+        setTimeout(() => setMessage(''), 5000);
+        return;
+      }
+
       setNewRecette({
         ...newRecette,
         montant: data.montant.toString(),
@@ -542,6 +548,21 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
     const success = await saveRecetteExceptionnelle(recette);
     if (success) {
+      if (newRecette.type_recette === 'Recuperation Depense' && newRecette.id_depense) {
+        try {
+          const { error: updateError } = await supabase
+            .from('depenses')
+            .update({ statut_depense: 'Payé' })
+            .eq('id', parseInt(newRecette.id_depense));
+
+          if (updateError) {
+            console.error('Erreur lors de la mise à jour du statut de la dépense:', updateError);
+          }
+        } catch (error) {
+          console.error('Erreur:', error);
+        }
+      }
+
       setMessage('✅ Recette exceptionnelle enregistrée avec succès');
       setNewRecette({
         type_recette: 'Hamza',
@@ -554,6 +575,9 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         libelle: ''
       });
       loadData();
+      if (showDepensesRecuperables) {
+        loadDepensesRecuperables();
+      }
     } else {
       setMessage('❌ Erreur lors de l\'enregistrement de la recette');
     }
@@ -944,6 +968,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                   <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Montant (DT)</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Date Dépense</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Date Récup. Prévue</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Statut</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Créé par</th>
                 </tr>
               </thead>
@@ -960,6 +985,17 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {depense.date_recuperation_prevue ? new Date(depense.date_recuperation_prevue).toLocaleDateString('fr-FR') : '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {depense.statut_depense === 'Payé' ? (
+                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                          Payé
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                          Non Payé
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{depense.cree_par}</td>
                   </tr>
@@ -1095,7 +1131,10 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
               step="0.01"
               value={newRecette.montant}
               onChange={(e) => setNewRecette({...newRecette, montant: e.target.value})}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              readOnly={newRecette.type_recette === 'Recuperation Depense'}
+              className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                newRecette.type_recette === 'Recuperation Depense' ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
               placeholder="0.00"
             />
           </div>
