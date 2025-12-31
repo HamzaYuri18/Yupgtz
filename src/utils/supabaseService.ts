@@ -1841,6 +1841,30 @@ export const getUpcomingTermes = async (monthName: string, year: string, daysAhe
   }
 };
 
+export const getCreditsDueToday = async (sessionDate: string): Promise<any[]> => {
+  try {
+    console.log(`🔍 Récupération des crédits à payer pour la date ${sessionDate}...`);
+
+    const { data, error } = await supabase
+      .from('liste_credits')
+      .select('*')
+      .eq('date_paiement_prevue', sessionDate)
+      .neq('statut', 'Payé en total')
+      .order('numero_contrat', { ascending: true });
+
+    if (error) {
+      console.error(`❌ Erreur lors de la récupération des crédits à payer:`, error);
+      return [];
+    }
+
+    console.log(`✅ Crédits à payer récupérés: ${data?.length || 0}`);
+    return data || [];
+  } catch (error) {
+    console.error('❌ Erreur générale:', error);
+    return [];
+  }
+};
+
 export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: string): Promise<{
   success: boolean;
   message: string;

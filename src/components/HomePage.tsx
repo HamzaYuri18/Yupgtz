@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, RefreshCw } from 'lucide-react';
-import { getAvailableMonths, getUnpaidTermesByMonth, getOverdueUnpaidTermes, getPaidTermesByMonth, getUpcomingTermes, syncTermeStatusesWithMainTable } from '../utils/supabaseService';
+import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, RefreshCw, DollarSign } from 'lucide-react';
+import { getAvailableMonths, getUnpaidTermesByMonth, getOverdueUnpaidTermes, getPaidTermesByMonth, getUpcomingTermes, getCreditsDueToday, syncTermeStatusesWithMainTable } from '../utils/supabaseService';
 import { getSessionDate } from '../utils/auth';
 
 interface CircularStatCardProps {
@@ -87,11 +87,13 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [unpaidTermes, setUnpaidTermes] = useState<any[]>([]);
   const [paidTermes, setPaidTermes] = useState<any[]>([]);
   const [upcomingTermes, setUpcomingTermes] = useState<any[]>([]);
+  const [creditsDueToday, setCreditsDueToday] = useState<any[]>([]);
 
   const [showOverdueDetails, setShowOverdueDetails] = useState(false);
   const [showUnpaidDetails, setShowUnpaidDetails] = useState(false);
   const [showPaidDetails, setShowPaidDetails] = useState(false);
   const [showUpcomingDetails, setShowUpcomingDetails] = useState(false);
+  const [showCreditsDueTodayDetails, setShowCreditsDueTodayDetails] = useState(false);
 
   const [daysFilter, setDaysFilter] = useState<number>(7);
   const [isLoading, setIsLoading] = useState(false);
@@ -109,6 +111,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     if (selectedMonth && selectedYear) {
       loadTermesData();
     }
+    loadCreditsDueToday();
   }, [selectedMonth, selectedYear, daysFilter]);
 
   const loadAvailableMonths = async () => {
@@ -199,8 +202,24 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     }
   };
 
+  const loadCreditsDueToday = async () => {
+    try {
+      const sessionDate = getSessionDate();
+      if (sessionDate) {
+        const credits = await getCreditsDueToday(sessionDate);
+        setCreditsDueToday(credits);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des crédits à payer aujourd\'hui:', error);
+    }
+  };
+
   const calculateTotal = (termes: any[]) => {
     return termes.reduce((sum, terme) => sum + (parseFloat(terme.prime) || 0), 0);
+  };
+
+  const calculateCreditTotal = (credits: any[]) => {
+    return credits.reduce((sum, credit) => sum + (parseFloat(credit.solde) || 0), 0);
   };
 
   const formatDate = (dateString: string) => {
@@ -413,6 +432,21 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
             })()}
           </div>
 
+          {creditsDueToday.length > 0 && (
+            <div className="mb-8">
+              <CircularStatCard
+                title="Crédits à Payer Aujourd'hui"
+                subtitle={`Date de session: ${getSessionDate()}`}
+                count={creditsDueToday.length}
+                total={calculateCreditTotal(creditsDueToday)}
+                percentage={100}
+                color="#8B5CF6"
+                icon={<DollarSign className="w-8 h-8" />}
+                onClick={() => setShowCreditsDueTodayDetails(!showCreditsDueTodayDetails)}
+              />
+            </div>
+          )}
+
           {showOverdueDetails && overdueTermes.length > 0 && (
             <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
               <h3 className="text-xl font-bold text-red-600 mb-4 flex items-center gap-2">
@@ -537,6 +571,59 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                         <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>
                         <td className="px-4 py-3 text-sm">{formatDate(terme.echeance)}</td>
                         <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {showCreditsDueTodayDetails && creditsDueToday.length > 0 && (
+            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+              <h3 className="text-xl font-bold text-purple-600 mb-4 flex items-center gap-2">
+                <DollarSign className="w-6 h-6" />
+                Crédits à Payer Aujourd'hui ({creditsDueToday.length})
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-purple-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Branche</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Crédit (DT)</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Payé (DT)</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Solde (DT)</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date Prévue</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {creditsDueToday.map((credit, index) => (
+                      <tr key={index} className="hover:bg-purple-50 transition-colors">
+                        <td className="px-4 py-3 text-sm font-medium">{credit.numero_contrat}</td>
+                        <td className="px-4 py-3 text-sm">{credit.assure}</td>
+                        <td className="px-4 py-3 text-sm">{credit.branche}</td>
+                        <td className="px-4 py-3 text-sm">{parseFloat(credit.montant_credit).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-sm text-green-600 font-semibold">
+                          {parseFloat(credit.paiement || 0).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-red-600 font-semibold">
+                          {parseFloat(credit.solde || credit.montant_credit).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                            credit.statut === 'Non payé' ? 'bg-red-100 text-red-800' :
+                            credit.statut === 'Payé partiellement' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-green-100 text-green-800'
+                          }`}>
+                            {credit.statut}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-purple-600 font-medium">
+                          {formatDate(credit.date_paiement_prevue)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
