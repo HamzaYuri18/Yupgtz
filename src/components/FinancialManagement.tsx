@@ -34,7 +34,9 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     montant: '',
     date_depense: getSessionDate(),
     numero_contrat: '',
-    client: ''
+    client: '',
+    libelle: '',
+    date_recuperation_prevue: ''
   });
   const [monthFilter, setMonthFilter] = useState<string>('all');
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
@@ -42,6 +44,8 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
   const [contractSearchMessage, setContractSearchMessage] = useState('');
   const [avanceData, setAvanceData] = useState<any>(null);
   const [avanceSearchMessage, setAvanceSearchMessage] = useState('');
+  const [showDepensesRecuperables, setShowDepensesRecuperables] = useState(false);
+  const [depensesRecuperables, setDepensesRecuperables] = useState<Depense[]>([]);
 
   // États pour les recettes exceptionnelles
   const [recettes, setRecettes] = useState<RecetteExceptionnelle[]>([]);
@@ -51,7 +55,9 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     date_recette: getSessionDate(),
     numero_contrat: '',
     echeance: '',
-    assure: ''
+    assure: '',
+    id_depense: '',
+    libelle: ''
   });
 
   // États pour les ristournes
@@ -347,10 +353,70 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     }
   };
 
+  const loadDepensesRecuperables = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('depenses')
+        .select('*')
+        .eq('type_depense', 'Depense Recuperable')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setDepensesRecuperables(data || []);
+    } catch (error) {
+      console.error('Erreur lors du chargement des dépenses récupérables:', error);
+    }
+  };
+
+  const handleSearchDepense = async () => {
+    if (!newRecette.id_depense) {
+      setMessage('Veuillez saisir un ID de dépense');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('depenses')
+        .select('*')
+        .eq('id', parseInt(newRecette.id_depense))
+        .eq('type_depense', 'Depense Recuperable')
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!data) {
+        setMessage('❌ Aucune dépense récupérable trouvée avec cet ID');
+        setTimeout(() => setMessage(''), 3000);
+        return;
+      }
+
+      setNewRecette({
+        ...newRecette,
+        montant: data.montant.toString(),
+        libelle: data.libelle || ''
+      });
+      setMessage(`✅ Dépense trouvée: ${data.libelle} - ${data.montant} DT`);
+      setTimeout(() => setMessage(''), 5000);
+    } catch (error) {
+      console.error('Erreur lors de la recherche de la dépense:', error);
+      setMessage('❌ Erreur lors de la recherche');
+      setTimeout(() => setMessage(''), 3000);
+    }
+  };
+
   const handleSaveDepense = async () => {
     if (!newDepense.montant) {
       setMessage('Veuillez saisir un montant');
       return;
+    }
+
+    if (newDepense.type_depense === 'Depense Recuperable') {
+      if (!newDepense.libelle || !newDepense.date_recuperation_prevue) {
+        setMessage('Veuillez saisir le libellé et la date de récupération prévue');
+        return;
+      }
     }
 
     if (newDepense.type_depense === 'Remise') {
@@ -406,6 +472,10 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       ...((newDepense.type_depense === 'Remise' || newDepense.type_depense === 'Reprise sur Avance Client') && {
         Numero_Contrat: newDepense.numero_contrat,
         Client: newDepense.client
+      }),
+      ...(newDepense.type_depense === 'Depense Recuperable' && {
+        libelle: newDepense.libelle,
+        date_recuperation_prevue: newDepense.date_recuperation_prevue
       })
     };
 
@@ -418,7 +488,9 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         montant: '',
         date_depense: getSessionDate(),
         numero_contrat: '',
-        client: ''
+        client: '',
+        libelle: '',
+        date_recuperation_prevue: ''
       });
       setContractSearchMessage('');
       setAvanceSearchMessage('');
@@ -438,6 +510,13 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       return;
     }
 
+    if (newRecette.type_recette === 'Recuperation Depense') {
+      if (!newRecette.id_depense || !newRecette.libelle) {
+        setMessage('Veuillez rechercher et valider la dépense récupérable');
+        return;
+      }
+    }
+
     if (newRecette.type_recette === 'Avance Client') {
       if (!newRecette.numero_contrat || !newRecette.echeance || !newRecette.assure) {
         setMessage('Veuillez saisir le numéro de contrat, l\'échéance et l\'assuré pour une avance client');
@@ -454,6 +533,10 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         Numero_Contrat: newRecette.numero_contrat,
         Echeance: newRecette.echeance,
         Assure: newRecette.assure
+      }),
+      ...(newRecette.type_recette === 'Recuperation Depense' && {
+        id_depense: parseInt(newRecette.id_depense),
+        libelle: newRecette.libelle
       })
     };
 
@@ -466,7 +549,9 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         date_recette: getSessionDate(),
         numero_contrat: '',
         echeance: '',
-        assure: ''
+        assure: '',
+        id_depense: '',
+        libelle: ''
       });
       loadData();
     } else {
@@ -644,6 +729,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
               <option value="Versement Bancaire">Versement Bancaire</option>
               <option value="Remise">Remise</option>
               <option value="Hamza">Hamza</option>
+              <option value="Depense Recuperable">Depense Recuperable</option>
             </select>
           </div>
           <div>
@@ -717,6 +803,34 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
           </div>
         )}
 
+        {/* Champs conditionnels pour Depense Recuperable */}
+        {newDepense.type_depense === 'Depense Recuperable' && (
+          <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+            <h5 className="text-sm font-semibold text-yellow-800 mb-3">Informations de la dépense récupérable</h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Libellé *</label>
+                <input
+                  type="text"
+                  value={newDepense.libelle}
+                  onChange={(e) => setNewDepense({...newDepense, libelle: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                  placeholder="Description de la dépense"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Date de récupération prévue *</label>
+                <input
+                  type="date"
+                  value={newDepense.date_recuperation_prevue}
+                  onChange={(e) => setNewDepense({...newDepense, date_recuperation_prevue: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Champs conditionnels pour Reprise sur Avance Client */}
         {newDepense.type_depense === 'Reprise sur Avance Client' && (
           <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
@@ -783,25 +897,81 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         </button>
       </div>
 
-      {/* Filtre par mois */}
+      {/* Filtre par mois et bouton dépenses récupérables */}
       <div className="bg-white rounded-lg p-4 mb-4 border border-red-200">
-        <div className="flex items-center gap-3">
-          <Calendar className="w-5 h-5 text-red-600" />
-          <label className="text-sm font-medium text-gray-700">Filtrer par:</label>
-          <select
-            value={monthFilter}
-            onChange={(e) => setMonthFilter(e.target.value)}
-            className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Calendar className="w-5 h-5 text-red-600" />
+            <label className="text-sm font-medium text-gray-700">Filtrer par:</label>
+            <select
+              value={monthFilter}
+              onChange={(e) => setMonthFilter(e.target.value)}
+              className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            >
+              <option value="all">Session actuelle</option>
+              {availableMonths.map(month => (
+                <option key={month} value={month}>
+                  {new Date(month + '-01').toLocaleDateString('fr-FR', { year: 'numeric', month: 'long' })}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={() => {
+              setShowDepensesRecuperables(!showDepensesRecuperables);
+              if (!showDepensesRecuperables) {
+                loadDepensesRecuperables();
+              }
+            }}
+            className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
           >
-            <option value="all">Session actuelle</option>
-            {availableMonths.map(month => (
-              <option key={month} value={month}>
-                {new Date(month + '-01').toLocaleDateString('fr-FR', { year: 'numeric', month: 'long' })}
-              </option>
-            ))}
-          </select>
+            <DollarSign className="w-4 h-4" />
+            <span>{showDepensesRecuperables ? 'Masquer' : 'Dépenses Récupérables'}</span>
+          </button>
         </div>
       </div>
+
+      {/* Modal des dépenses récupérables */}
+      {showDepensesRecuperables && (
+        <div className="bg-white rounded-lg p-4 mb-4 border border-yellow-200">
+          <h4 className="font-medium text-yellow-700 mb-4">Dépenses Récupérables ({depensesRecuperables.length})</h4>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-yellow-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">ID</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Libellé</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Montant (DT)</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Date Dépense</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Date Récup. Prévue</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Créé par</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {depensesRecuperables.map((depense) => (
+                  <tr key={depense.id} className="hover:bg-yellow-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{depense.id}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{depense.libelle}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-yellow-600">
+                      {depense.montant.toLocaleString('fr-FR')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {depense.date_depense ? new Date(depense.date_depense).toLocaleDateString('fr-FR') : '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {depense.date_recuperation_prevue ? new Date(depense.date_recuperation_prevue).toLocaleDateString('fr-FR') : '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{depense.cree_par}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {depensesRecuperables.length === 0 && (
+              <div className="text-center py-8 text-gray-500">Aucune dépense récupérable enregistrée</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Liste des dépenses */}
       <div className="bg-white rounded-lg border border-red-200">
@@ -915,6 +1085,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
               <option value="Récupération A/S Ahlem">Récupération A/S Ahlem</option>
               <option value="Récupération A/S Islem">Récupération A/S Islem</option>
               <option value="Avance Client">Avance Client</option>
+              <option value="Recuperation Depense">Recuperation Depense</option>
             </select>
           </div>
           <div>
@@ -938,6 +1109,45 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
             />
           </div>
         </div>
+
+        {newRecette.type_recette === 'Recuperation Depense' && (
+          <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+            <h5 className="text-sm font-semibold text-yellow-800 mb-3">Recherche de la dépense récupérable</h5>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ID de la dépense *</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={newRecette.id_depense}
+                    onChange={(e) => setNewRecette({...newRecette, id_depense: e.target.value})}
+                    className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                    placeholder="Ex: 123"
+                  />
+                  <button
+                    onClick={handleSearchDepense}
+                    className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Libellé (automatique)</label>
+                <input
+                  type="text"
+                  value={newRecette.libelle}
+                  readOnly
+                  className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50"
+                  placeholder="Rechercher d'abord la dépense"
+                />
+              </div>
+            </div>
+            <div className="mt-2 text-xs text-yellow-700">
+              <p>Cliquez sur le bouton "Dépenses Récupérables" dans la section Dépenses pour voir les IDs disponibles</p>
+            </div>
+          </div>
+        )}
 
         {newRecette.type_recette === 'Avance Client' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 p-4 bg-blue-50 rounded-lg">

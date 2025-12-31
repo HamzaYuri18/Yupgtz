@@ -10,6 +10,8 @@ export interface Depense {
   created_at?: string;
   Numero_Contrat?: string;
   Client?: string;
+  libelle?: string;
+  date_recuperation_prevue?: string;
 }
 
 export interface RecetteExceptionnelle {
@@ -22,6 +24,8 @@ export interface RecetteExceptionnelle {
   Numero_Contrat?: string;
   Echeance?: string;
   Assure?: string;
+  id_depense?: number;
+  libelle?: string;
 }
 
 export interface Ristourne {
@@ -55,14 +59,29 @@ export const saveDepense = async (depense: Depense): Promise<boolean> => {
   try {
     console.log('💰 Sauvegarde de la dépense:', depense);
 
+    const insertData: any = {
+      type_depense: depense.type_depense,
+      montant: depense.montant,
+      date_depense: depense.date_depense || new Date().toISOString().split('T')[0],
+      cree_par: depense.cree_par
+    };
+
+    if (depense.Numero_Contrat) {
+      insertData.Numero_Contrat = depense.Numero_Contrat;
+    }
+    if (depense.Client) {
+      insertData.Client = depense.Client;
+    }
+    if (depense.libelle) {
+      insertData.libelle = depense.libelle;
+    }
+    if (depense.date_recuperation_prevue) {
+      insertData.date_recuperation_prevue = depense.date_recuperation_prevue;
+    }
+
     const { data, error } = await supabase
       .from('depenses')
-      .insert([{
-        type_depense: depense.type_depense,
-        montant: depense.montant,
-        date_depense: depense.date_depense || new Date().toISOString().split('T')[0],
-        cree_par: depense.cree_par
-      }])
+      .insert([insertData])
       .select();
 
     if (error) {
@@ -138,6 +157,12 @@ export const saveRecetteExceptionnelle = async (recette: RecetteExceptionnelle):
     }
     if (recette.Assure) {
       insertData.Assure = recette.Assure;
+    }
+    if (recette.id_depense) {
+      insertData.id_depense = recette.id_depense;
+    }
+    if (recette.libelle) {
+      insertData.libelle = recette.libelle;
     }
 
     const { data, error } = await supabase
