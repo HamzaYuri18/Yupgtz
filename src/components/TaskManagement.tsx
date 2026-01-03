@@ -146,7 +146,12 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
         .eq('id', tacheId);
 
       if (error) throw error;
-      loadTaches();
+
+      if (editingRemarks === tacheId) {
+        setEditingRemarks(null);
+      }
+
+      await loadTaches();
     } catch (error) {
       console.error('Erreur lors de la suppression de la tâche:', error);
       alert('Erreur lors de la suppression de la tâche');
@@ -550,7 +555,10 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                     )}
                     {isHamza && !isSessionClosed && (
                       <button
-                        onClick={() => handleDeleteTache(tache.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteTache(tache.id);
+                        }}
                         className="px-4 py-2 rounded-lg font-medium transition-colors bg-red-600 text-white hover:bg-red-700"
                       >
                         <Trash2 className="inline w-4 h-4 mr-1" />
@@ -677,7 +685,10 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                     )}
                     {isHamza && !isSessionClosed && (
                       <button
-                        onClick={() => handleDeleteTache(tache.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteTache(tache.id);
+                        }}
                         className="px-4 py-2 rounded-lg font-medium transition-colors bg-red-600 text-white hover:bg-red-700"
                       >
                         <Trash2 className="inline w-4 h-4 mr-1" />
