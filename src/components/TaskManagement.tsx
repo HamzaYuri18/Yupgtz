@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { AlertCircle, CheckCircle, Clock, Plus, Edit2, Save, X, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, Plus, Edit2, Save, X, ChevronDown, ChevronUp, Calendar, Trash2, Filter } from 'lucide-react';
 
 interface Tache {
   id: string;
@@ -31,6 +31,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
   const [showTachesAFaire, setShowTachesAFaire] = useState(false);
   const [showTachesAccomplies, setShowTachesAccomplies] = useState(false);
   const [dateFilter, setDateFilter] = useState<string>('today');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'A faire' | 'Accomplie'>('all');
   const [customDateDebut, setCustomDateDebut] = useState<string>('');
   const [customDateFin, setCustomDateFin] = useState<string>('');
   const [newTache, setNewTache] = useState({
@@ -43,6 +44,9 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
   const [remarquesTemp, setRemarquesTemp] = useState<{ [key: string]: string }>({});
 
   const isHamza = currentUser === 'Hamza';
+  const isIslemOrAhlem = currentUser === 'Islem' || currentUser === 'Ahlem';
+  const canEditRemarks = isHamza || isIslemOrAhlem;
+  const canMarkAsComplete = isHamza || isIslemOrAhlem;
 
   useEffect(() => {
     loadTaches();
@@ -96,7 +100,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
   };
 
   const handleUpdateStatut = async (tacheId: string, newStatut: 'A faire' | 'Accomplie') => {
-    if (!isHamza || isSessionClosed) return;
+    if (!canMarkAsComplete || isSessionClosed) return;
 
     try {
       const { error } = await supabase
@@ -113,7 +117,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
   };
 
   const handleSaveRemarques = async (tacheId: string) => {
-    if (!isHamza || isSessionClosed) return;
+    if (!canEditRemarks || isSessionClosed) return;
 
     try {
       const { error } = await supabase
@@ -127,6 +131,25 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
     } catch (error) {
       console.error('Erreur lors de la sauvegarde des remarques:', error);
       alert('Erreur lors de la sauvegarde des remarques');
+    }
+  };
+
+  const handleDeleteTache = async (tacheId: string) => {
+    if (!isHamza) return;
+
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette tâche ?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('taches')
+        .delete()
+        .eq('id', tacheId);
+
+      if (error) throw error;
+      loadTaches();
+    } catch (error) {
+      console.error('Erreur lors de la suppression de la tâche:', error);
+      alert('Erreur lors de la suppression de la tâche');
     }
   };
 
@@ -145,8 +168,12 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
     }
   };
 
-  const getFilteredTaches = (statut: 'A faire' | 'Accomplie') => {
-    let filtered = taches.filter(t => t.statut === statut);
+  const getFilteredTaches = (statut?: 'A faire' | 'Accomplie') => {
+    let filtered = statut ? taches.filter(t => t.statut === statut) : taches;
+
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(t => t.statut === statusFilter);
+    }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -296,11 +323,50 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
           </form>
         )}
 
-        <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-          <div className="flex items-center gap-2 mb-3">
-            <Calendar className="w-5 h-5 text-gray-600" />
-            <label className="text-sm font-medium text-gray-700">Filtre de dates:</label>
+        <div className="mb-4 p-4 bg-gray-50 rounded-lg space-y-4">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Filter className="w-5 h-5 text-gray-600" />
+              <label className="text-sm font-medium text-gray-700">Filtre de statut:</label>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => setStatusFilter('all')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  statusFilter === 'all'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                Toutes
+              </button>
+              <button
+                onClick={() => setStatusFilter('A faire')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  statusFilter === 'A faire'
+                    ? 'bg-orange-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                À faire
+              </button>
+              <button
+                onClick={() => setStatusFilter('Accomplie')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  statusFilter === 'Accomplie'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                Accomplies
+              </button>
+            </div>
           </div>
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Calendar className="w-5 h-5 text-gray-600" />
+              <label className="text-sm font-medium text-gray-700">Filtre de dates:</label>
+            </div>
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => setDateFilter('today')}
@@ -375,6 +441,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
               </div>
             </div>
           )}
+          </div>
         </div>
 
         <div
@@ -418,7 +485,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                     )}
                     <div className="mt-3">
                       <label className="block text-xs font-medium text-gray-700 mb-1">Remarques:</label>
-                      {editingRemarks === tache.id && isHamza && !isSessionClosed ? (
+                      {editingRemarks === tache.id && canEditRemarks && !isSessionClosed ? (
                         <div className="flex gap-2">
                           <textarea
                             value={remarquesTemp[tache.id] !== undefined ? remarquesTemp[tache.id] : tache.remarques}
@@ -446,7 +513,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                           <p className="flex-1 text-sm text-gray-600 bg-gray-50 p-2 rounded">
                             {tache.remarques || 'Aucune remarque'}
                           </p>
-                          {isHamza && !isSessionClosed && (
+                          {canEditRemarks && !isSessionClosed && (
                             <button
                               onClick={() => {
                                 setEditingRemarks(tache.id);
@@ -461,8 +528,8 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                       )}
                     </div>
                   </div>
-                  <div className="ml-4">
-                    {isHamza && !isSessionClosed && (
+                  <div className="ml-4 flex flex-col gap-2">
+                    {canMarkAsComplete && !isSessionClosed && (
                       <button
                         onClick={() => handleUpdateStatut(tache.id, 'Accomplie')}
                         className="px-4 py-2 rounded-lg font-medium transition-colors bg-green-600 text-white hover:bg-green-700"
@@ -471,10 +538,24 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                         Marquer accomplie
                       </button>
                     )}
-                    {(!isHamza || isSessionClosed) && (
+                    {!canMarkAsComplete && !isSessionClosed && (
                       <span className="px-4 py-2 rounded-lg font-medium bg-orange-100 text-orange-800">
                         A faire
                       </span>
+                    )}
+                    {isSessionClosed && (
+                      <span className="px-4 py-2 rounded-lg font-medium bg-orange-100 text-orange-800">
+                        A faire
+                      </span>
+                    )}
+                    {isHamza && !isSessionClosed && (
+                      <button
+                        onClick={() => handleDeleteTache(tache.id)}
+                        className="px-4 py-2 rounded-lg font-medium transition-colors bg-red-600 text-white hover:bg-red-700"
+                      >
+                        <Trash2 className="inline w-4 h-4 mr-1" />
+                        Supprimer
+                      </button>
                     )}
                   </div>
                 </div>
@@ -529,7 +610,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                     )}
                     <div className="mt-3">
                       <label className="block text-xs font-medium text-gray-700 mb-1">Remarques:</label>
-                      {editingRemarks === tache.id && isHamza && !isSessionClosed ? (
+                      {editingRemarks === tache.id && canEditRemarks && !isSessionClosed ? (
                         <div className="flex gap-2">
                           <textarea
                             value={remarquesTemp[tache.id] !== undefined ? remarquesTemp[tache.id] : tache.remarques}
@@ -557,7 +638,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                           <p className="flex-1 text-sm text-gray-600 bg-white p-2 rounded">
                             {tache.remarques || 'Aucune remarque'}
                           </p>
-                          {isHamza && !isSessionClosed && (
+                          {canEditRemarks && !isSessionClosed && (
                             <button
                               onClick={() => {
                                 setEditingRemarks(tache.id);
@@ -572,7 +653,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                       )}
                     </div>
                   </div>
-                  <div className="ml-4">
+                  <div className="ml-4 flex flex-col gap-2">
                     {isHamza && !isSessionClosed && (
                       <button
                         onClick={() => handleUpdateStatut(tache.id, 'A faire')}
@@ -582,11 +663,26 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                         Rouvrir
                       </button>
                     )}
-                    {(!isHamza || isSessionClosed) && (
+                    {!isHamza && !isSessionClosed && (
                       <span className="px-4 py-2 rounded-lg font-medium bg-green-100 text-green-800">
                         <CheckCircle className="inline w-4 h-4 mr-1" />
                         Accomplie
                       </span>
+                    )}
+                    {isSessionClosed && (
+                      <span className="px-4 py-2 rounded-lg font-medium bg-green-100 text-green-800">
+                        <CheckCircle className="inline w-4 h-4 mr-1" />
+                        Accomplie
+                      </span>
+                    )}
+                    {isHamza && !isSessionClosed && (
+                      <button
+                        onClick={() => handleDeleteTache(tache.id)}
+                        className="px-4 py-2 rounded-lg font-medium transition-colors bg-red-600 text-white hover:bg-red-700"
+                      >
+                        <Trash2 className="inline w-4 h-4 mr-1" />
+                        Supprimer
+                      </button>
                     )}
                   </div>
                 </div>
