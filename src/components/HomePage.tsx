@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, RefreshCw, DollarSign } from 'lucide-react';
+import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, RefreshCw, DollarSign, X } from 'lucide-react';
 import { getAvailableMonths, getUnpaidTermesByMonth, getOverdueUnpaidTermes, getPaidTermesByMonth, getUpcomingTermes, getCreditsDueToday, syncTermeStatusesWithMainTable } from '../utils/supabaseService';
 import { getSessionDate } from '../utils/auth';
+import { isSessionClosed } from '../utils/sessionService';
+import { supabase } from '../lib/supabase';
+import TaskManagement from './TaskManagement';
 
 interface CircularStatCardProps {
   title: string;
@@ -12,6 +15,7 @@ interface CircularStatCardProps {
   color: string;
   icon: React.ReactNode;
   onClick: () => void;
+  showAmount?: boolean;
 }
 
 const CircularStatCard: React.FC<CircularStatCardProps> = ({
@@ -22,7 +26,8 @@ const CircularStatCard: React.FC<CircularStatCardProps> = ({
   percentage,
   color,
   icon,
-  onClick
+  onClick,
+  showAmount = true
 }) => {
   const radius = 70;
   const circumference = 2 * Math.PI * radius;
@@ -67,7 +72,9 @@ const CircularStatCard: React.FC<CircularStatCardProps> = ({
         </div>
         <h3 className="text-lg font-semibold text-gray-900 mb-1 text-center">{title}</h3>
         <p className="text-sm text-gray-500 mb-2 text-center">{subtitle}</p>
-        <div className="text-2xl font-bold" style={{ color }}>{total.toFixed(2)} DT</div>
+        {showAmount && (
+          <div className="text-2xl font-bold" style={{ color }}>{total.toFixed(2)} DT</div>
+        )}
       </div>
     </div>
   );
@@ -100,11 +107,15 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string>('');
   const [showSyncMessage, setShowSyncMessage] = useState(false);
+  const [showCreditAlert, setShowCreditAlert] = useState(true);
+  const [sessionClosed, setSessionClosed] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   const isHamza = username?.toLowerCase() === 'hamza';
 
   useEffect(() => {
     loadAvailableMonths();
+    checkSessionStatus();
   }, []);
 
   useEffect(() => {
@@ -113,6 +124,24 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     }
     loadCreditsDueToday();
   }, [selectedMonth, selectedYear, daysFilter]);
+
+  const checkSessionStatus = async () => {
+    const sessionDate = getSessionDate();
+    if (sessionDate) {
+      const closed = await isSessionClosed(sessionDate);
+      setSessionClosed(closed);
+
+      const { data } = await supabase
+        .from('sessions')
+        .select('id')
+        .eq('date_session', sessionDate)
+        .maybeSingle();
+
+      if (data) {
+        setCurrentSessionId(data.id);
+      }
+    }
+  };
 
   const loadAvailableMonths = async () => {
     const months = await getAvailableMonths();
@@ -280,9 +309,107 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
+      {showCreditAlert && creditsDueToday.length > 0 && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-6 rounded-t-2xl flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="w-10 h-10" />
+                <div>
+                  <h2 className="text-2xl font-bold">RAPPEL URGENT</h2>
+                  <p className="text-red-100">Crédits à payer aujourd'hui</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCreditAlert(false)}
+                className="p-2 hover:bg-red-800 rounded-lg transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="mb-4 text-center">
+                <p className="text-lg text-gray-700">
+                  <span className="font-bold text-red-600">{creditsDueToday.length}</span> crédit(s) à régler aujourd'hui
+                </p>
+                {isHamza && (
+                  <p className="text-2xl font-bold text-red-600 mt-2">
+                    Total: {calculateCreditTotal(creditsDueToday).toFixed(2)} DT
+                  </p>
+                )}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-red-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Branche</th>
+                      {isHamza && (
+                        <>
+                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Crédit (DT)</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Solde (DT)</th>
+                        </>
+                      )}
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date Prévue</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {creditsDueToday.map((credit, index) => (
+                      <tr key={index} className="hover:bg-red-50">
+                        <td className="px-4 py-3 text-sm font-medium">{credit.numero_contrat}</td>
+                        <td className="px-4 py-3 text-sm">{credit.assure}</td>
+                        <td className="px-4 py-3 text-sm">{credit.branche}</td>
+                        {isHamza && (
+                          <>
+                            <td className="px-4 py-3 text-sm font-semibold">{parseFloat(credit.montant_credit).toFixed(2)}</td>
+                            <td className="px-4 py-3 text-sm text-red-600 font-semibold">
+                              {parseFloat(credit.solde || credit.montant_credit).toFixed(2)}
+                            </td>
+                          </>
+                        )}
+                        <td className="px-4 py-3 text-sm">
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                            credit.statut === 'Non payé' ? 'bg-red-100 text-red-800' :
+                            credit.statut === 'Payé partiellement' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-green-100 text-green-800'
+                          }`}>
+                            {credit.statut}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-red-600 font-medium">
+                          {formatDate(credit.date_paiement_prevue)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-6 flex justify-center">
+                <button
+                  onClick={() => setShowCreditAlert(false)}
+                  className="px-8 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Tableau de bord des Termes</h1>
         <p className="text-gray-600">Vue d'ensemble des paiements et échéances</p>
+      </div>
+
+      <div className="mb-8">
+        <TaskManagement
+          currentUser={username || 'Inconnu'}
+          sessionId={currentSessionId}
+          isSessionClosed={sessionClosed}
+        />
       </div>
 
       <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
@@ -396,6 +523,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     color="#EF4444"
                     icon={<AlertCircle className="w-8 h-8" />}
                     onClick={() => setShowOverdueDetails(!showOverdueDetails)}
+                    showAmount={isHamza}
                   />
                   <CircularStatCard
                     title="Termes Non Payés"
@@ -406,6 +534,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     color="#F97316"
                     icon={<Clock className="w-8 h-8" />}
                     onClick={() => setShowUnpaidDetails(!showUnpaidDetails)}
+                    showAmount={isHamza}
                   />
                   <CircularStatCard
                     title="Échéances Proches"
@@ -416,6 +545,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     color="#3B82F6"
                     icon={<Calendar className="w-8 h-8" />}
                     onClick={() => setShowUpcomingDetails(!showUpcomingDetails)}
+                    showAmount={isHamza}
                   />
                   <CircularStatCard
                     title="Termes Payés"
@@ -426,6 +556,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     color="#10B981"
                     icon={<CheckCircle className="w-8 h-8" />}
                     onClick={() => setShowPaidDetails(!showPaidDetails)}
+                    showAmount={isHamza}
                   />
                 </>
               );
@@ -443,6 +574,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                 color="#8B5CF6"
                 icon={<DollarSign className="w-8 h-8" />}
                 onClick={() => setShowCreditsDueTodayDetails(!showCreditsDueTodayDetails)}
+                showAmount={isHamza}
               />
             </div>
           )}
@@ -459,7 +591,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     <tr>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>
+                      {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
                     </tr>
@@ -469,7 +601,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                       <tr key={index} className="hover:bg-red-50 transition-colors">
                         <td className="px-4 py-3 text-sm">{terme.numero_contrat}</td>
                         <td className="px-4 py-3 text-sm">{terme.assure}</td>
-                        <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>
+                        {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
                         <td className="px-4 py-3 text-sm text-red-600 font-medium">{formatDate(terme.echeance)}</td>
                         <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
                       </tr>
@@ -492,7 +624,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     <tr>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>
+                      {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
                     </tr>
@@ -502,7 +634,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                       <tr key={index} className="hover:bg-orange-50 transition-colors">
                         <td className="px-4 py-3 text-sm">{terme.numero_contrat}</td>
                         <td className="px-4 py-3 text-sm">{terme.assure}</td>
-                        <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>
+                        {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
                         <td className="px-4 py-3 text-sm">{formatDate(terme.echeance)}</td>
                         <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
                       </tr>
@@ -525,7 +657,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     <tr>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>
+                      {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
                     </tr>
@@ -535,7 +667,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                       <tr key={index} className="hover:bg-blue-50 transition-colors">
                         <td className="px-4 py-3 text-sm">{terme.numero_contrat}</td>
                         <td className="px-4 py-3 text-sm">{terme.assure}</td>
-                        <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>
+                        {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
                         <td className="px-4 py-3 text-sm text-blue-600 font-medium">{formatDate(terme.echeance)}</td>
                         <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
                       </tr>
@@ -558,7 +690,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     <tr>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>
+                      {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
                     </tr>
@@ -568,7 +700,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                       <tr key={index} className="hover:bg-green-50 transition-colors">
                         <td className="px-4 py-3 text-sm">{terme.numero_contrat}</td>
                         <td className="px-4 py-3 text-sm">{terme.assure}</td>
-                        <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>
+                        {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
                         <td className="px-4 py-3 text-sm">{formatDate(terme.echeance)}</td>
                         <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
                       </tr>
