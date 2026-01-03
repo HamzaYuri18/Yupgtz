@@ -167,14 +167,9 @@ const TransactionReport: React.FC = () => {
           stats.byTypePaiement[transaction.type_paiement].count++;
         }
       } else if (transaction.type_paiement === 'Crédit') {
-        // Pour "Crédit", afficher le crédit net (montant_credit - montant payé au comptant)
-        if (transaction.montant_credit) {
-          const creditNet = transaction.montant_credit - montant;
-          if (creditNet > 0) {
-            stats.byTypePaiement[transaction.type_paiement].montant += creditNet;
-            stats.byTypePaiement[transaction.type_paiement].count++;
-          }
-        }
+        // Pour "Crédit", afficher (total primes - total montants)
+        stats.byTypePaiement[transaction.type_paiement].montant += (prime - montant);
+        stats.byTypePaiement[transaction.type_paiement].count++;
       } else {
         stats.byTypePaiement[transaction.type_paiement].montant += prime;
         stats.byTypePaiement[transaction.type_paiement].count++;
