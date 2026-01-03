@@ -97,13 +97,13 @@ const TransactionReport: React.FC = () => {
         stats.countCredits++;
       }
 
-      // Calculer Total Espèces Net (somme des montants en Espèce)
-      if (transaction.mode_paiement === 'Espece') {
+      // Calculer Total Espèces Net (somme des montants en Espèce positifs uniquement)
+      if (transaction.mode_paiement === 'Espece' && montant > 0) {
         stats.countEspeces++;
         stats.totalEspecesNet += montant;
       }
 
-      // Calculer Total Chèque
+      // Calculer Total Chèque (montants positifs uniquement)
       if (transaction.mode_paiement === 'Cheque' && montant > 0) {
         stats.totalCheque += montant;
         stats.countCheque++;
@@ -153,12 +153,19 @@ const TransactionReport: React.FC = () => {
       stats.byModePaiement[transaction.mode_paiement].montant += prime;
       stats.byModePaiement[transaction.mode_paiement].count++;
 
-      // Par Type de Paiement
+      // Par Type de Paiement (seulement les montants positifs pour "Au comptant")
       if (!stats.byTypePaiement[transaction.type_paiement]) {
         stats.byTypePaiement[transaction.type_paiement] = { montant: 0, count: 0 };
       }
-      stats.byTypePaiement[transaction.type_paiement].montant += prime;
-      stats.byTypePaiement[transaction.type_paiement].count++;
+      if (transaction.type_paiement === 'Au comptant') {
+        if (prime > 0) {
+          stats.byTypePaiement[transaction.type_paiement].montant += prime;
+          stats.byTypePaiement[transaction.type_paiement].count++;
+        }
+      } else {
+        stats.byTypePaiement[transaction.type_paiement].montant += prime;
+        stats.byTypePaiement[transaction.type_paiement].count++;
+      }
 
       // Par Type
       if (!stats.byType[transaction.type]) {
@@ -300,8 +307,8 @@ const TransactionReport: React.FC = () => {
       return;
     }
 
-    // Filtrer les transactions en espèces
-    const especesTransactions = transactions.filter(t => t.mode_paiement === 'Espece');
+    // Filtrer les transactions en espèces positives uniquement
+    const especesTransactions = transactions.filter(t => t.mode_paiement === 'Espece' && t.montant > 0);
 
     if (especesTransactions.length === 0) {
       setError('Aucune transaction en espèces à exporter');
@@ -331,6 +338,135 @@ const TransactionReport: React.FC = () => {
     XLSX.utils.book_append_sheet(wb, ws, 'Espèces');
 
     const fileName = `especes_net_${dateFrom}_au_${dateTo}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
+
+  const handleExportCheques = () => {
+    if (transactions.length === 0) {
+      setError('Aucune transaction à exporter');
+      return;
+    }
+
+    const chequeTransactions = transactions.filter(t => t.mode_paiement === 'Cheque' && t.montant > 0);
+
+    if (chequeTransactions.length === 0) {
+      setError('Aucune transaction en chèques à exporter');
+      return;
+    }
+
+    const exportData = chequeTransactions.map(t => ({
+      'ID': t.id,
+      'Type': t.type,
+      'Retour': t.retour_type ? (t.retour_type === 'Technique' ? 'RT' : 'RCX') : '',
+      'Branche': t.branche,
+      'Numéro Contrat': t.numero_contrat,
+      'Prime': t.prime,
+      'Prime Avant Retour': t.prime_avant_retour || '',
+      'Assuré': t.assure,
+      'Mode Paiement': t.mode_paiement,
+      'Type Paiement': t.type_paiement,
+      'Montant Crédit': t.montant_credit || '',
+      'Montant': t.montant,
+      'Date Paiement Prévue': t.date_paiement_prevue || '',
+      'Créé Par': t.cree_par,
+      'Date Création': new Date(t.created_at).toLocaleString('fr-FR')
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Chèques');
+
+    const fileName = `cheques_${dateFrom}_au_${dateTo}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
+
+  const handleExportByCategory = (category: string, categoryName: string) => {
+    if (transactions.length === 0) {
+      setError('Aucune transaction à exporter');
+      return;
+    }
+
+    let filteredTransactions: Transaction[] = [];
+    let sheetName = '';
+    let fileName = '';
+
+    switch (category) {
+      case 'totalTransactions':
+        filteredTransactions = transactions;
+        sheetName = 'Transactions';
+        fileName = `toutes_transactions_${dateFrom}_au_${dateTo}.xlsx`;
+        break;
+      case 'totalPrime':
+        filteredTransactions = transactions;
+        sheetName = 'Primes';
+        fileName = `primes_${dateFrom}_au_${dateTo}.xlsx`;
+        break;
+      case 'totalMontant':
+        filteredTransactions = transactions;
+        sheetName = 'Montants';
+        fileName = `montants_${dateFrom}_au_${dateTo}.xlsx`;
+        break;
+      case 'totalCredit':
+        filteredTransactions = transactions.filter(t => t.montant_credit);
+        sheetName = 'Crédits';
+        fileName = `credits_${dateFrom}_au_${dateTo}.xlsx`;
+        break;
+      case 'totalDepenses':
+        filteredTransactions = transactions.filter(t => t.type === 'Dépense');
+        sheetName = 'Dépenses';
+        fileName = `depenses_${dateFrom}_au_${dateTo}.xlsx`;
+        break;
+      case 'totalPaiementCredits':
+        filteredTransactions = transactions.filter(t => t.type === 'Paiement Crédit');
+        sheetName = 'Paiements Crédits';
+        fileName = `paiements_credits_${dateFrom}_au_${dateTo}.xlsx`;
+        break;
+      case 'totalRistournes':
+        filteredTransactions = transactions.filter(t => t.type === 'Ristourne');
+        sheetName = 'Ristournes';
+        fileName = `ristournes_${dateFrom}_au_${dateTo}.xlsx`;
+        break;
+      case 'totalSinistres':
+        filteredTransactions = transactions.filter(t => t.type === 'Sinistre');
+        sheetName = 'Sinistres';
+        fileName = `sinistres_${dateFrom}_au_${dateTo}.xlsx`;
+        break;
+      case 'totalRecettes':
+        filteredTransactions = transactions.filter(t => t.type === 'Recette');
+        sheetName = 'Recettes';
+        fileName = `recettes_${dateFrom}_au_${dateTo}.xlsx`;
+        break;
+      default:
+        return;
+    }
+
+    if (filteredTransactions.length === 0) {
+      setError(`Aucune transaction ${categoryName} à exporter`);
+      return;
+    }
+
+    const exportData = filteredTransactions.map(t => ({
+      'ID': t.id,
+      'Type': t.type,
+      'Retour': t.retour_type ? (t.retour_type === 'Technique' ? 'RT' : 'RCX') : '',
+      'Branche': t.branche,
+      'Numéro Contrat': t.numero_contrat,
+      'Prime': t.prime,
+      'Prime Avant Retour': t.prime_avant_retour || '',
+      'Assuré': t.assure,
+      'Mode Paiement': t.mode_paiement,
+      'Type Paiement': t.type_paiement,
+      'Montant Crédit': t.montant_credit || '',
+      'Montant': t.montant,
+      'Date Paiement Prévue': t.date_paiement_prevue || '',
+      'Créé Par': t.cree_par,
+      'Date Création': new Date(t.created_at).toLocaleString('fr-FR')
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
     XLSX.writeFile(wb, fileName);
   };
 
@@ -408,31 +544,56 @@ const TransactionReport: React.FC = () => {
       {statistics && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-sm p-4 text-white">
+            <div
+              onClick={() => handleExportByCategory('totalTransactions', 'transactions')}
+              className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-sm p-4 text-white cursor-pointer hover:scale-105 transition-transform hover:shadow-lg"
+              title="Cliquer pour exporter toutes les transactions"
+            >
               <div className="flex items-center justify-between mb-2">
                 <FileText className="w-6 h-6 opacity-80" />
                 <span className="text-xl font-bold">{statistics.totalTransactions}</span>
               </div>
-              <p className="text-blue-100 text-xs font-medium">Total Transactions</p>
+              <p className="text-blue-100 text-xs font-medium flex items-center justify-between">
+                <span>Total Transactions</span>
+                <Download className="w-4 h-4 opacity-70" />
+              </p>
             </div>
 
-            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-sm p-4 text-white">
+            <div
+              onClick={() => handleExportByCategory('totalPrime', 'primes')}
+              className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-sm p-4 text-white cursor-pointer hover:scale-105 transition-transform hover:shadow-lg"
+              title="Cliquer pour exporter les primes"
+            >
               <div className="flex items-center justify-between mb-2">
                 <TrendingUp className="w-6 h-6 opacity-80" />
                 <span className="text-xl font-bold">{formatCurrency(statistics.totalPrime)}</span>
               </div>
-              <p className="text-green-100 text-xs font-medium">Total Primes</p>
+              <p className="text-green-100 text-xs font-medium flex items-center justify-between">
+                <span>Total Primes</span>
+                <Download className="w-4 h-4 opacity-70" />
+              </p>
             </div>
 
-            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-sm p-4 text-white">
+            <div
+              onClick={() => handleExportByCategory('totalMontant', 'montants')}
+              className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-sm p-4 text-white cursor-pointer hover:scale-105 transition-transform hover:shadow-lg"
+              title="Cliquer pour exporter les montants"
+            >
               <div className="flex items-center justify-between mb-2">
                 <DollarSign className="w-6 h-6 opacity-80" />
                 <span className="text-xl font-bold">{formatCurrency(statistics.totalMontant)}</span>
               </div>
-              <p className="text-emerald-100 text-xs font-medium">Total Montants</p>
+              <p className="text-emerald-100 text-xs font-medium flex items-center justify-between">
+                <span>Total Montants</span>
+                <Download className="w-4 h-4 opacity-70" />
+              </p>
             </div>
 
-            <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-sm p-4 text-white">
+            <div
+              onClick={() => handleExportByCategory('totalCredit', 'crédits')}
+              className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-sm p-4 text-white cursor-pointer hover:scale-105 transition-transform hover:shadow-lg"
+              title="Cliquer pour exporter les crédits"
+            >
               <div className="flex items-center justify-between mb-2">
                 <CreditCard className="w-6 h-6 opacity-80" />
                 <div className="text-right">
@@ -440,7 +601,10 @@ const TransactionReport: React.FC = () => {
                   <span className="text-sm opacity-90">({statistics.countCredits} crédits)</span>
                 </div>
               </div>
-              <p className="text-orange-100 text-xs font-medium">Total Crédits</p>
+              <p className="text-orange-100 text-xs font-medium flex items-center justify-between">
+                <span>Total Crédits</span>
+                <Download className="w-4 h-4 opacity-70" />
+              </p>
             </div>
 
             <div
@@ -461,7 +625,11 @@ const TransactionReport: React.FC = () => {
               </p>
             </div>
 
-            <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl shadow-sm p-4 text-white">
+            <div
+              onClick={handleExportCheques}
+              className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl shadow-sm p-4 text-white cursor-pointer hover:scale-105 transition-transform hover:shadow-lg"
+              title="Cliquer pour exporter les chèques"
+            >
               <div className="flex items-center justify-between mb-2">
                 <CreditCard className="w-6 h-6 opacity-80" />
                 <div className="text-right">
@@ -469,10 +637,17 @@ const TransactionReport: React.FC = () => {
                   <span className="text-sm opacity-90">({statistics.countCheque} chèques)</span>
                 </div>
               </div>
-              <p className="text-cyan-100 text-xs font-medium">Total Chèque</p>
+              <p className="text-cyan-100 text-xs font-medium flex items-center justify-between">
+                <span>Total Chèque</span>
+                <Download className="w-4 h-4 opacity-70" />
+              </p>
             </div>
 
-            <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-sm p-4 text-white">
+            <div
+              onClick={() => handleExportByCategory('totalDepenses', 'dépenses')}
+              className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-sm p-4 text-white cursor-pointer hover:scale-105 transition-transform hover:shadow-lg"
+              title="Cliquer pour exporter les dépenses"
+            >
               <div className="flex items-center justify-between mb-2">
                 <TrendingUp className="w-6 h-6 opacity-80" />
                 <div className="text-right">
@@ -480,10 +655,17 @@ const TransactionReport: React.FC = () => {
                   <span className="text-sm opacity-90">({statistics.countDepenses} dépenses)</span>
                 </div>
               </div>
-              <p className="text-red-100 text-xs font-medium">Total Dépenses</p>
+              <p className="text-red-100 text-xs font-medium flex items-center justify-between">
+                <span>Total Dépenses</span>
+                <Download className="w-4 h-4 opacity-70" />
+              </p>
             </div>
 
-            <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-sm p-4 text-white">
+            <div
+              onClick={() => handleExportByCategory('totalPaiementCredits', 'paiements crédits')}
+              className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-sm p-4 text-white cursor-pointer hover:scale-105 transition-transform hover:shadow-lg"
+              title="Cliquer pour exporter les paiements crédits"
+            >
               <div className="flex items-center justify-between mb-2">
                 <DollarSign className="w-6 h-6 opacity-80" />
                 <div className="text-right">
@@ -491,10 +673,17 @@ const TransactionReport: React.FC = () => {
                   <span className="text-sm opacity-90">({statistics.countPaiementCredits} paiements)</span>
                 </div>
               </div>
-              <p className="text-amber-100 text-xs font-medium">Total Paiement Crédits</p>
+              <p className="text-amber-100 text-xs font-medium flex items-center justify-between">
+                <span>Total Paiement Crédits</span>
+                <Download className="w-4 h-4 opacity-70" />
+              </p>
             </div>
 
-            <div className="bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl shadow-sm p-4 text-white">
+            <div
+              onClick={() => handleExportByCategory('totalRistournes', 'ristournes')}
+              className="bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl shadow-sm p-4 text-white cursor-pointer hover:scale-105 transition-transform hover:shadow-lg"
+              title="Cliquer pour exporter les ristournes"
+            >
               <div className="flex items-center justify-between mb-2">
                 <TrendingUp className="w-6 h-6 opacity-80" />
                 <div className="text-right">
@@ -502,10 +691,17 @@ const TransactionReport: React.FC = () => {
                   <span className="text-sm opacity-90">({statistics.countRistournes} ristournes)</span>
                 </div>
               </div>
-              <p className="text-violet-100 text-xs font-medium">Total Ristournes</p>
+              <p className="text-violet-100 text-xs font-medium flex items-center justify-between">
+                <span>Total Ristournes</span>
+                <Download className="w-4 h-4 opacity-70" />
+              </p>
             </div>
 
-            <div className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl shadow-sm p-4 text-white">
+            <div
+              onClick={() => handleExportByCategory('totalSinistres', 'sinistres')}
+              className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl shadow-sm p-4 text-white cursor-pointer hover:scale-105 transition-transform hover:shadow-lg"
+              title="Cliquer pour exporter les sinistres"
+            >
               <div className="flex items-center justify-between mb-2">
                 <FileText className="w-6 h-6 opacity-80" />
                 <div className="text-right">
@@ -513,10 +709,17 @@ const TransactionReport: React.FC = () => {
                   <span className="text-sm opacity-90">({statistics.countSinistres} sinistres)</span>
                 </div>
               </div>
-              <p className="text-pink-100 text-xs font-medium">Total Sinistres</p>
+              <p className="text-pink-100 text-xs font-medium flex items-center justify-between">
+                <span>Total Sinistres</span>
+                <Download className="w-4 h-4 opacity-70" />
+              </p>
             </div>
 
-            <div className="bg-gradient-to-br from-sky-500 to-sky-600 rounded-xl shadow-sm p-4 text-white">
+            <div
+              onClick={() => handleExportByCategory('totalRecettes', 'recettes')}
+              className="bg-gradient-to-br from-sky-500 to-sky-600 rounded-xl shadow-sm p-4 text-white cursor-pointer hover:scale-105 transition-transform hover:shadow-lg"
+              title="Cliquer pour exporter les recettes"
+            >
               <div className="flex items-center justify-between mb-2">
                 <DollarSign className="w-6 h-6 opacity-80" />
                 <div className="text-right">
@@ -524,7 +727,10 @@ const TransactionReport: React.FC = () => {
                   <span className="text-sm opacity-90">({statistics.countRecettes} recettes)</span>
                 </div>
               </div>
-              <p className="text-sky-100 text-xs font-medium">Total Recettes</p>
+              <p className="text-sky-100 text-xs font-medium flex items-center justify-between">
+                <span>Total Recettes</span>
+                <Download className="w-4 h-4 opacity-70" />
+              </p>
             </div>
           </div>
 
