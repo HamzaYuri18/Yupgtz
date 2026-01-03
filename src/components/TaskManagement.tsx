@@ -96,7 +96,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
   };
 
   const handleUpdateStatut = async (tacheId: string, newStatut: 'A faire' | 'Accomplie') => {
-    if (isSessionClosed) return;
+    if (!isHamza || isSessionClosed) return;
 
     try {
       const { error } = await supabase
@@ -113,7 +113,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
   };
 
   const handleSaveRemarques = async (tacheId: string) => {
-    if (isSessionClosed) return;
+    if (!isHamza || isSessionClosed) return;
 
     try {
       const { error } = await supabase
@@ -418,7 +418,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                     )}
                     <div className="mt-3">
                       <label className="block text-xs font-medium text-gray-700 mb-1">Remarques:</label>
-                      {editingRemarks === tache.id && !isSessionClosed ? (
+                      {editingRemarks === tache.id && isHamza && !isSessionClosed ? (
                         <div className="flex gap-2">
                           <textarea
                             value={remarquesTemp[tache.id] !== undefined ? remarquesTemp[tache.id] : tache.remarques}
@@ -446,7 +446,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                           <p className="flex-1 text-sm text-gray-600 bg-gray-50 p-2 rounded">
                             {tache.remarques || 'Aucune remarque'}
                           </p>
-                          {!isSessionClosed && (
+                          {isHamza && !isSessionClosed && (
                             <button
                               onClick={() => {
                                 setEditingRemarks(tache.id);
@@ -462,7 +462,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                     </div>
                   </div>
                   <div className="ml-4">
-                    {!isSessionClosed && (
+                    {isHamza && !isSessionClosed && (
                       <button
                         onClick={() => handleUpdateStatut(tache.id, 'Accomplie')}
                         className="px-4 py-2 rounded-lg font-medium transition-colors bg-green-600 text-white hover:bg-green-700"
@@ -471,7 +471,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                         Marquer accomplie
                       </button>
                     )}
-                    {isSessionClosed && (
+                    {(!isHamza || isSessionClosed) && (
                       <span className="px-4 py-2 rounded-lg font-medium bg-orange-100 text-orange-800">
                         A faire
                       </span>
@@ -529,7 +529,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                     )}
                     <div className="mt-3">
                       <label className="block text-xs font-medium text-gray-700 mb-1">Remarques:</label>
-                      {editingRemarks === tache.id && !isSessionClosed ? (
+                      {editingRemarks === tache.id && isHamza && !isSessionClosed ? (
                         <div className="flex gap-2">
                           <textarea
                             value={remarquesTemp[tache.id] !== undefined ? remarquesTemp[tache.id] : tache.remarques}
@@ -557,7 +557,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                           <p className="flex-1 text-sm text-gray-600 bg-white p-2 rounded">
                             {tache.remarques || 'Aucune remarque'}
                           </p>
-                          {!isSessionClosed && (
+                          {isHamza && !isSessionClosed && (
                             <button
                               onClick={() => {
                                 setEditingRemarks(tache.id);
@@ -573,7 +573,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                     </div>
                   </div>
                   <div className="ml-4">
-                    {!isSessionClosed && (
+                    {isHamza && !isSessionClosed && (
                       <button
                         onClick={() => handleUpdateStatut(tache.id, 'A faire')}
                         className="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-200 text-gray-700 hover:bg-gray-300"
@@ -582,7 +582,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                         Rouvrir
                       </button>
                     )}
-                    {isSessionClosed && (
+                    {(!isHamza || isSessionClosed) && (
                       <span className="px-4 py-2 rounded-lg font-medium bg-green-100 text-green-800">
                         <CheckCircle className="inline w-4 h-4 mr-1" />
                         Accomplie

@@ -29,32 +29,32 @@ const CircularStatCard: React.FC<CircularStatCardProps> = ({
   onClick,
   showAmount = true
 }) => {
-  const radius = 70;
+  const radius = 60;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-all duration-200 transform hover:-translate-y-1 border border-gray-100"
+      className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-[1.02]"
     >
       <div className="flex flex-col items-center">
-        <div className="relative w-40 h-40 mb-4">
-          <svg className="transform -rotate-90 w-40 h-40">
+        <div className="relative w-32 h-32 mb-3">
+          <svg className="transform -rotate-90 w-32 h-32">
             <circle
-              cx="80"
-              cy="80"
+              cx="64"
+              cy="64"
               r={radius}
               stroke="#E5E7EB"
-              strokeWidth="12"
+              strokeWidth="10"
               fill="none"
             />
             <circle
-              cx="80"
-              cy="80"
+              cx="64"
+              cy="64"
               r={radius}
               stroke={color}
-              strokeWidth="12"
+              strokeWidth="10"
               fill="none"
               strokeDasharray={circumference}
               strokeDashoffset={strokeDashoffset}
@@ -63,17 +63,17 @@ const CircularStatCard: React.FC<CircularStatCardProps> = ({
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div style={{ color }} className="mb-1">
+            <div style={{ color }} className="mb-0.5">
               {icon}
             </div>
-            <span className="text-3xl font-bold text-gray-900">{count}</span>
-            <span className="text-sm text-gray-500 mt-1">{percentage.toFixed(1)}%</span>
+            <span className="text-2xl font-bold text-gray-900">{count}</span>
+            <span className="text-xs text-gray-500">{percentage.toFixed(0)}%</span>
           </div>
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-1 text-center">{title}</h3>
-        <p className="text-sm text-gray-500 mb-2 text-center">{subtitle}</p>
+        <h3 className="text-base font-semibold text-gray-900 mb-0.5 text-center">{title}</h3>
+        <p className="text-xs text-gray-500 mb-2 text-center">{subtitle}</p>
         {showAmount && (
-          <div className="text-2xl font-bold" style={{ color }}>{total.toFixed(2)} DT</div>
+          <div className="text-xl font-bold" style={{ color }}>{total.toFixed(2)} DT</div>
         )}
       </div>
     </div>
@@ -308,7 +308,31 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gray-50">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
+                  <TrendingUp className="w-6 h-6 text-white" />
+                </div>
+                <span className="text-xl font-bold text-gray-800">Dashboard</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3 px-4 py-2 bg-gray-100 rounded-lg">
+                <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+                  {username?.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-sm font-medium text-gray-700">{username}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-6 py-8">
       {showCreditAlert && creditsDueToday.length > 0 && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -399,12 +423,12 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
         </div>
       )}
 
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Tableau de bord des Termes</h1>
-        <p className="text-gray-600">Vue d'ensemble des paiements et échéances</p>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Tableau de bord des Termes</h1>
+        <p className="text-sm text-gray-600">Vue d'ensemble des paiements et échéances</p>
       </div>
 
-      <div className="mb-8">
+      <div className="mb-6">
         <TaskManagement
           currentUser={username || 'Inconnu'}
           sessionId={currentSessionId}
@@ -412,7 +436,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
         />
       </div>
 
-      <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
         <div className="flex items-center gap-2 mb-4">
           <Filter className="w-5 h-5 text-blue-600" />
           <h2 className="text-lg font-semibold text-gray-900">Filtres</h2>
@@ -504,7 +528,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
         </div>
       ) : selectedMonth ? (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
             {(() => {
               const totalCount = overdueTermes.length + unpaidTermes.length + upcomingTermes.length + paidTermes.length;
               const overduePercentage = totalCount > 0 ? (overdueTermes.length / totalCount) * 100 : 0;
@@ -521,7 +545,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     total={calculateTotal(overdueTermes)}
                     percentage={overduePercentage}
                     color="#EF4444"
-                    icon={<AlertCircle className="w-8 h-8" />}
+                    icon={<AlertCircle className="w-7 h-7" />}
                     onClick={() => setShowOverdueDetails(!showOverdueDetails)}
                     showAmount={isHamza}
                   />
@@ -532,7 +556,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     total={calculateTotal(unpaidTermes)}
                     percentage={unpaidPercentage}
                     color="#F97316"
-                    icon={<Clock className="w-8 h-8" />}
+                    icon={<Clock className="w-7 h-7" />}
                     onClick={() => setShowUnpaidDetails(!showUnpaidDetails)}
                     showAmount={isHamza}
                   />
@@ -543,7 +567,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     total={calculateTotal(upcomingTermes)}
                     percentage={upcomingPercentage}
                     color="#3B82F6"
-                    icon={<Calendar className="w-8 h-8" />}
+                    icon={<Calendar className="w-7 h-7" />}
                     onClick={() => setShowUpcomingDetails(!showUpcomingDetails)}
                     showAmount={isHamza}
                   />
@@ -554,7 +578,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     total={calculateTotal(paidTermes)}
                     percentage={paidPercentage}
                     color="#10B981"
-                    icon={<CheckCircle className="w-8 h-8" />}
+                    icon={<CheckCircle className="w-7 h-7" />}
                     onClick={() => setShowPaidDetails(!showPaidDetails)}
                     showAmount={isHamza}
                   />
@@ -564,7 +588,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
           </div>
 
           {creditsDueToday.length > 0 && (
-            <div className="mb-8">
+            <div className="mb-6">
               <CircularStatCard
                 title="Crédits à Payer Aujourd'hui"
                 subtitle={`Date de session: ${getSessionDate()}`}
@@ -572,7 +596,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                 total={calculateCreditTotal(creditsDueToday)}
                 percentage={100}
                 color="#8B5CF6"
-                icon={<DollarSign className="w-8 h-8" />}
+                icon={<DollarSign className="w-7 h-7" />}
                 onClick={() => setShowCreditsDueTodayDetails(!showCreditsDueTodayDetails)}
                 showAmount={isHamza}
               />
@@ -580,7 +604,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
           )}
 
           {showOverdueDetails && overdueTermes.length > 0 && (
-            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
               <h3 className="text-xl font-bold text-red-600 mb-4 flex items-center gap-2">
                 <AlertCircle className="w-6 h-6" />
                 Détails des Termes Échus ({overdueTermes.length})
@@ -613,7 +637,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
           )}
 
           {showUnpaidDetails && unpaidTermes.length > 0 && (
-            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
               <h3 className="text-xl font-bold text-orange-600 mb-4 flex items-center gap-2">
                 <Clock className="w-6 h-6" />
                 Détails des Termes Non Payés ({unpaidTermes.length})
@@ -646,7 +670,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
           )}
 
           {showUpcomingDetails && upcomingTermes.length > 0 && (
-            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
               <h3 className="text-xl font-bold text-blue-600 mb-4 flex items-center gap-2">
                 <Calendar className="w-6 h-6" />
                 Détails des Échéances Proches ({upcomingTermes.length})
@@ -679,7 +703,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
           )}
 
           {showPaidDetails && paidTermes.length > 0 && (
-            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
               <h3 className="text-xl font-bold text-green-600 mb-4 flex items-center gap-2">
                 <CheckCircle className="w-6 h-6" />
                 Détails des Termes Payés ({paidTermes.length})
@@ -712,7 +736,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
           )}
 
           {showCreditsDueTodayDetails && creditsDueToday.length > 0 && (
-            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
               <h3 className="text-xl font-bold text-purple-600 mb-4 flex items-center gap-2">
                 <DollarSign className="w-6 h-6" />
                 Crédits à Payer Aujourd'hui ({creditsDueToday.length})
@@ -765,11 +789,12 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
           )}
         </>
       ) : (
-        <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
           <TrendingUp className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-600 text-lg">Veuillez sélectionner une année et un mois pour afficher les données</p>
         </div>
       )}
+      </div>
     </div>
   );
 };
