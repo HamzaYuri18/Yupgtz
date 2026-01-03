@@ -89,7 +89,10 @@ const TransactionReport: React.FC = () => {
       const prime = transaction.prime || 0;
       const montant = transaction.montant || 0;
 
-      stats.totalPrime += prime;
+      // Calculer Total Prime (primes positives uniquement)
+      if (prime > 0) {
+        stats.totalPrime += prime;
+      }
       stats.totalMontant += montant;
 
       if (transaction.montant_credit) {
@@ -153,14 +156,24 @@ const TransactionReport: React.FC = () => {
       stats.byModePaiement[transaction.mode_paiement].montant += prime;
       stats.byModePaiement[transaction.mode_paiement].count++;
 
-      // Par Type de Paiement (seulement les montants positifs pour "Au comptant")
+      // Par Type de Paiement
       if (!stats.byTypePaiement[transaction.type_paiement]) {
         stats.byTypePaiement[transaction.type_paiement] = { montant: 0, count: 0 };
       }
       if (transaction.type_paiement === 'Au comptant') {
-        if (prime > 0) {
-          stats.byTypePaiement[transaction.type_paiement].montant += prime;
+        // Pour "Au comptant", afficher le total des montants positifs
+        if (montant > 0) {
+          stats.byTypePaiement[transaction.type_paiement].montant += montant;
           stats.byTypePaiement[transaction.type_paiement].count++;
+        }
+      } else if (transaction.type_paiement === 'Crédit') {
+        // Pour "Crédit", afficher le crédit net (montant_credit - montant payé au comptant)
+        if (transaction.montant_credit) {
+          const creditNet = transaction.montant_credit - montant;
+          if (creditNet > 0) {
+            stats.byTypePaiement[transaction.type_paiement].montant += creditNet;
+            stats.byTypePaiement[transaction.type_paiement].count++;
+          }
         }
       } else {
         stats.byTypePaiement[transaction.type_paiement].montant += prime;
