@@ -93,7 +93,11 @@ const TransactionReport: React.FC = () => {
       if (prime > 0) {
         stats.totalPrime += prime;
       }
-      stats.totalMontant += montant;
+
+      // Calculer Total Montant (uniquement les opérations en Espèce)
+      if (transaction.mode_paiement === 'Espece') {
+        stats.totalMontant += montant;
+      }
 
       if (transaction.montant_credit) {
         stats.totalCredit += transaction.montant_credit;
