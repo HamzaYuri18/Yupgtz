@@ -150,6 +150,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
   const checkSessionStatus = async () => {
     const sessionDate = getSessionDate();
+    console.log('Session date:', sessionDate);
     if (sessionDate) {
       const closed = await isSessionClosed(sessionDate);
       setSessionClosed(closed);
@@ -160,8 +161,12 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
         .eq('date_session', sessionDate)
         .maybeSingle();
 
+      console.log('Session data:', data);
       if (data) {
         setCurrentSessionId(data.id);
+        console.log('Current session ID défini:', data.id);
+      } else {
+        console.log('Aucune session trouvée pour cette date');
       }
     }
   };
@@ -269,6 +274,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
   const loadSessionTasks = async () => {
     try {
+      console.log('loadSessionTasks appelé avec currentSessionId:', currentSessionId);
       if (currentSessionId) {
         const { data, error } = await supabase
           .from('taches')
@@ -279,8 +285,9 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
         if (error) throw error;
         setSessionTasks(data || []);
-        console.log('Tâches chargées:', data?.length || 0);
+        console.log('Tâches chargées:', data?.length || 0, data);
       } else {
+        console.log('Pas de currentSessionId, tâches non chargées');
         setSessionTasks([]);
       }
     } catch (error) {
