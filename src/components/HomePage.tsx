@@ -119,38 +119,33 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   useEffect(() => {
     loadAvailableMonths();
     checkSessionStatus();
+    loadCreditsDueToday();
   }, []);
 
   useEffect(() => {
     if (selectedMonth && selectedYear) {
       loadTermesData();
     }
-    loadCreditsDueToday();
-    loadSessionTasks();
-  }, [selectedMonth, selectedYear, daysFilter, currentSessionId]);
+  }, [selectedMonth, selectedYear, daysFilter]);
 
   useEffect(() => {
-    console.log('Check Task Alert:', {
-      sessionTasksLength: sessionTasks.length,
-      creditsDueTodayLength: creditsDueToday.length,
-      showCreditAlert,
-      hasCreditAlertBeenShown
-    });
+    if (currentSessionId) {
+      loadSessionTasks();
+    }
+  }, [currentSessionId]);
 
-    if (sessionTasks.length > 0) {
-      if (creditsDueToday.length === 0) {
-        console.log('Affichage du msgbox tâches: pas de crédits');
+  useEffect(() => {
+    if (sessionTasks.length > 0 && !showTaskAlert) {
+      if (creditsDueToday.length === 0 && !showCreditAlert) {
         setShowTaskAlert(true);
-      } else if (!showCreditAlert && hasCreditAlertBeenShown) {
-        console.log('Affichage du msgbox tâches: après fermeture crédits');
+      } else if (creditsDueToday.length > 0 && hasCreditAlertBeenShown && !showCreditAlert) {
         setShowTaskAlert(true);
       }
     }
-  }, [showCreditAlert, sessionTasks, creditsDueToday, hasCreditAlertBeenShown]);
+  }, [sessionTasks, creditsDueToday, showCreditAlert, hasCreditAlertBeenShown, showTaskAlert]);
 
   const checkSessionStatus = async () => {
     const sessionDate = getSessionDate();
-    console.log('Session date:', sessionDate);
     if (sessionDate) {
       const closed = await isSessionClosed(sessionDate);
       setSessionClosed(closed);
@@ -161,12 +156,8 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
         .eq('date_session', sessionDate)
         .maybeSingle();
 
-      console.log('Session data:', data);
       if (data) {
         setCurrentSessionId(data.id);
-        console.log('Current session ID défini:', data.id);
-      } else {
-        console.log('Aucune session trouvée pour cette date');
       }
     }
   };
@@ -274,7 +265,6 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
   const loadSessionTasks = async () => {
     try {
-      console.log('loadSessionTasks appelé avec currentSessionId:', currentSessionId);
       if (currentSessionId) {
         const { data, error } = await supabase
           .from('taches')
@@ -285,9 +275,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
         if (error) throw error;
         setSessionTasks(data || []);
-        console.log('Tâches chargées:', data?.length || 0, data);
       } else {
-        console.log('Pas de currentSessionId, tâches non chargées');
         setSessionTasks([]);
       }
     } catch (error) {
