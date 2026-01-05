@@ -108,10 +108,11 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [syncMessage, setSyncMessage] = useState<string>('');
   const [showSyncMessage, setShowSyncMessage] = useState(false);
   const [showCreditAlert, setShowCreditAlert] = useState(true);
-  const [showTaskAlert, setShowTaskAlert] = useState(true);
+  const [showTaskAlert, setShowTaskAlert] = useState(false);
   const [sessionClosed, setSessionClosed] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sessionTasks, setSessionTasks] = useState<any[]>([]);
+  const [hasCreditAlertBeenShown, setHasCreditAlertBeenShown] = useState(false);
 
   const isHamza = username?.toLowerCase() === 'hamza';
 
@@ -127,6 +128,14 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     loadCreditsDueToday();
     loadSessionTasks();
   }, [selectedMonth, selectedYear, daysFilter, currentSessionId]);
+
+  useEffect(() => {
+    if (!showCreditAlert && sessionTasks.length > 0 && hasCreditAlertBeenShown) {
+      setShowTaskAlert(true);
+    } else if (creditsDueToday.length === 0 && sessionTasks.length > 0) {
+      setShowTaskAlert(true);
+    }
+  }, [showCreditAlert, sessionTasks.length, creditsDueToday.length, hasCreditAlertBeenShown]);
 
   const checkSessionStatus = async () => {
     const sessionDate = getSessionDate();
@@ -366,7 +375,10 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                 </div>
               </div>
               <button
-                onClick={() => setShowCreditAlert(false)}
+                onClick={() => {
+                  setShowCreditAlert(false);
+                  setHasCreditAlertBeenShown(true);
+                }}
                 className="p-2 hover:bg-red-800 rounded-lg transition-colors"
               >
                 <X className="w-6 h-6" />
@@ -433,7 +445,10 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
               </div>
               <div className="mt-6 flex justify-center">
                 <button
-                  onClick={() => setShowCreditAlert(false)}
+                  onClick={() => {
+                    setShowCreditAlert(false);
+                    setHasCreditAlertBeenShown(true);
+                  }}
                   className="px-8 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors"
                 >
                   Fermer
