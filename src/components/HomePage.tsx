@@ -108,8 +108,10 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [syncMessage, setSyncMessage] = useState<string>('');
   const [showSyncMessage, setShowSyncMessage] = useState(false);
   const [showCreditAlert, setShowCreditAlert] = useState(true);
+  const [showTaskAlert, setShowTaskAlert] = useState(true);
   const [sessionClosed, setSessionClosed] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [sessionTasks, setSessionTasks] = useState<any[]>([]);
 
   const isHamza = username?.toLowerCase() === 'hamza';
 
@@ -123,7 +125,8 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
       loadTermesData();
     }
     loadCreditsDueToday();
-  }, [selectedMonth, selectedYear, daysFilter]);
+    loadSessionTasks();
+  }, [selectedMonth, selectedYear, daysFilter, currentSessionId]);
 
   const checkSessionStatus = async () => {
     const sessionDate = getSessionDate();
@@ -240,6 +243,24 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
       }
     } catch (error) {
       console.error('Erreur lors du chargement des crédits à payer aujourd\'hui:', error);
+    }
+  };
+
+  const loadSessionTasks = async () => {
+    try {
+      if (currentSessionId) {
+        const { data, error } = await supabase
+          .from('taches')
+          .select('*')
+          .eq('session_id', currentSessionId)
+          .eq('statut', 'A faire')
+          .order('degre_importance', { ascending: true });
+
+        if (error) throw error;
+        setSessionTasks(data || []);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des tâches de la session:', error);
     }
   };
 
@@ -414,6 +435,81 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                 <button
                   onClick={() => setShowCreditAlert(false)}
                   className="px-8 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTaskAlert && sessionTasks.length > 0 && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white p-6 rounded-t-2xl flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="w-10 h-10" />
+                <div>
+                  <h2 className="text-2xl font-bold">RAPPEL DES TACHES</h2>
+                  <p className="text-yellow-100">Tâches à faire au cours de cette session</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTaskAlert(false)}
+                className="p-2 hover:bg-yellow-700 rounded-lg transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="mb-4 text-center">
+                <p className="text-lg text-gray-700">
+                  <span className="font-bold text-yellow-600">{sessionTasks.length}</span> tâche(s) non accomplie(s) pour cette session
+                </p>
+                <p className="text-sm text-gray-600 mt-2">
+                  Cliquez sur "Tâches" dans le menu pour voir et gérer vos tâches
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-yellow-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Titre</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Description</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Importance</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Chargé</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {sessionTasks.map((task, index) => (
+                      <tr key={index} className="hover:bg-yellow-50">
+                        <td className="px-4 py-3 text-sm font-medium">{task.titre}</td>
+                        <td className="px-4 py-3 text-sm">{task.description || 'N/A'}</td>
+                        <td className="px-4 py-3 text-sm text-yellow-600 font-medium">
+                          {formatDate(task.date_effectuer)}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                            task.degre_importance === 'Urgent' ? 'bg-red-100 text-red-800' :
+                            task.degre_importance === 'Haute' ? 'bg-orange-100 text-orange-800' :
+                            task.degre_importance === 'Moyenne' ? 'bg-blue-100 text-blue-800' :
+                            'bg-green-100 text-green-800'
+                          }`}>
+                            {task.degre_importance}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium">{task.utilisateur_charge}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-6 flex justify-center">
+                <button
+                  onClick={() => setShowTaskAlert(false)}
+                  className="px-8 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 font-semibold transition-colors"
                 >
                   Fermer
                 </button>
