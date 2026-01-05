@@ -130,12 +130,23 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   }, [selectedMonth, selectedYear, daysFilter, currentSessionId]);
 
   useEffect(() => {
-    if (!showCreditAlert && sessionTasks.length > 0 && hasCreditAlertBeenShown) {
-      setShowTaskAlert(true);
-    } else if (creditsDueToday.length === 0 && sessionTasks.length > 0) {
-      setShowTaskAlert(true);
+    console.log('Check Task Alert:', {
+      sessionTasksLength: sessionTasks.length,
+      creditsDueTodayLength: creditsDueToday.length,
+      showCreditAlert,
+      hasCreditAlertBeenShown
+    });
+
+    if (sessionTasks.length > 0) {
+      if (creditsDueToday.length === 0) {
+        console.log('Affichage du msgbox tâches: pas de crédits');
+        setShowTaskAlert(true);
+      } else if (!showCreditAlert && hasCreditAlertBeenShown) {
+        console.log('Affichage du msgbox tâches: après fermeture crédits');
+        setShowTaskAlert(true);
+      }
     }
-  }, [showCreditAlert, sessionTasks.length, creditsDueToday.length, hasCreditAlertBeenShown]);
+  }, [showCreditAlert, sessionTasks, creditsDueToday, hasCreditAlertBeenShown]);
 
   const checkSessionStatus = async () => {
     const sessionDate = getSessionDate();
@@ -249,6 +260,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
       if (sessionDate) {
         const credits = await getCreditsDueToday(sessionDate);
         setCreditsDueToday(credits);
+        console.log('Crédits à payer chargés:', credits.length);
       }
     } catch (error) {
       console.error('Erreur lors du chargement des crédits à payer aujourd\'hui:', error);
@@ -267,6 +279,9 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
         if (error) throw error;
         setSessionTasks(data || []);
+        console.log('Tâches chargées:', data?.length || 0);
+      } else {
+        setSessionTasks([]);
       }
     } catch (error) {
       console.error('Erreur lors du chargement des tâches de la session:', error);
