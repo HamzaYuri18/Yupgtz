@@ -475,8 +475,8 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
               <div className="flex items-center gap-3">
                 <AlertCircle className="w-10 h-10" />
                 <div>
-                  <h2 className="text-2xl font-bold">RAPPEL DES TACHES</h2>
-                  <p className="text-blue-100">Tâches à effectuer aujourd'hui</p>
+                  <h2 className="text-2xl font-bold">RAPPEL DES TACHES NON ACCOMPLIES</h2>
+                  <p className="text-blue-100">{sessionTasks.length} tâche(s) en attente</p>
                 </div>
               </div>
               <button
@@ -489,11 +489,16 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
             <div className="p-6">
               <div className="mb-4 text-center">
                 <p className="text-lg text-gray-700">
-                  Vous avez <span className="font-bold text-blue-600">{sessionTasks.length}</span> tâche(s) à effectuer aujourd'hui
+                  Vous avez <span className="font-bold text-blue-600">{sessionTasks.length}</span> tâche(s) non accomplie(s) à effectuer aujourd'hui
                 </p>
                 <p className="text-sm text-gray-600 mt-2">
-                  Veuillez consulter les tâches pour plus de détails
+                  Veuillez consulter ces tâches et les accomplir dès que possible
                 </p>
+                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm text-amber-800 font-medium">
+                    Important : Assurez-vous de marquer chaque tâche comme "Accomplie" une fois terminée
+                  </p>
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -503,6 +508,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Description</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Importance</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Chargé à</th>
                     </tr>
                   </thead>
@@ -522,6 +528,11 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                             'bg-green-100 text-green-800'
                           }`}>
                             {task.degre_importance}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
+                            {task.statut}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm font-medium">{task.utilisateur_charge}</td>
