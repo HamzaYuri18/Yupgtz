@@ -294,6 +294,13 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
         setTimeout(() => setMessage(''), 5000);
         return;
       }
+
+      const phoneRegex = /^\+216[0-9]{8}$/;
+      if (!phoneRegex.test(cleanedFormData.telephone.trim())) {
+        setMessage('❌ Le format du numéro de téléphone est invalide. Format requis: +216 suivi de 8 chiffres (ex: +21623502362)');
+        setTimeout(() => setMessage(''), 5000);
+        return;
+      }
     }
 
     // VALIDATION POUR PAIEMENT PAR CHÈQUE
@@ -960,17 +967,23 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
                 <span className="text-lg mr-2">📱</span>
                 Numéro de téléphone *
-                <span className="text-xs text-red-600 ml-2">(Obligatoire pour les contrats Affaire)</span>
+                <span className="text-xs text-red-600 ml-2">(Format: +21612345678)</span>
               </label>
               <input
                 type="tel"
                 name="telephone"
                 value={formData.telephone}
                 onChange={handleInputChange}
+                pattern="\+216[0-9]{8}"
+                maxLength={12}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
-                placeholder="Ex: +216 12 345 678 ou 12345678"
+                placeholder="+21623502362"
+                title="Format: +216 suivi de 8 chiffres (ex: +21623502362)"
                 required
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Format requis: +216 suivi de 8 chiffres (ex: +21623502362)
+              </p>
             </div>
           )}
 
