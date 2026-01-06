@@ -113,6 +113,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sessionTasks, setSessionTasks] = useState<any[]>([]);
   const [hasCreditAlertBeenShown, setHasCreditAlertBeenShown] = useState(false);
+  const [hasTaskAlertBeenShown, setHasTaskAlertBeenShown] = useState(false);
 
   const isHamza = username?.toLowerCase() === 'hamza';
 
@@ -130,14 +131,16 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   }, [selectedMonth, selectedYear, daysFilter]);
 
   useEffect(() => {
-    if (sessionTasks.length > 0 && !showTaskAlert) {
+    if (sessionTasks.length > 0 && !hasTaskAlertBeenShown) {
       if (creditsDueToday.length === 0 && !showCreditAlert) {
         setShowTaskAlert(true);
+        setHasTaskAlertBeenShown(true);
       } else if (creditsDueToday.length > 0 && hasCreditAlertBeenShown && !showCreditAlert) {
         setShowTaskAlert(true);
+        setHasTaskAlertBeenShown(true);
       }
     }
-  }, [sessionTasks, creditsDueToday, showCreditAlert, hasCreditAlertBeenShown, showTaskAlert]);
+  }, [sessionTasks, creditsDueToday, showCreditAlert, hasCreditAlertBeenShown, hasTaskAlertBeenShown]);
 
   const checkSessionStatus = async () => {
     const sessionDate = getSessionDate();
