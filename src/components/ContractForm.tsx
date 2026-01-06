@@ -15,6 +15,25 @@ const trimSpaces = (value: string): string => {
   return value.trim().replace(/\s+/g, ' ');
 };
 
+// Fonction pour déterminer automatiquement la branche selon le numéro de contrat pour Affaire
+const determineBrancheForAffaire = (contractNumber: string): 'Auto' | 'Vie' | 'Santé' | 'IRDS' => {
+  const cleanedNumber = trimSpaces(contractNumber).toUpperCase();
+
+  if (cleanedNumber.startsWith('606')) {
+    return 'Santé';
+  }
+
+  if (cleanedNumber.startsWith('CI05') || cleanedNumber.startsWith('5')) {
+    return 'Auto';
+  }
+
+  if (cleanedNumber.startsWith('672')) {
+    return 'Vie';
+  }
+
+  return 'IRDS';
+};
+
 const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const [formData, setFormData] = useState({
     type: 'Affaire' as 'Terme' | 'Affaire' | 'Avenant changement de véhicule' | 'Encaissement pour autre code',
@@ -29,7 +48,8 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     numeroCheque: '',
     banque: '',
     dateEncaissementPrevue: '',
-    dateEcheance: ''
+    dateEcheance: '',
+    telephone: ''
   });
 
   const [xmlSearchResult, setXmlSearchResult] = useState<any>(null);
@@ -64,17 +84,23 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    
+
     // Nettoyer les espaces uniquement pour le numéro de contrat
     let cleanedValue = value;
     if (name === 'contractNumber') {
       cleanedValue = trimSpaces(value);
     }
-    
+
     let updatedData = {
       ...formData,
       [name]: cleanedValue
     };
+
+    // Déterminer automatiquement la branche pour les contrats Affaire
+    if (name === 'contractNumber' && formData.type === 'Affaire' && cleanedValue) {
+      const autoBranche = determineBrancheForAffaire(cleanedValue);
+      updatedData.branch = autoBranche;
+    }
 
     // LOGIQUE AMÉLIORÉE POUR CRÉDIT
     if (name === 'paymentType' && value === 'Crédit') {
@@ -219,7 +245,8 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       numeroCheque: '',
       banque: '',
       dateEncaissementPrevue: '',
-      dateEcheance: ''
+      dateEcheance: '',
+      telephone: ''
     });
     setXmlSearchResult(null);
     setSelectedMonth('');
@@ -259,6 +286,15 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
     // Mettre à jour le state avec les valeurs nettoyées
     setFormData(cleanedFormData);
+
+    // VALIDATION POUR TELEPHONE (obligatoire pour les contrats Affaire)
+    if (cleanedFormData.type === 'Affaire') {
+      if (!cleanedFormData.telephone || cleanedFormData.telephone.trim() === '') {
+        setMessage('❌ Le numéro de téléphone est obligatoire pour les contrats Affaire');
+        setTimeout(() => setMessage(''), 5000);
+        return;
+      }
+    }
 
     // VALIDATION POUR PAIEMENT PAR CHÈQUE
     if (cleanedFormData.paymentMode === 'Cheque') {
@@ -353,13 +389,14 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
         branch: cleanedFormData.branch,
         contractNumber: cleanedFormData.contractNumber,
         premiumAmount: parseFloat(cleanedFormData.premiumAmount),
-        insuredName: cleanedFormData.insuredName, // Garde les espaces tels quels
+        insuredName: cleanedFormData.insuredName,
         paymentMode: cleanedFormData.paymentMode,
         paymentType: cleanedFormData.paymentType,
         creditAmount: cleanedFormData.paymentType === 'Crédit' ? parseFloat(cleanedFormData.creditAmount) : undefined,
         paymentDate: cleanedFormData.paymentDate || undefined,
         createdBy: username,
         createdAt: Date.now(),
+        telephone: cleanedFormData.type === 'Affaire' ? cleanedFormData.telephone : undefined,
         xmlData: xmlSearchResult || undefined
       };
 
@@ -666,7 +703,8 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     numeroCheque: '',
                     banque: '',
                     dateEncaissementPrevue: '',
-                    dateEcheance: ''
+                    dateEcheance: '',
+                    telephone: ''
                   }));
                   setMessage('');
                 }}
@@ -915,6 +953,26 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               />
             </div>
           </div>
+
+          {/* Champ Téléphone pour les contrats Affaire */}
+          {formData.type === 'Affaire' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                <span className="text-lg mr-2">📱</span>
+                Numéro de téléphone *
+                <span className="text-xs text-red-600 ml-2">(Obligatoire pour les contrats Affaire)</span>
+              </label>
+              <input
+                type="tel"
+                name="telephone"
+                value={formData.telephone}
+                onChange={handleInputChange}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
+                placeholder="Ex: +216 12 345 678 ou 12345678"
+                required
+              />
+            </div>
+          )}
 
           {/* Mode et Type de Paiement */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">

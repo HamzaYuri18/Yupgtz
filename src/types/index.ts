@@ -23,6 +23,7 @@ export interface Contract {
   paymentDate?: string;
   createdBy: string;
   createdAt: number;
+  telephone?: string;
   xmlData?: {
     contractNumber: string;
     premium: number;

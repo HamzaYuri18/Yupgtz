@@ -41,6 +41,7 @@ interface ContractData {
     maturity?: string;
   };
   echeance?: string;
+  telephone?: string;
 }
 
 interface RapportData {
@@ -764,7 +765,8 @@ export const saveAffaireContract = async (contractData: ContractData): Promise<b
         type_paiement: contractData.paymentType,
         montant_credit: montantCreditValue,
         date_paiement: contractData.paymentType === 'Crédit' ? contractData.paymentDate : null,
-        cree_par: contractData.createdBy
+        cree_par: contractData.createdBy,
+        telephone: contractData.telephone || ''
       }]);
 
     if (error) {
