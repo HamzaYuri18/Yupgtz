@@ -21,9 +21,10 @@ interface TaskManagementProps {
   currentUser: string;
   sessionId: string | null;
   isSessionClosed: boolean;
+  onTaskUpdate?: () => void;
 }
 
-export default function TaskManagement({ currentUser, sessionId, isSessionClosed }: TaskManagementProps) {
+export default function TaskManagement({ currentUser, sessionId, isSessionClosed, onTaskUpdate }: TaskManagementProps) {
   const [taches, setTaches] = useState<Tache[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -93,6 +94,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
       });
       setShowAddForm(false);
       loadTaches();
+      if (onTaskUpdate) onTaskUpdate();
     } catch (error) {
       console.error('Erreur lors de l\'ajout de la tâche:', error);
       alert('Erreur lors de l\'ajout de la tâche');
@@ -110,6 +112,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
 
       if (error) throw error;
       loadTaches();
+      if (onTaskUpdate) onTaskUpdate();
     } catch (error) {
       console.error('Erreur lors de la mise à jour du statut:', error);
       alert('Erreur lors de la mise à jour du statut');
@@ -152,6 +155,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
       }
 
       await loadTaches();
+      if (onTaskUpdate) onTaskUpdate();
     } catch (error) {
       console.error('Erreur lors de la suppression de la tâche:', error);
       alert('Erreur lors de la suppression de la tâche');

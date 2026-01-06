@@ -112,6 +112,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [sessionClosed, setSessionClosed] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sessionTasks, setSessionTasks] = useState<any[]>([]);
+  const [totalUncompletedTasks, setTotalUncompletedTasks] = useState<number>(0);
   const [hasCreditAlertBeenShown, setHasCreditAlertBeenShown] = useState(false);
   const [hasTaskAlertBeenShown, setHasTaskAlertBeenShown] = useState(false);
 
@@ -122,6 +123,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     checkSessionStatus();
     loadCreditsDueToday();
     loadSessionTasks();
+    loadTotalUncompletedTasks();
   }, []);
 
   useEffect(() => {
@@ -279,6 +281,20 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
       }
     } catch (error) {
       console.error('Erreur lors du chargement des tâches de la session:', error);
+    }
+  };
+
+  const loadTotalUncompletedTasks = async () => {
+    try {
+      const { count, error } = await supabase
+        .from('taches')
+        .select('*', { count: 'exact', head: true })
+        .eq('statut', 'A faire');
+
+      if (error) throw error;
+      setTotalUncompletedTasks(count || 0);
+    } catch (error) {
+      console.error('Erreur lors du chargement du nombre total de tâches non accomplies:', error);
     }
   };
 
@@ -494,6 +510,11 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                 <p className="text-sm text-gray-600 mt-2">
                   Veuillez consulter ces tâches et les accomplir dès que possible
                 </p>
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-base text-red-800 font-semibold">
+                    Total de toutes les tâches non accomplies : <span className="text-2xl">{totalUncompletedTasks}</span>
+                  </p>
+                </div>
                 <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                   <p className="text-sm text-amber-800 font-medium">
                     Important : Assurez-vous de marquer chaque tâche comme "Accomplie" une fois terminée
@@ -564,6 +585,10 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
           currentUser={username || 'Inconnu'}
           sessionId={currentSessionId}
           isSessionClosed={sessionClosed}
+          onTaskUpdate={() => {
+            loadTotalUncompletedTasks();
+            loadSessionTasks();
+          }}
         />
       </div>
 
