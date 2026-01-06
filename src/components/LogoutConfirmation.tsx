@@ -14,17 +14,19 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [pdfGenerated, setPdfGenerated] = useState(false);
   const [isCancelLocked, setIsCancelLocked] = useState(false);
+  const [showReminderAlert, setShowReminderAlert] = useState(false);
 
   const handleGeneratePDF = async () => {
     setIsGeneratingPDF(true);
-    setIsCancelLocked(true); // Verrouiller le bouton Annuler
+    setIsCancelLocked(true);
     try {
       await printSessionReport(username);
       setPdfGenerated(true);
+      setShowReminderAlert(true);
     } catch (error) {
       console.error('Erreur génération PDF:', error);
       alert('Erreur lors de la génération du PDF');
-      setIsCancelLocked(false); // Déverrouiller en cas d'erreur
+      setIsCancelLocked(false);
     }
     setIsGeneratingPDF(false);
   };
@@ -143,6 +145,60 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
           </div>
         )}
       </div>
+
+      {showReminderAlert && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg shadow-2xl p-6 max-w-lg w-full mx-4 border-4 border-amber-400">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-3 bg-amber-100 rounded-full">
+                <AlertCircle className="w-8 h-8 text-amber-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900">RAPPELS IMPORTANTS</h2>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                <h3 className="font-bold text-red-800 mb-2 flex items-center gap-2">
+                  <span className="text-2xl">1️⃣</span>
+                  <span>Impression de la Fiche de Caisse</span>
+                </h3>
+                <p className="text-red-700">
+                  Imprimez la FC générée avant de cliquer sur Déconnecter
+                </p>
+              </div>
+
+              <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+                <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2">
+                  <span className="text-2xl">2️⃣</span>
+                  <span>Vérification des Tâches</span>
+                </h3>
+                <p className="text-blue-700">
+                  Vérifiez toutes les tâches non accomplies de la journée et saisissez vos remarques pour chaque tâche
+                </p>
+              </div>
+
+              <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded">
+                <h3 className="font-bold text-green-800 mb-2 flex items-center gap-2">
+                  <span className="text-2xl">3️⃣</span>
+                  <span>Déconnexion</span>
+                </h3>
+                <p className="text-green-700">
+                  Une fois l'impression terminée et les tâches vérifiées, cliquez sur le bouton Se déconnecter
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-center">
+              <button
+                onClick={() => setShowReminderAlert(false)}
+                className="px-8 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-bold transition-colors text-lg"
+              >
+                J'ai compris
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

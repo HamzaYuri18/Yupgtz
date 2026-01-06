@@ -107,14 +107,12 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string>('');
   const [showSyncMessage, setShowSyncMessage] = useState(false);
-  const [showCreditAlert, setShowCreditAlert] = useState(true);
+  const [showCreditAlert, setShowCreditAlert] = useState(false);
   const [showTaskAlert, setShowTaskAlert] = useState(false);
   const [sessionClosed, setSessionClosed] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sessionTasks, setSessionTasks] = useState<any[]>([]);
   const [totalUncompletedTasks, setTotalUncompletedTasks] = useState<number>(0);
-  const [hasCreditAlertBeenShown, setHasCreditAlertBeenShown] = useState(false);
-  const [hasTaskAlertBeenShown, setHasTaskAlertBeenShown] = useState(false);
 
   const isHamza = username?.toLowerCase() === 'hamza';
 
@@ -133,16 +131,16 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   }, [selectedMonth, selectedYear, daysFilter]);
 
   useEffect(() => {
-    if (sessionTasks.length > 0 && !hasTaskAlertBeenShown) {
-      if (creditsDueToday.length === 0 && !showCreditAlert) {
-        setShowTaskAlert(true);
-        setHasTaskAlertBeenShown(true);
-      } else if (creditsDueToday.length > 0 && hasCreditAlertBeenShown && !showCreditAlert) {
-        setShowTaskAlert(true);
-        setHasTaskAlertBeenShown(true);
-      }
+    if (creditsDueToday.length > 0 && !showCreditAlert && !showTaskAlert) {
+      setShowCreditAlert(true);
     }
-  }, [sessionTasks, creditsDueToday, showCreditAlert, hasCreditAlertBeenShown, hasTaskAlertBeenShown]);
+  }, [creditsDueToday]);
+
+  useEffect(() => {
+    if (sessionTasks.length > 0 && !showTaskAlert && !showCreditAlert) {
+      setShowTaskAlert(true);
+    }
+  }, [sessionTasks, showCreditAlert]);
 
   const checkSessionStatus = async () => {
     const sessionDate = getSessionDate();
@@ -402,7 +400,9 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
               <button
                 onClick={() => {
                   setShowCreditAlert(false);
-                  setHasCreditAlertBeenShown(true);
+                  if (sessionTasks.length > 0) {
+                    setTimeout(() => setShowTaskAlert(true), 300);
+                  }
                 }}
                 className="p-2 hover:bg-red-800 rounded-lg transition-colors"
               >
@@ -472,7 +472,9 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                 <button
                   onClick={() => {
                     setShowCreditAlert(false);
-                    setHasCreditAlertBeenShown(true);
+                    if (sessionTasks.length > 0) {
+                      setTimeout(() => setShowTaskAlert(true), 300);
+                    }
                   }}
                   className="px-8 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors"
                 >
