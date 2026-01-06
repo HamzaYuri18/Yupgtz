@@ -120,6 +120,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     loadAvailableMonths();
     checkSessionStatus();
     loadCreditsDueToday();
+    loadSessionTasks();
   }, []);
 
   useEffect(() => {
@@ -127,12 +128,6 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
       loadTermesData();
     }
   }, [selectedMonth, selectedYear, daysFilter]);
-
-  useEffect(() => {
-    if (currentSessionId) {
-      loadSessionTasks();
-    }
-  }, [currentSessionId]);
 
   useEffect(() => {
     if (sessionTasks.length > 0 && !showTaskAlert) {
@@ -265,11 +260,12 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
   const loadSessionTasks = async () => {
     try {
-      if (currentSessionId) {
+      const sessionDate = getSessionDate();
+      if (sessionDate) {
         const { data, error } = await supabase
           .from('taches')
           .select('*')
-          .eq('session_id', currentSessionId)
+          .eq('date_effectuer', sessionDate)
           .eq('statut', 'A faire')
           .order('degre_importance', { ascending: true });
 
@@ -471,70 +467,29 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
       {showTaskAlert && sessionTasks.length > 0 && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white p-6 rounded-t-2xl flex items-center justify-between">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full">
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-2xl">
               <div className="flex items-center gap-3">
                 <AlertCircle className="w-10 h-10" />
                 <div>
                   <h2 className="text-2xl font-bold">RAPPEL DES TACHES</h2>
-                  <p className="text-yellow-100">Tâches à faire au cours de cette session</p>
+                  <p className="text-blue-100">Tâches à effectuer aujourd'hui</p>
                 </div>
               </div>
-              <button
-                onClick={() => setShowTaskAlert(false)}
-                className="p-2 hover:bg-yellow-700 rounded-lg transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
             </div>
             <div className="p-6">
-              <div className="mb-4 text-center">
-                <p className="text-lg text-gray-700">
-                  <span className="font-bold text-yellow-600">{sessionTasks.length}</span> tâche(s) non accomplie(s) pour cette session
+              <div className="text-center">
+                <p className="text-lg text-gray-700 mb-2">
+                  Vous avez <span className="font-bold text-blue-600">{sessionTasks.length}</span> tâche(s) à effectuer aujourd'hui
                 </p>
-                <p className="text-sm text-gray-600 mt-2">
-                  Cliquez sur "Tâches" dans le menu pour voir et gérer vos tâches
+                <p className="text-sm text-gray-600">
+                  Veuillez consulter les tâches pour plus de détails
                 </p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-yellow-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Titre</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Description</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Importance</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Chargé</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {sessionTasks.map((task, index) => (
-                      <tr key={index} className="hover:bg-yellow-50">
-                        <td className="px-4 py-3 text-sm font-medium">{task.titre}</td>
-                        <td className="px-4 py-3 text-sm">{task.description || 'N/A'}</td>
-                        <td className="px-4 py-3 text-sm text-yellow-600 font-medium">
-                          {formatDate(task.date_effectuer)}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                            task.degre_importance === 'Urgent' ? 'bg-red-100 text-red-800' :
-                            task.degre_importance === 'Haute' ? 'bg-orange-100 text-orange-800' :
-                            task.degre_importance === 'Moyenne' ? 'bg-blue-100 text-blue-800' :
-                            'bg-green-100 text-green-800'
-                          }`}>
-                            {task.degre_importance}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm font-medium">{task.utilisateur_charge}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
               <div className="mt-6 flex justify-center">
                 <button
                   onClick={() => setShowTaskAlert(false)}
-                  className="px-8 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 font-semibold transition-colors"
+                  className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold transition-colors"
                 >
                   Fermer
                 </button>
