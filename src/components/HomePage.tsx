@@ -5,6 +5,8 @@ import { getSessionDate } from '../utils/auth';
 import { isSessionClosed } from '../utils/sessionService';
 import { supabase } from '../lib/supabase';
 import TaskManagement from './TaskManagement';
+import RemarqueModal from './RemarqueModal';
+import StatisticsChart from './StatisticsChart';
 
 interface CircularStatCardProps {
   title: string;
@@ -113,6 +115,9 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sessionTasks, setSessionTasks] = useState<any[]>([]);
   const [totalUncompletedTasks, setTotalUncompletedTasks] = useState<number>(0);
+
+  const [isRemarqueModalOpen, setIsRemarqueModalOpen] = useState(false);
+  const [selectedContrat, setSelectedContrat] = useState<any>(null);
 
   const isHamza = username?.toLowerCase() === 'hamza';
 
@@ -309,6 +314,23 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('fr-FR');
   };
+
+  const handleTermeClick = (terme: any) => {
+    setSelectedContrat({
+      police: terme.numero_contrat,
+      mois: selectedMonth ? `${selectedYear}-${String(monthsFR.indexOf(selectedMonth.toLowerCase()) + 1).padStart(2, '0')}` : '',
+      terme: terme.terme,
+      remarque: terme.remarque,
+      date_remarque: terme.date_remarque,
+      user_remarque: terme.user_remarque
+    });
+    setIsRemarqueModalOpen(true);
+  };
+
+  const monthsFR = [
+    'janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin',
+    'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'
+  ];
 
   const handleSyncStatuses = async () => {
     if (!selectedMonth || !selectedYear) {
@@ -780,7 +802,12 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {overdueTermes.map((terme, index) => (
-                      <tr key={index} className="hover:bg-red-50 transition-colors">
+                      <tr
+                        key={index}
+                        className="hover:bg-red-50 transition-colors cursor-pointer"
+                        onClick={() => handleTermeClick(terme)}
+                        title="Cliquez pour ajouter une remarque"
+                      >
                         <td className="px-4 py-3 text-sm">{terme.numero_contrat}</td>
                         <td className="px-4 py-3 text-sm">{terme.assure}</td>
                         {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
@@ -952,6 +979,21 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
           <p className="text-gray-600 text-lg">Veuillez sélectionner une année et un mois pour afficher les données</p>
         </div>
       )}
+
+      <div className="mt-8">
+        <StatisticsChart />
+      </div>
+
+      <RemarqueModal
+        isOpen={isRemarqueModalOpen}
+        onClose={() => setIsRemarqueModalOpen(false)}
+        contrat={selectedContrat || { police: '', mois: '', terme: 0 }}
+        onSave={() => {
+          if (selectedMonth && selectedYear) {
+            loadTermesData();
+          }
+        }}
+      />
       </div>
     </div>
   );
