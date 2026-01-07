@@ -64,15 +64,12 @@ export default function StatisticsChart() {
       const startDate = new Date(selectedYear, selectedMonth - 1, 1);
       const endDate = new Date(selectedYear, selectedMonth, 0, 23, 59, 59, 999);
 
-      const startTimestamp = startDate.getTime();
-      const endTimestamp = endDate.getTime();
-
       const { data: contracts, error } = await supabase
         .from('affaire')
         .select('branche, prime, created_at')
         .not('branche', 'is', null)
-        .gte('created_at', startTimestamp)
-        .lte('created_at', endTimestamp);
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString());
 
       if (error) throw error;
 
