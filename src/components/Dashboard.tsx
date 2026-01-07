@@ -304,7 +304,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
         {activeTab === 'contract' && <ContractForm username={username} />}
         {activeTab === 'xml' && isUserAdmin && <XLSXUploader />}
         {activeTab === 'reports' && <ReportGenerator />}
-        {activeTab === 'statistics' && <StatisticsChart />}
+        {activeTab === 'statistics' && <StatisticsChart username={username} />}
         {activeTab === 'credits' && <CreditsList />}
         {activeTab === 'financial' && <FinancialManagement username={username} />}
         {activeTab === 'payment' && <CreditPayment />}

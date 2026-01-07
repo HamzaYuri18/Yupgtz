@@ -10,14 +10,17 @@ interface BrancheStats {
   color: string;
 }
 
-export default function StatisticsChart() {
+interface StatisticsChartProps {
+  username: string;
+}
+
+export default function StatisticsChart({ username }: StatisticsChartProps) {
   const [stats, setStats] = useState<BrancheStats[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [isLoading, setIsLoading] = useState(false);
   const [totalContracts, setTotalContracts] = useState(0);
   const [totalPrimes, setTotalPrimes] = useState(0);
-  const [currentUser, setCurrentUser] = useState('');
 
   const brancheColors: { [key: string]: string } = {
     'Auto': '#3B82F6',
@@ -45,12 +48,6 @@ export default function StatisticsChart() {
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
-
-  useEffect(() => {
-    const user = localStorage.getItem('currentUser') || '';
-    setCurrentUser(user);
-    loadStatistics();
-  }, []);
 
   useEffect(() => {
     loadStatistics();
@@ -170,7 +167,7 @@ export default function StatisticsChart() {
     );
   };
 
-  const showTotals = currentUser === 'Hamza';
+  const showTotals = username === 'Hamza';
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
