@@ -57,7 +57,10 @@ export default function RemarqueModal({ isOpen, onClose, contrat, onSave }: Rema
       const year = echeanceDate.getFullYear();
       const tableName = `table_terme_${monthName}_${year}`;
 
+      const echeanceFormatted = contrat.echeance.split('T')[0];
+
       console.log(`🔍 Enregistrement de la remarque dans la table: ${tableName}`);
+      console.log(`🔍 Numero contrat: ${contrat.police}, Echeance: ${echeanceFormatted}`);
 
       const { error: updateError } = await supabase
         .from(tableName)
@@ -66,8 +69,8 @@ export default function RemarqueModal({ isOpen, onClose, contrat, onSave }: Rema
           date_remarque: new Date().toISOString(),
           user_remarque: currentUser || 'Utilisateur inconnu'
         })
-        .eq('police', contrat.police)
-        .eq('terme', contrat.terme);
+        .eq('numero_contrat', contrat.police)
+        .eq('echeance', echeanceFormatted);
 
       if (updateError) {
         throw updateError;

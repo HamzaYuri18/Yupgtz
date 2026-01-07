@@ -336,7 +336,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     setSelectedContrat({
       police: terme.numero_contrat,
       mois: selectedMonth ? `${selectedYear}-${String(monthsFR.indexOf(selectedMonth.toLowerCase()) + 1).padStart(2, '0')}` : '',
-      terme: terme.terme,
+      terme: 0,
       remarque: terme.remarque,
       date_remarque: terme.date_remarque,
       user_remarque: terme.user_remarque,
