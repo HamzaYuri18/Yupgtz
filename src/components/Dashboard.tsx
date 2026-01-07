@@ -16,6 +16,7 @@ import ChequesManagement from './ChequesManagement';
 import VersementBancaire from './VersementBancaire';
 import Encaissement from './Encaissement';
 import EtatCommissions from './EtatCommissions';
+import StatisticsChart from './StatisticsChart';
 
 interface DashboardProps {
   username: string;
@@ -23,7 +24,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'home' | 'contract' | 'xml' | 'reports' | 'credits' | 'financial' | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement' | 'encaissement' | 'commissions'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'contract' | 'xml' | 'reports' | 'credits' | 'financial' | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement' | 'encaissement' | 'commissions' | 'statistics'>('home');
   const [sessionInfo, setSessionInfo] = useState<any>(null);
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false);
 
@@ -169,6 +170,18 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
             </button>
 
             <button
+              onClick={() => setActiveTab('statistics')}
+              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
+                activeTab === 'statistics'
+                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
+                  : 'text-white/90 hover:bg-white/20 hover:text-white'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4" />
+              <span>Statistiques</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('credits')}
               className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
                 activeTab === 'credits'
@@ -291,6 +304,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
         {activeTab === 'contract' && <ContractForm username={username} />}
         {activeTab === 'xml' && isUserAdmin && <XLSXUploader />}
         {activeTab === 'reports' && <ReportGenerator />}
+        {activeTab === 'statistics' && <StatisticsChart />}
         {activeTab === 'credits' && <CreditsList />}
         {activeTab === 'financial' && <FinancialManagement username={username} />}
         {activeTab === 'payment' && <CreditPayment />}

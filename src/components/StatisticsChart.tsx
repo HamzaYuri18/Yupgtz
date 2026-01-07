@@ -32,30 +32,46 @@ export default function StatisticsChart() {
     const user = localStorage.getItem('currentUser') || '';
     setCurrentUser(user);
     loadAvailableMonths();
+    loadStatistics();
   }, []);
 
   useEffect(() => {
-    if (selectedMonth) {
-      loadStatistics();
-    }
+    loadStatistics();
   }, [selectedMonth]);
 
   const loadAvailableMonths = async () => {
     try {
-      const { data: tables } = await supabase
-        .from('information_schema.tables')
-        .select('table_name')
-        .like('table_name', 'rapport_%');
+      const { data, error } = await supabase.rpc('get_table_names');
 
-      if (tables) {
-        const months = tables
-          .map(t => t.table_name.replace('rapport_', '').replace(/_/g, '-'))
-          .sort()
-          .reverse();
+      if (error) {
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth();
+
+        const months: string[] = [];
+        for (let i = 0; i < 12; i++) {
+          const date = new Date(currentYear, currentMonth - i, 1);
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const year = date.getFullYear();
+          months.push(`${year}-${month}`);
+        }
+
         setAvailableMonths(months);
-        if (months.length > 0 && !selectedMonth) {
+        if (!selectedMonth && months.length > 0) {
           setSelectedMonth(months[0]);
         }
+        return;
+      }
+
+      const termeTable = data?.filter((t: any) => t.table_name.startsWith('terme_')) || [];
+      const months = termeTable
+        .map((t: any) => t.table_name.replace('terme_', '').replace(/_/g, '-'))
+        .sort()
+        .reverse();
+
+      setAvailableMonths(months);
+      if (months.length > 0 && !selectedMonth) {
+        setSelectedMonth(months[0]);
       }
     } catch (error) {
       console.error('Erreur lors du chargement des mois:', error);

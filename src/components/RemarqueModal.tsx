@@ -141,14 +141,17 @@ export default function RemarqueModal({ isOpen, onClose, contrat, onSave }: Rema
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Nouvelle remarque *
             </label>
-            <textarea
+            <select
               value={remarque}
               onChange={(e) => setRemarque(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-              rows={4}
-              placeholder="Saisissez votre remarque ici..."
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-base"
               disabled={isSaving}
-            />
+            >
+              <option value="">Sélectionnez une option...</option>
+              <option value="RT">RT</option>
+              <option value="vendu">Vendu</option>
+              <option value="relancé">Relancé</option>
+            </select>
           </div>
 
           {error && (

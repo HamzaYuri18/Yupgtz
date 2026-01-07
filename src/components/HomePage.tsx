@@ -6,7 +6,6 @@ import { isSessionClosed } from '../utils/sessionService';
 import { supabase } from '../lib/supabase';
 import TaskManagement from './TaskManagement';
 import RemarqueModal from './RemarqueModal';
-import StatisticsChart from './StatisticsChart';
 
 interface CircularStatCardProps {
   title: string;
@@ -801,20 +800,27 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {overdueTermes.map((terme, index) => (
-                      <tr
-                        key={index}
-                        className="hover:bg-red-50 transition-colors cursor-pointer"
-                        onClick={() => handleTermeClick(terme)}
-                        title="Cliquez pour ajouter une remarque"
-                      >
-                        <td className="px-4 py-3 text-sm">{terme.numero_contrat}</td>
-                        <td className="px-4 py-3 text-sm">{terme.assure}</td>
-                        {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
-                        <td className="px-4 py-3 text-sm text-red-600 font-medium">{formatDate(terme.echeance)}</td>
-                        <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
-                      </tr>
-                    ))}
+                    {overdueTermes.map((terme, index) => {
+                      const remarqueLower = terme.remarque?.toLowerCase() || '';
+                      const bgColor = remarqueLower === 'vendu' ? 'bg-yellow-100 hover:bg-yellow-200' :
+                                     remarqueLower === 'rt' ? 'bg-blue-100 hover:bg-blue-200' :
+                                     'hover:bg-red-50';
+
+                      return (
+                        <tr
+                          key={index}
+                          className={`transition-colors cursor-pointer ${bgColor}`}
+                          onClick={() => handleTermeClick(terme)}
+                          title="Cliquez pour ajouter une remarque"
+                        >
+                          <td className="px-4 py-3 text-sm">{terme.numero_contrat}</td>
+                          <td className="px-4 py-3 text-sm">{terme.assure}</td>
+                          {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
+                          <td className="px-4 py-3 text-sm text-red-600 font-medium">{formatDate(terme.echeance)}</td>
+                          <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -979,10 +985,6 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
           <p className="text-gray-600 text-lg">Veuillez sélectionner une année et un mois pour afficher les données</p>
         </div>
       )}
-
-      <div className="mt-8">
-        <StatisticsChart />
-      </div>
 
       <RemarqueModal
         isOpen={isRemarqueModalOpen}
