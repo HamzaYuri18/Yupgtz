@@ -12,6 +12,7 @@ interface RemarqueModalProps {
     remarque?: string;
     date_remarque?: string;
     user_remarque?: string;
+    echeance?: string;
   };
   onSave: () => void;
 }
@@ -36,12 +37,27 @@ export default function RemarqueModal({ isOpen, onClose, contrat, onSave }: Rema
       return;
     }
 
+    if (!contrat.echeance) {
+      setError('Date d\'échéance manquante');
+      return;
+    }
+
     setIsSaving(true);
     setError('');
 
     try {
       const currentUser = localStorage.getItem('currentUser');
-      const tableName = `terme_${contrat.mois.replace(/-/g, '_')}`;
+
+      const echeanceDate = new Date(contrat.echeance);
+      const monthsFR = [
+        'janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin',
+        'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'
+      ];
+      const monthName = monthsFR[echeanceDate.getMonth()];
+      const year = echeanceDate.getFullYear();
+      const tableName = `table_terme_${monthName}_${year}`;
+
+      console.log(`🔍 Enregistrement de la remarque dans la table: ${tableName}`);
 
       const { error: updateError } = await supabase
         .from(tableName)

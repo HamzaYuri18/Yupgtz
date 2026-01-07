@@ -339,7 +339,8 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
       terme: terme.terme,
       remarque: terme.remarque,
       date_remarque: terme.date_remarque,
-      user_remarque: terme.user_remarque
+      user_remarque: terme.user_remarque,
+      echeance: terme.echeance
     });
     setIsRemarqueModalOpen(true);
   };
@@ -1033,7 +1034,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
       <RemarqueModal
         isOpen={isRemarqueModalOpen}
         onClose={() => setIsRemarqueModalOpen(false)}
-        contrat={selectedContrat || { police: '', mois: '', terme: 0 }}
+        contrat={selectedContrat || { police: '', mois: '', terme: 0, echeance: '' }}
         onSave={() => {
           if (selectedMonth && selectedYear) {
             loadTermesData();
