@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { AlertCircle, CheckCircle, Clock, Plus, Edit2, Save, X, ChevronDown, ChevronUp, Calendar, Trash2, Filter } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, Plus, Edit2, Save, X, ChevronDown, ChevronUp, Calendar, Trash2, Filter, RefreshCw } from 'lucide-react';
 
 interface Tache {
   id: string;
@@ -29,6 +29,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingRemarks, setEditingRemarks] = useState<string | null>(null);
+  const [editingDate, setEditingDate] = useState<string | null>(null);
   const [showTachesAFaire, setShowTachesAFaire] = useState(false);
   const [showTachesAccomplies, setShowTachesAccomplies] = useState(false);
   const [dateFilter, setDateFilter] = useState<string>('today');
@@ -43,6 +44,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
     utilisateur_charge: 'Ahlem' as 'Ahlem' | 'Islem',
   });
   const [remarquesTemp, setRemarquesTemp] = useState<{ [key: string]: string }>({});
+  const [newDateTemp, setNewDateTemp] = useState<{ [key: string]: string }>({});
 
   const isHamza = currentUser === 'Hamza';
   const isIslemOrAhlem = currentUser === 'Islem' || currentUser === 'Ahlem';
@@ -134,6 +136,25 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
     } catch (error) {
       console.error('Erreur lors de la sauvegarde des remarques:', error);
       alert('Erreur lors de la sauvegarde des remarques');
+    }
+  };
+
+  const handleUpdateDate = async (tacheId: string) => {
+    if (!isHamza || isSessionClosed) return;
+
+    try {
+      const { error } = await supabase
+        .from('taches')
+        .update({ date_effectuer: newDateTemp[tacheId], updated_at: new Date().toISOString() })
+        .eq('id', tacheId);
+
+      if (error) throw error;
+      setEditingDate(null);
+      loadTaches();
+      if (onTaskUpdate) onTaskUpdate();
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour de la date:', error);
+      alert('Erreur lors de la mise à jour de la date');
     }
   };
 
@@ -484,14 +505,54 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                       <span className="px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-300">
                         {tache.utilisateur_charge}
                       </span>
-                      <span className="text-sm text-gray-600">
-                        <Clock className="inline w-4 h-4 mr-1" />
-                        {new Date(tache.date_effectuer).toLocaleDateString('fr-FR')}
-                      </span>
                     </div>
                     {tache.description && (
                       <p className="text-sm text-gray-600 mb-2">{tache.description}</p>
                     )}
+                    <div className="mt-2 mb-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Date à effectuer:</label>
+                      {editingDate === tache.id && isHamza && !isSessionClosed ? (
+                        <div className="flex gap-2 items-center">
+                          <input
+                            type="date"
+                            value={newDateTemp[tache.id] !== undefined ? newDateTemp[tache.id] : tache.date_effectuer}
+                            onChange={(e) => setNewDateTemp({ ...newDateTemp, [tache.id]: e.target.value })}
+                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          />
+                          <button
+                            onClick={() => handleUpdateDate(tache.id)}
+                            className="p-2 bg-green-600 text-white rounded hover:bg-green-700"
+                          >
+                            <Save className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setEditingDate(null)}
+                            className="p-2 bg-gray-400 text-white rounded hover:bg-gray-500"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded">
+                            <Clock className="inline w-4 h-4 mr-1" />
+                            {new Date(tache.date_effectuer).toLocaleDateString('fr-FR')}
+                          </span>
+                          {isHamza && !isSessionClosed && (
+                            <button
+                              onClick={() => {
+                                setEditingDate(tache.id);
+                                setNewDateTemp({ ...newDateTemp, [tache.id]: tache.date_effectuer });
+                              }}
+                              className="flex items-center gap-1 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded text-sm font-medium"
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                              Relance
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <div className="mt-3">
                       <label className="block text-xs font-medium text-gray-700 mb-1">Remarques:</label>
                       {editingRemarks === tache.id && canEditRemarks && !isSessionClosed ? (
@@ -612,14 +673,54 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                       <span className="px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-300">
                         {tache.utilisateur_charge}
                       </span>
-                      <span className="text-sm text-gray-600">
-                        <Clock className="inline w-4 h-4 mr-1" />
-                        {new Date(tache.date_effectuer).toLocaleDateString('fr-FR')}
-                      </span>
                     </div>
                     {tache.description && (
                       <p className="text-sm text-gray-600 mb-2">{tache.description}</p>
                     )}
+                    <div className="mt-2 mb-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Date à effectuer:</label>
+                      {editingDate === tache.id && isHamza && !isSessionClosed ? (
+                        <div className="flex gap-2 items-center">
+                          <input
+                            type="date"
+                            value={newDateTemp[tache.id] !== undefined ? newDateTemp[tache.id] : tache.date_effectuer}
+                            onChange={(e) => setNewDateTemp({ ...newDateTemp, [tache.id]: e.target.value })}
+                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          />
+                          <button
+                            onClick={() => handleUpdateDate(tache.id)}
+                            className="p-2 bg-green-600 text-white rounded hover:bg-green-700"
+                          >
+                            <Save className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setEditingDate(null)}
+                            className="p-2 bg-gray-400 text-white rounded hover:bg-gray-500"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded">
+                            <Clock className="inline w-4 h-4 mr-1" />
+                            {new Date(tache.date_effectuer).toLocaleDateString('fr-FR')}
+                          </span>
+                          {isHamza && !isSessionClosed && (
+                            <button
+                              onClick={() => {
+                                setEditingDate(tache.id);
+                                setNewDateTemp({ ...newDateTemp, [tache.id]: tache.date_effectuer });
+                              }}
+                              className="flex items-center gap-1 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded text-sm font-medium"
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                              Relance
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <div className="mt-3">
                       <label className="block text-xs font-medium text-gray-700 mb-1">Remarques:</label>
                       {editingRemarks === tache.id && canEditRemarks && !isSessionClosed ? (

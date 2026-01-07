@@ -12,8 +12,8 @@ interface BrancheStats {
 
 export default function StatisticsChart() {
   const [stats, setStats] = useState<BrancheStats[]>([]);
-  const [selectedMonth, setSelectedMonth] = useState('');
-  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [isLoading, setIsLoading] = useState(false);
   const [totalContracts, setTotalContracts] = useState(0);
   const [totalPrimes, setTotalPrimes] = useState(0);
@@ -28,65 +28,51 @@ export default function StatisticsChart() {
     'Autre': '#6B7280'
   };
 
+  const months = [
+    { value: 1, label: 'Janvier' },
+    { value: 2, label: 'Février' },
+    { value: 3, label: 'Mars' },
+    { value: 4, label: 'Avril' },
+    { value: 5, label: 'Mai' },
+    { value: 6, label: 'Juin' },
+    { value: 7, label: 'Juillet' },
+    { value: 8, label: 'Août' },
+    { value: 9, label: 'Septembre' },
+    { value: 10, label: 'Octobre' },
+    { value: 11, label: 'Novembre' },
+    { value: 12, label: 'Décembre' }
+  ];
+
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
+
   useEffect(() => {
     const user = localStorage.getItem('currentUser') || '';
     setCurrentUser(user);
-    loadAvailableMonths();
     loadStatistics();
   }, []);
 
   useEffect(() => {
     loadStatistics();
-  }, [selectedMonth]);
-
-  const loadAvailableMonths = async () => {
-    try {
-      const { data, error } = await supabase.rpc('get_table_names');
-
-      if (error) {
-        const currentDate = new Date();
-        const currentYear = currentDate.getFullYear();
-        const currentMonth = currentDate.getMonth();
-
-        const months: string[] = [];
-        for (let i = 0; i < 12; i++) {
-          const date = new Date(currentYear, currentMonth - i, 1);
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const year = date.getFullYear();
-          months.push(`${year}-${month}`);
-        }
-
-        setAvailableMonths(months);
-        if (!selectedMonth && months.length > 0) {
-          setSelectedMonth(months[0]);
-        }
-        return;
-      }
-
-      const termeTable = data?.filter((t: any) => t.table_name.startsWith('terme_')) || [];
-      const months = termeTable
-        .map((t: any) => t.table_name.replace('terme_', '').replace(/_/g, '-'))
-        .sort()
-        .reverse();
-
-      setAvailableMonths(months);
-      if (months.length > 0 && !selectedMonth) {
-        setSelectedMonth(months[0]);
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des mois:', error);
-    }
-  };
+  }, [selectedMonth, selectedYear]);
 
   const loadStatistics = async () => {
-    if (!selectedMonth) return;
+    if (!selectedMonth || !selectedYear) return;
 
     setIsLoading(true);
     try {
+      const startDate = new Date(selectedYear, selectedMonth - 1, 1);
+      const endDate = new Date(selectedYear, selectedMonth, 0, 23, 59, 59, 999);
+
+      const startTimestamp = startDate.getTime();
+      const endTimestamp = endDate.getTime();
+
       const { data: contracts, error } = await supabase
         .from('affaire')
-        .select('branche, prime')
-        .not('branche', 'is', null);
+        .select('branche, prime, created_at')
+        .not('branche', 'is', null)
+        .gte('created_at', startTimestamp)
+        .lte('created_at', endTimestamp);
 
       if (error) throw error;
 
@@ -200,13 +186,23 @@ export default function StatisticsChart() {
           <Calendar className="w-5 h-5 text-gray-500" />
           <select
             value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
+            onChange={(e) => setSelectedMonth(Number(e.target.value))}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
-            <option value="">Sélectionner un mois</option>
-            {availableMonths.map(month => (
-              <option key={month} value={month}>
-                {new Date(month + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+            {months.map(month => (
+              <option key={month.value} value={month.value}>
+                {month.label}
+              </option>
+            ))}
+          </select>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            {years.map(year => (
+              <option key={year} value={year}>
+                {year}
               </option>
             ))}
           </select>
