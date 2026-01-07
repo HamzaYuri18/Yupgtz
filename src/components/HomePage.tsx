@@ -135,16 +135,28 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   }, [selectedMonth, selectedYear, daysFilter]);
 
   useEffect(() => {
-    if (creditsDueToday.length > 0 && !showCreditAlert && !showTaskAlert) {
+    if (creditsDueToday.length > 0 && !showCreditAlert) {
       setShowCreditAlert(true);
     }
   }, [creditsDueToday]);
 
   useEffect(() => {
     if (sessionTasks.length > 0 && !showTaskAlert && !showCreditAlert) {
-      setShowTaskAlert(true);
+      setTimeout(() => setShowTaskAlert(true), 500);
     }
   }, [sessionTasks, showCreditAlert]);
+
+  useEffect(() => {
+    if (showCreditAlert || showTaskAlert) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showCreditAlert, showTaskAlert]);
 
   const checkSessionStatus = async () => {
     const sessionDate = getSessionDate();
@@ -408,8 +420,18 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
       <div className="max-w-7xl mx-auto px-6 py-8">
       {showCreditAlert && creditsDueToday.length > 0 && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[9999] p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowCreditAlert(false);
+              if (sessionTasks.length > 0) {
+                setTimeout(() => setShowTaskAlert(true), 300);
+              }
+            }
+          }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-6 rounded-t-2xl flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <AlertCircle className="w-10 h-10" />
@@ -508,8 +530,15 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
       )}
 
       {showTaskAlert && sessionTasks.length > 0 && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[9999] p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowTaskAlert(false);
+            }
+          }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-2xl flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <AlertCircle className="w-10 h-10" />
