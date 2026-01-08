@@ -299,7 +299,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
       </nav>
 
       {/* Content */}
-      <main className="max-w-7xl mx-auto pt-28 sm:pt-36 pb-6 px-2 sm:px-4 lg:px-8">
+      <main className="max-w-7xl mx-auto pt-32 sm:pt-40 pb-6 px-2 sm:px-4 lg:px-8">
         {activeTab === 'home' && <HomePage username={username} />}
         {activeTab === 'contract' && <ContractForm username={username} />}
         {activeTab === 'xml' && isUserAdmin && <XLSXUploader />}
