@@ -75,7 +75,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 bg-gradient-to-r from-emerald-600 via-gray-700 to-gray-900 shadow-lg z-50">
+      <header className="bg-gradient-to-r from-emerald-600 via-gray-700 to-gray-900 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 sm:h-16">
             <div className="flex items-center space-x-2 sm:space-x-4">
@@ -116,7 +116,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
       </header>
 
       {/* Navigation */}
-      <nav className="fixed top-14 sm:top-16 left-0 right-0 bg-gradient-to-r from-emerald-500 via-gray-600 to-gray-800 shadow-md overflow-x-auto z-40">
+      <nav className="bg-gradient-to-r from-emerald-500 via-gray-600 to-gray-800 shadow-md overflow-x-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex space-x-1 sm:space-x-2 min-w-max">
             <button
@@ -299,7 +299,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
       </nav>
 
       {/* Content */}
-      <main className="max-w-7xl mx-auto pt-20 sm:pt-24 pb-6 px-2 sm:px-4 lg:px-8">
+      <main className="max-w-7xl mx-auto py-3 sm:py-6 px-2 sm:px-4 lg:px-8">
         {activeTab === 'home' && <HomePage username={username} />}
         {activeTab === 'contract' && <ContractForm username={username} />}
         {activeTab === 'xml' && isUserAdmin && <XLSXUploader />}
