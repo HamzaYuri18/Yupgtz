@@ -60,6 +60,9 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     banque: 'ATTIJARI'
   });
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   useEffect(() => {
     loadSessions();
     loadMonthlyStats();
@@ -70,9 +73,10 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   }, [filteredSessions, selectedMonth, selectedYear]);
 
   const loadSessions = async () => {
-    const data = await getRecentSessions(15);
+    const data = await getRecentSessions(30);
     setSessions(data);
     setFilteredSessions(data);
+    setCurrentPage(1);
   };
 
   const loadMonthlyStats = async () => {
@@ -292,6 +296,7 @@ const deleteRemarque = async (sessionId: number) => {
     setDateDebut('');
     setDateFin('');
     setFilteredSessions(sessions);
+    setCurrentPage(1);
   };
 
   const handleSaveVersement = async () => {
@@ -361,6 +366,15 @@ const deleteRemarque = async (sessionId: number) => {
   };
 
   const quinzaineDates = getQuinzaineDates();
+
+  const getPaginatedSessions = () => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredSessions.slice(startIndex, endIndex);
+  };
+
+  const totalPages = Math.ceil(filteredSessions.length / itemsPerPage);
+  const paginatedSessions = getPaginatedSessions();
 
   return (
     <div className="space-y-6">
@@ -598,7 +612,7 @@ const deleteRemarque = async (sessionId: number) => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredSessions.map((session) => {
+              {paginatedSessions.map((session) => {
                 const solde = calculateSolde(session);
                 return (
                   <tr key={session.id} className="hover:bg-gray-50">
@@ -675,6 +689,31 @@ const deleteRemarque = async (sessionId: number) => {
               })}
             </tbody>
           </table>
+        </div>
+
+        <div className="flex items-center justify-between mt-6 px-4">
+          <div className="text-sm text-gray-600">
+            Affichage {(currentPage - 1) * itemsPerPage + 1} à {Math.min(currentPage * itemsPerPage, filteredSessions.length)} sur {filteredSessions.length} sessions
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-semibold rounded-lg transition-colors duration-200 flex items-center space-x-2"
+            >
+              <span>← Précédent</span>
+            </button>
+            <span className="px-3 py-2 bg-gray-100 rounded-lg text-sm font-semibold text-gray-700">
+              Page {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-semibold rounded-lg transition-colors duration-200 flex items-center space-x-2"
+            >
+              <span>Suivant →</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
