@@ -2004,6 +2004,142 @@ export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: 
   }
 };
 
+export const verifyTermeStatusWithEcheance = async (monthName?: string, year?: string): Promise<{
+  success: boolean;
+  message: string;
+  details: {
+    totalContracts: number;
+    paidCount: number;
+    unpaidCount: number;
+    updated: number;
+    errors: number;
+  };
+}> => {
+  try {
+    console.log('🔄 Démarrage de la vérification avec echeance...');
+
+    const { data: paidContracts, error: termeError } = await supabase
+      .from('terme')
+      .select('numero_contrat, echeance');
+
+    if (termeError) {
+      console.error('❌ Erreur lors de la récupération de la table terme:', termeError);
+      return {
+        success: false,
+        message: 'Erreur lors de la récupération des contrats payés',
+        details: { totalContracts: 0, paidCount: 0, unpaidCount: 0, updated: 0, errors: 1 }
+      };
+    }
+
+    const paidContractSet = new Set<string>();
+    paidContracts?.forEach(c => {
+      const key = `${c.numero_contrat?.trim()?.toUpperCase()}|${c.echeance}`;
+      paidContractSet.add(key);
+    });
+    console.log(`📋 ${paidContractSet.size} combinaisons contrat+echeance trouvées dans la table principale`);
+
+    let availableTables: string[] = [];
+    if (monthName && year) {
+      availableTables = [`${monthName}_${year}`];
+    } else {
+      const months = await getAvailableMonths();
+      availableTables = months.map(month => {
+        const parts = month.toLowerCase().split(' ');
+        return `${parts[0]}_${parts[1]}`;
+      });
+    }
+
+    let totalContracts = 0;
+    let updated = 0;
+    let errors = 0;
+    let paidCount = 0;
+    let unpaidCount = 0;
+
+    for (const tableSuffix of availableTables) {
+      const tableName = `table_terme_${tableSuffix}`;
+      console.log(`📊 Traitement de ${tableName}...`);
+
+      try {
+        const { data: contracts, error: selectError } = await supabase
+          .from(tableName)
+          .select('id, numero_contrat, echeance, statut');
+
+        if (selectError) {
+          console.error(`❌ Erreur lors de la lecture de ${tableName}:`, selectError);
+          errors++;
+          continue;
+        }
+
+        if (!contracts || contracts.length === 0) {
+          console.log(`ℹ️ Aucun contrat dans ${tableName}`);
+          continue;
+        }
+
+        totalContracts += contracts.length;
+        console.log(`📋 ${contracts.length} contrats trouvés dans ${tableName}`);
+
+        for (const contract of contracts) {
+          const key = `${contract.numero_contrat?.trim()?.toUpperCase()}|${contract.echeance}`;
+          const shouldBePaid = paidContractSet.has(key);
+          const newStatus = shouldBePaid ? 'payé' : 'non payé';
+
+          if (shouldBePaid) {
+            paidCount++;
+          } else {
+            unpaidCount++;
+          }
+
+          if (contract.statut !== newStatus) {
+            console.log(`🔄 Mise à jour: ${contract.numero_contrat} (${contract.echeance}) de "${contract.statut}" vers "${newStatus}"`);
+
+            const { error: updateError } = await supabase
+              .from(tableName)
+              .update({ statut: newStatus })
+              .eq('id', contract.id);
+
+            if (updateError) {
+              console.error(`❌ Erreur mise à jour ${contract.numero_contrat}:`, updateError);
+              errors++;
+            } else {
+              console.log(`✅ ${contract.numero_contrat}: ${contract.statut} → ${newStatus}`);
+              updated++;
+            }
+          } else {
+            console.log(`ℹ️ ${contract.numero_contrat} (${contract.echeance}): statut déjà correct (${contract.statut})`);
+          }
+        }
+
+        console.log(`✅ ${tableName} traité avec succès`);
+      } catch (tableError) {
+        console.error(`❌ Erreur sur ${tableName}:`, tableError);
+        errors++;
+      }
+    }
+
+    const message = `Vérification terminée: ${updated} contrats mis à jour sur ${totalContracts} vérifiés (${paidCount} payés, ${unpaidCount} non payés)`;
+    console.log(`✅ ${message}`);
+
+    return {
+      success: true,
+      message,
+      details: {
+        totalContracts,
+        paidCount,
+        unpaidCount,
+        updated,
+        errors
+      }
+    };
+  } catch (error) {
+    console.error('❌ Erreur générale lors de la vérification:', error);
+    return {
+      success: false,
+      message: 'Erreur lors de la vérification',
+      details: { totalContracts: 0, paidCount: 0, unpaidCount: 0, updated: 0, errors: 1 }
+    };
+  }
+};
+
 // Mettez à jour l'export default à la fin du fichier pour inclure toutes les nouvelles fonctions :
 
 export default {
@@ -2043,5 +2179,6 @@ export default {
   getOverdueUnpaidTermes,
   getPaidTermesByMonth,
   getUpcomingTermes,
-  syncTermeStatusesWithMainTable
+  syncTermeStatusesWithMainTable,
+  verifyTermeStatusWithEcheance
 };
