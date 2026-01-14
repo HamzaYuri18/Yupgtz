@@ -322,11 +322,17 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   };
 
   const calculateTotal = (termes: any[]) => {
-    return termes.reduce((sum, terme) => sum + (parseFloat(terme.prime) || 0), 0);
+    return termes.reduce((sum, terme) => {
+      const prime = parseFloat(terme.prime);
+      return sum + (isNaN(prime) ? 0 : prime);
+    }, 0);
   };
 
   const calculateCreditTotal = (credits: any[]) => {
-    return credits.reduce((sum, credit) => sum + (parseFloat(credit.solde) || 0), 0);
+    return credits.reduce((sum, credit) => {
+      const solde = parseFloat(credit.solde || credit.montant_credit);
+      return sum + (isNaN(solde) ? 0 : solde);
+    }, 0);
   };
 
   const formatDate = (dateString: string) => {
@@ -829,11 +835,20 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
             {(() => {
-              const totalCount = overdueTermes.length + unpaidTermes.length + upcomingTermes.length + paidTermes.length;
-              const overduePercentage = totalCount > 0 ? (overdueTermes.length / totalCount) * 100 : 0;
-              const unpaidPercentage = totalCount > 0 ? (unpaidTermes.length / totalCount) * 100 : 0;
-              const upcomingPercentage = totalCount > 0 ? (upcomingTermes.length / totalCount) * 100 : 0;
-              const paidPercentage = totalCount > 0 ? (paidTermes.length / totalCount) * 100 : 0;
+              // Calculer les totaux uniquement pour les contrats du mois sélectionné
+              const totalPaid = calculateTotal(paidTermes);
+              const totalUnpaid = calculateTotal(unpaidTermes);
+              const totalUpcoming = calculateTotal(upcomingTermes);
+              const totalOverdue = calculateTotal(overdueTermes);
+              
+              // Pour les pourcentages: payés vs non payés = 100%
+              const totalTermesCount = paidTermes.length + unpaidTermes.length;
+              const paidPercentage = totalTermesCount > 0 ? (paidTermes.length / totalTermesCount) * 100 : 0;
+              const unpaidPercentage = totalTermesCount > 0 ? (unpaidTermes.length / totalTermesCount) * 100 : 0;
+              
+              // Pour les termes à venir et échus, on utilise leur propre total comme référence
+              const upcomingPercentage = totalUnpaid > 0 ? (totalUpcoming / totalUnpaid) * 100 : 0;
+              const overduePercentage = totalUnpaid > 0 ? (totalOverdue / totalUnpaid) * 100 : 0;
 
               return (
                 <>
@@ -841,7 +856,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     title="Termes Échus"
                     subtitle="Non payés et en retard"
                     count={overdueTermes.length}
-                    total={calculateTotal(overdueTermes)}
+                    total={totalOverdue}
                     percentage={overduePercentage}
                     color="#EF4444"
                     icon={<AlertCircle className="w-7 h-7" />}
@@ -852,7 +867,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     title="Termes Non Payés"
                     subtitle="Total dans le mois"
                     count={unpaidTermes.length}
-                    total={calculateTotal(unpaidTermes)}
+                    total={totalUnpaid}
                     percentage={unpaidPercentage}
                     color="#F97316"
                     icon={<Clock className="w-7 h-7" />}
@@ -863,7 +878,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     title="Échéances Proches"
                     subtitle={`${daysFilter} prochains jours`}
                     count={upcomingTermes.length}
-                    total={calculateTotal(upcomingTermes)}
+                    total={totalUpcoming}
                     percentage={upcomingPercentage}
                     color="#3B82F6"
                     icon={<Calendar className="w-7 h-7" />}
@@ -874,7 +889,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     title="Termes Payés"
                     subtitle="Total dans le mois"
                     count={paidTermes.length}
-                    total={calculateTotal(paidTermes)}
+                    total={totalPaid}
                     percentage={paidPercentage}
                     color="#10B981"
                     icon={<CheckCircle className="w-7 h-7" />}
