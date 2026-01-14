@@ -342,14 +342,24 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   };
 
   const handleTermeClick = (terme: any) => {
+    // Extraire le mois et l'année du mois sélectionné
+    const monthParts = selectedMonth.split(' ');
+    const mois = monthParts.length >= 2 
+      ? `${monthParts[1]}-${String(monthsFR.indexOf(monthParts[0].toLowerCase()) + 1).padStart(2, '0')}`
+      : '';
+
     setSelectedContrat({
       police: terme.numero_contrat,
-      mois: selectedMonth ? `${selectedYear}-${String(monthsFR.indexOf(selectedMonth.toLowerCase()) + 1).padStart(2, '0')}` : '',
+      mois: mois,
       terme: 0,
       remarque: terme.remarque,
       date_remarque: terme.date_remarque,
       user_remarque: terme.user_remarque,
-      echeance: terme.echeance
+      echeance: terme.echeance,
+      assure: terme.assure,
+      prime: terme.prime,
+      id: terme.id, // Important pour la mise à jour dans la table
+      table_mois: selectedMonth // Ajouté pour référence
     });
     setIsRemarqueModalOpen(true);
   };
@@ -484,105 +494,30 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
-      {showCreditAlert && creditsDueToday.length > 0 && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[9999] p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowCreditAlert(false);
-              if (sessionTasks.length > 0 && !hasShownTaskAlert) {
-                setTimeout(() => {
-                  setShowTaskAlert(true);
-                  setHasShownTaskAlert(true);
-                }, 300);
+        {showCreditAlert && creditsDueToday.length > 0 && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[9999] p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowCreditAlert(false);
+                if (sessionTasks.length > 0 && !hasShownTaskAlert) {
+                  setTimeout(() => {
+                    setShowTaskAlert(true);
+                    setHasShownTaskAlert(true);
+                  }, 300);
+                }
               }
-            }
-          }}
-        >
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-6 rounded-t-2xl flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="w-10 h-10" />
-                <div>
-                  <h2 className="text-2xl font-bold">RAPPEL URGENT</h2>
-                  <p className="text-red-100">Crédits à payer aujourd'hui</p>
+            }}
+          >
+            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-6 rounded-t-2xl flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-10 h-10" />
+                  <div>
+                    <h2 className="text-2xl font-bold">RAPPEL URGENT</h2>
+                    <p className="text-red-100">Crédits à payer aujourd'hui</p>
+                  </div>
                 </div>
-              </div>
-              <button
-                onClick={() => {
-                  setShowCreditAlert(false);
-                  if (sessionTasks.length > 0 && !hasShownTaskAlert) {
-                    setTimeout(() => {
-                      setShowTaskAlert(true);
-                      setHasShownTaskAlert(true);
-                    }, 300);
-                  }
-                }}
-                className="p-2 hover:bg-red-800 rounded-lg transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="p-6">
-              <div className="mb-4 text-center">
-                <p className="text-lg text-gray-700">
-                  <span className="font-bold text-red-600">{creditsDueToday.length}</span> crédit(s) à régler aujourd'hui
-                </p>
-                {isHamza && (
-                  <p className="text-2xl font-bold text-red-600 mt-2">
-                    Total: {calculateCreditTotal(creditsDueToday).toFixed(2)} DT
-                  </p>
-                )}
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-red-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Branche</th>
-                      {isHamza && (
-                        <>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Crédit (DT)</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Solde (DT)</th>
-                        </>
-                      )}
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date Prévue</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {creditsDueToday.map((credit, index) => (
-                      <tr key={index} className="hover:bg-red-50">
-                        <td className="px-4 py-3 text-sm font-medium">{credit.numero_contrat}</td>
-                        <td className="px-4 py-3 text-sm">{credit.assure}</td>
-                        <td className="px-4 py-3 text-sm">{credit.branche}</td>
-                        {isHamza && (
-                          <>
-                            <td className="px-4 py-3 text-sm font-semibold">{parseFloat(credit.montant_credit).toFixed(2)}</td>
-                            <td className="px-4 py-3 text-sm text-red-600 font-semibold">
-                              {parseFloat(credit.solde || credit.montant_credit).toFixed(2)}
-                            </td>
-                          </>
-                        )}
-                        <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                            credit.statut === 'Non payé' ? 'bg-red-100 text-red-800' :
-                            credit.statut === 'Payé partiellement' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-green-100 text-green-800'
-                          }`}>
-                            {credit.statut}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-red-600 font-medium">
-                          {formatDate(credit.date_paiement_prevue)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="mt-6 flex justify-center">
                 <button
                   onClick={() => {
                     setShowCreditAlert(false);
@@ -593,544 +528,704 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                       }, 300);
                     }
                   }}
-                  className="px-8 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors"
+                  className="p-2 hover:bg-red-800 rounded-lg transition-colors"
                 >
-                  Fermer
+                  <X className="w-6 h-6" />
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showTaskAlert && sessionTasks.length > 0 && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[9999] p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowTaskAlert(false);
-            }
-          }}
-        >
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-2xl flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="w-10 h-10" />
-                <div>
-                  <h2 className="text-2xl font-bold">RAPPEL DES TACHES NON ACCOMPLIES</h2>
-                  <p className="text-blue-100">{sessionTasks.length} tâche(s) en attente</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowTaskAlert(false)}
-                className="p-2 hover:bg-blue-700 rounded-lg transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="p-6">
-              <div className="mb-4 text-center">
-                <p className="text-lg text-gray-700">
-                  Vous avez <span className="font-bold text-blue-600">{sessionTasks.length}</span> tâche(s) non accomplie(s) à effectuer aujourd'hui
-                </p>
-                <p className="text-sm text-gray-600 mt-2">
-                  Veuillez consulter ces tâches et les accomplir dès que possible
-                </p>
-                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-base text-red-800 font-semibold">
-                    Total de toutes les tâches non accomplies : <span className="text-2xl">{totalUncompletedTasks}</span>
+              <div className="p-6">
+                <div className="mb-4 text-center">
+                  <p className="text-lg text-gray-700">
+                    <span className="font-bold text-red-600">{creditsDueToday.length}</span> crédit(s) à régler aujourd'hui
                   </p>
+                  {isHamza && (
+                    <p className="text-2xl font-bold text-red-600 mt-2">
+                      Total: {calculateCreditTotal(creditsDueToday).toFixed(2)} DT
+                    </p>
+                  )}
                 </div>
-                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <p className="text-sm text-amber-800 font-medium">
-                    Important : Assurez-vous de marquer chaque tâche comme "Accomplie" une fois terminée
-                  </p>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-blue-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Titre</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Description</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Importance</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Chargé à</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {sessionTasks.map((task, index) => (
-                      <tr key={index} className="hover:bg-blue-50">
-                        <td className="px-4 py-3 text-sm font-medium">{task.titre}</td>
-                        <td className="px-4 py-3 text-sm">{task.description || 'N/A'}</td>
-                        <td className="px-4 py-3 text-sm text-blue-600 font-medium">
-                          {formatDate(task.date_effectuer)}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                            task.degre_importance === 'Urgent' ? 'bg-red-100 text-red-800' :
-                            task.degre_importance === 'Haute' ? 'bg-orange-100 text-orange-800' :
-                            task.degre_importance === 'Moyenne' ? 'bg-blue-100 text-blue-800' :
-                            'bg-green-100 text-green-800'
-                          }`}>
-                            {task.degre_importance}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
-                            {task.statut}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm font-medium">{task.utilisateur_charge}</td>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-red-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Branche</th>
+                        {isHamza && (
+                          <>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Crédit (DT)</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Solde (DT)</th>
+                          </>
+                        )}
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date Prévue</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {creditsDueToday.map((credit, index) => (
+                        <tr key={index} className="hover:bg-red-50">
+                          <td className="px-4 py-3 text-sm font-medium">{credit.numero_contrat}</td>
+                          <td className="px-4 py-3 text-sm">{credit.assure}</td>
+                          <td className="px-4 py-3 text-sm">{credit.branche}</td>
+                          {isHamza && (
+                            <>
+                              <td className="px-4 py-3 text-sm font-semibold">{parseFloat(credit.montant_credit).toFixed(2)}</td>
+                              <td className="px-4 py-3 text-sm text-red-600 font-semibold">
+                                {parseFloat(credit.solde || credit.montant_credit).toFixed(2)}
+                              </td>
+                            </>
+                          )}
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                              credit.statut === 'Non payé' ? 'bg-red-100 text-red-800' :
+                              credit.statut === 'Payé partiellement' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-green-100 text-green-800'
+                            }`}>
+                              {credit.statut}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-red-600 font-medium">
+                            {formatDate(credit.date_paiement_prevue)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-6 flex justify-center">
+                  <button
+                    onClick={() => {
+                      setShowCreditAlert(false);
+                      if (sessionTasks.length > 0 && !hasShownTaskAlert) {
+                        setTimeout(() => {
+                          setShowTaskAlert(true);
+                          setHasShownTaskAlert(true);
+                        }, 300);
+                      }
+                    }}
+                    className="px-8 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors"
+                  >
+                    Fermer
+                  </button>
+                </div>
               </div>
-              <div className="mt-6 flex justify-center">
-                <button
-                  onClick={() => setShowTaskAlert(false)}
-                  className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold transition-colors"
-                >
-                  Fermer
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Tableau de bord des Termes</h1>
-        <p className="text-sm text-gray-600">Vue d'ensemble des paiements et échéances</p>
-      </div>
-
-      <div className="mb-6">
-        <TaskManagement
-          currentUser={username || 'Inconnu'}
-          sessionId={currentSessionId}
-          isSessionClosed={sessionClosed}
-          onTaskUpdate={() => {
-            loadTotalUncompletedTasks();
-            loadSessionTasks();
-          }}
-        />
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Filter className="w-5 h-5 text-blue-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Filtres</h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Année
-            </label>
-            <select
-              value={selectedYear}
-              onChange={(e) => {
-                setSelectedYear(e.target.value);
-                setSelectedMonth('');
-              }}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
-            >
-              <option value="">Choisir une année...</option>
-              {availableYears.map((year, index) => (
-                <option key={index} value={year}>{year}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Mois
-            </label>
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              disabled={!selectedYear}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
-            >
-              <option value="">Choisir un mois...</option>
-              {availableMonths
-                .filter(month => month.includes(selectedYear))
-                .map((month, index) => (
-                  <option key={index} value={month}>{month}</option>
-                ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Échéances à venir (jours)
-            </label>
-            <select
-              value={daysFilter}
-              onChange={(e) => setDaysFilter(parseInt(e.target.value))}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
-            >
-              <option value={7}>7 jours</option>
-              <option value={15}>15 jours</option>
-              <option value={30}>30 jours</option>
-            </select>
-          </div>
-        </div>
-
-        {isHamza && (
-          <div className="mt-6 space-y-4">
-            <div>
-              <button
-                onClick={handleVerifyTermeStatus}
-                disabled={isVerifying || !selectedMonth || !selectedYear}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-              >
-                <RefreshCw className={`w-5 h-5 ${isVerifying ? 'animate-spin' : ''}`} />
-                <span>{isVerifying ? 'Vérification en cours...' : 'Vérifier avec Échéance'}</span>
-              </button>
-              <p className="text-sm text-gray-600 mt-2">
-                Vérifie les contrats en comparant numero_contrat + echeance avec la table terme principale
-              </p>
-            </div>
-            <div>
-              <button
-                onClick={handleSyncStatuses}
-                disabled={isSyncing || !selectedMonth || !selectedYear}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-              >
-                <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
-                <span>{isSyncing ? 'Synchronisation en cours...' : 'Synchroniser les statuts'}</span>
-              </button>
-              <p className="text-sm text-gray-600 mt-2">
-                Compare les contrats de ce mois avec la table principale et met à jour les statuts
-              </p>
             </div>
           </div>
         )}
-      </div>
 
-      {showVerifyMessage && (
-        <div className={`mb-6 p-4 rounded-lg ${verifyMessage.includes('Erreur') ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
-          <pre className={`text-sm whitespace-pre-wrap ${verifyMessage.includes('Erreur') ? 'text-red-800' : 'text-green-800'}`}>
-            {verifyMessage}
-          </pre>
+        {showTaskAlert && sessionTasks.length > 0 && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[9999] p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowTaskAlert(false);
+              }
+            }}
+          >
+            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-2xl flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-10 h-10" />
+                  <div>
+                    <h2 className="text-2xl font-bold">RAPPEL DES TACHES NON ACCOMPLIES</h2>
+                    <p className="text-blue-100">{sessionTasks.length} tâche(s) en attente</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowTaskAlert(false)}
+                  className="p-2 hover:bg-blue-700 rounded-lg transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="p-6">
+                <div className="mb-4 text-center">
+                  <p className="text-lg text-gray-700">
+                    Vous avez <span className="font-bold text-blue-600">{sessionTasks.length}</span> tâche(s) non accomplie(s) à effectuer aujourd'hui
+                  </p>
+                  <p className="text-sm text-gray-600 mt-2">
+                    Veuillez consulter ces tâches et les accomplir dès que possible
+                  </p>
+                  <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-base text-red-800 font-semibold">
+                      Total de toutes les tâches non accomplies : <span className="text-2xl">{totalUncompletedTasks}</span>
+                    </p>
+                  </div>
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-sm text-amber-800 font-medium">
+                      Important : Assurez-vous de marquer chaque tâche comme "Accomplie" une fois terminée
+                    </p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-blue-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Titre</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Description</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Importance</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Chargé à</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {sessionTasks.map((task, index) => (
+                        <tr key={index} className="hover:bg-blue-50">
+                          <td className="px-4 py-3 text-sm font-medium">{task.titre}</td>
+                          <td className="px-4 py-3 text-sm">{task.description || 'N/A'}</td>
+                          <td className="px-4 py-3 text-sm text-blue-600 font-medium">
+                            {formatDate(task.date_effectuer)}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                              task.degre_importance === 'Urgent' ? 'bg-red-100 text-red-800' :
+                              task.degre_importance === 'Haute' ? 'bg-orange-100 text-orange-800' :
+                              task.degre_importance === 'Moyenne' ? 'bg-blue-100 text-blue-800' :
+                              'bg-green-100 text-green-800'
+                            }`}>
+                              {task.degre_importance}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
+                              {task.statut}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium">{task.utilisateur_charge}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-6 flex justify-center">
+                  <button
+                    onClick={() => setShowTaskAlert(false)}
+                    className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold transition-colors"
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Tableau de bord des Termes</h1>
+          <p className="text-sm text-gray-600">Vue d'ensemble des paiements et échéances</p>
         </div>
-      )}
 
-      {showSyncMessage && (
-        <div className={`mb-6 p-4 rounded-lg ${syncMessage.includes('Erreur') ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
-          <pre className={`text-sm whitespace-pre-wrap ${syncMessage.includes('Erreur') ? 'text-red-800' : 'text-green-800'}`}>
-            {syncMessage}
-          </pre>
+        <div className="mb-6">
+          <TaskManagement
+            currentUser={username || 'Inconnu'}
+            sessionId={currentSessionId}
+            isSessionClosed={sessionClosed}
+            onTaskUpdate={() => {
+              loadTotalUncompletedTasks();
+              loadSessionTasks();
+            }}
+          />
         </div>
-      )}
 
-      {isLoading ? (
-        <div className="flex justify-center items-center py-12">
-          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      ) : selectedMonth ? (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
-            {(() => {
-              // Calculer les totaux uniquement pour les contrats du mois sélectionné
-              const totalPaid = calculateTotal(paidTermes);
-              const totalUnpaid = calculateTotal(unpaidTermes);
-              const totalUpcoming = calculateTotal(upcomingTermes);
-              const totalOverdue = calculateTotal(overdueTermes);
-              
-              // Pour les pourcentages: payés vs non payés = 100%
-              const totalTermesCount = paidTermes.length + unpaidTermes.length;
-              const paidPercentage = totalTermesCount > 0 ? (paidTermes.length / totalTermesCount) * 100 : 0;
-              const unpaidPercentage = totalTermesCount > 0 ? (unpaidTermes.length / totalTermesCount) * 100 : 0;
-              
-              // Pour les termes à venir et échus, on utilise leur propre total comme référence
-              const upcomingPercentage = totalUnpaid > 0 ? (totalUpcoming / totalUnpaid) * 100 : 0;
-              const overduePercentage = totalUnpaid > 0 ? (totalOverdue / totalUnpaid) * 100 : 0;
-
-              return (
-                <>
-                  <CircularStatCard
-                    title="Termes Échus"
-                    subtitle="Non payés et en retard"
-                    count={overdueTermes.length}
-                    total={totalOverdue}
-                    percentage={overduePercentage}
-                    color="#EF4444"
-                    icon={<AlertCircle className="w-7 h-7" />}
-                    onClick={() => setShowOverdueDetails(!showOverdueDetails)}
-                    showAmount={isHamza}
-                  />
-                  <CircularStatCard
-                    title="Termes Non Payés"
-                    subtitle="Total dans le mois"
-                    count={unpaidTermes.length}
-                    total={totalUnpaid}
-                    percentage={unpaidPercentage}
-                    color="#F97316"
-                    icon={<Clock className="w-7 h-7" />}
-                    onClick={() => setShowUnpaidDetails(!showUnpaidDetails)}
-                    showAmount={isHamza}
-                  />
-                  <CircularStatCard
-                    title="Échéances Proches"
-                    subtitle={`${daysFilter} prochains jours`}
-                    count={upcomingTermes.length}
-                    total={totalUpcoming}
-                    percentage={upcomingPercentage}
-                    color="#3B82F6"
-                    icon={<Calendar className="w-7 h-7" />}
-                    onClick={() => setShowUpcomingDetails(!showUpcomingDetails)}
-                    showAmount={isHamza}
-                  />
-                  <CircularStatCard
-                    title="Termes Payés"
-                    subtitle="Total dans le mois"
-                    count={paidTermes.length}
-                    total={totalPaid}
-                    percentage={paidPercentage}
-                    color="#10B981"
-                    icon={<CheckCircle className="w-7 h-7" />}
-                    onClick={() => setShowPaidDetails(!showPaidDetails)}
-                    showAmount={isHamza}
-                  />
-                </>
-              );
-            })()}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Filter className="w-5 h-5 text-blue-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Filtres</h2>
           </div>
 
-          {creditsDueToday.length > 0 && (
-            <div className="mb-6">
-              <CircularStatCard
-                title="Crédits à Payer Aujourd'hui"
-                subtitle={`Date de session: ${getSessionDate()}`}
-                count={creditsDueToday.length}
-                total={calculateCreditTotal(creditsDueToday)}
-                percentage={100}
-                color="#8B5CF6"
-                icon={<DollarSign className="w-7 h-7" />}
-                onClick={() => setShowCreditsDueTodayDetails(!showCreditsDueTodayDetails)}
-                showAmount={isHamza}
-              />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Année
+              </label>
+              <select
+                value={selectedYear}
+                onChange={(e) => {
+                  setSelectedYear(e.target.value);
+                  setSelectedMonth('');
+                }}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+              >
+                <option value="">Choisir une année...</option>
+                {availableYears.map((year, index) => (
+                  <option key={index} value={year}>{year}</option>
+                ))}
+              </select>
             </div>
-          )}
 
-          {showOverdueDetails && overdueTermes.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-              <h3 className="text-xl font-bold text-red-600 mb-4 flex items-center gap-2">
-                <AlertCircle className="w-6 h-6" />
-                Détails des Termes Échus ({overdueTermes.length})
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-red-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
-                      {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {overdueTermes.map((terme, index) => {
-                      const remarqueLower = terme.remarque?.toLowerCase() || '';
-                      const bgColor = remarqueLower === 'vendu' ? 'bg-yellow-100 hover:bg-yellow-200' :
-                                     remarqueLower === 'rt' ? 'bg-blue-100 hover:bg-blue-200' :
-                                     'hover:bg-red-50';
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Mois
+              </label>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                disabled={!selectedYear}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+              >
+                <option value="">Choisir un mois...</option>
+                {availableMonths
+                  .filter(month => month.includes(selectedYear))
+                  .map((month, index) => (
+                    <option key={index} value={month}>{month}</option>
+                  ))}
+              </select>
+            </div>
 
-                      return (
-                        <tr
-                          key={index}
-                          className={`transition-colors cursor-pointer ${bgColor}`}
-                          onClick={() => handleTermeClick(terme)}
-                          title="Cliquez pour ajouter une remarque"
-                        >
-                          <td className="px-4 py-3 text-sm">{terme.numero_contrat}</td>
-                          <td className="px-4 py-3 text-sm">{terme.assure}</td>
-                          {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
-                          <td className="px-4 py-3 text-sm text-red-600 font-medium">{formatDate(terme.echeance)}</td>
-                          <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Échéances à venir (jours)
+              </label>
+              <select
+                value={daysFilter}
+                onChange={(e) => setDaysFilter(parseInt(e.target.value))}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+              >
+                <option value={7}>7 jours</option>
+                <option value={15}>15 jours</option>
+                <option value={30}>30 jours</option>
+              </select>
+            </div>
+          </div>
+
+          {isHamza && (
+            <div className="mt-6 space-y-4">
+              <div>
+                <button
+                  onClick={handleVerifyTermeStatus}
+                  disabled={isVerifying || !selectedMonth || !selectedYear}
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                >
+                  <RefreshCw className={`w-5 h-5 ${isVerifying ? 'animate-spin' : ''}`} />
+                  <span>{isVerifying ? 'Vérification en cours...' : 'Vérifier avec Échéance'}</span>
+                </button>
+                <p className="text-sm text-gray-600 mt-2">
+                  Vérifie les contrats en comparant numero_contrat + echeance avec la table terme principale
+                </p>
+              </div>
+              <div>
+                <button
+                  onClick={handleSyncStatuses}
+                  disabled={isSyncing || !selectedMonth || !selectedYear}
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                >
+                  <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? 'Synchronisation en cours...' : 'Synchroniser les statuts'}</span>
+                </button>
+                <p className="text-sm text-gray-600 mt-2">
+                  Compare les contrats de ce mois avec la table principale et met à jour les statuts
+                </p>
               </div>
             </div>
           )}
-
-          {showUnpaidDetails && unpaidTermes.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-              <h3 className="text-xl font-bold text-orange-600 mb-4 flex items-center gap-2">
-                <Clock className="w-6 h-6" />
-                Détails des Termes Non Payés ({unpaidTermes.length})
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-orange-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
-                      {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {unpaidTermes.map((terme, index) => (
-                      <tr key={index} className="hover:bg-orange-50 transition-colors">
-                        <td className="px-4 py-3 text-sm">{terme.numero_contrat}</td>
-                        <td className="px-4 py-3 text-sm">{terme.assure}</td>
-                        {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
-                        <td className="px-4 py-3 text-sm">{formatDate(terme.echeance)}</td>
-                        <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {showUpcomingDetails && upcomingTermes.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-              <h3 className="text-xl font-bold text-blue-600 mb-4 flex items-center gap-2">
-                <Calendar className="w-6 h-6" />
-                Détails des Échéances Proches ({upcomingTermes.length})
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-blue-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
-                      {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {upcomingTermes.map((terme, index) => (
-                      <tr key={index} className="hover:bg-blue-50 transition-colors">
-                        <td className="px-4 py-3 text-sm">{terme.numero_contrat}</td>
-                        <td className="px-4 py-3 text-sm">{terme.assure}</td>
-                        {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
-                        <td className="px-4 py-3 text-sm text-blue-600 font-medium">{formatDate(terme.echeance)}</td>
-                        <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {showPaidDetails && paidTermes.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-              <h3 className="text-xl font-bold text-green-600 mb-4 flex items-center gap-2">
-                <CheckCircle className="w-6 h-6" />
-                Détails des Termes Payés ({paidTermes.length})
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-green-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
-                      {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {paidTermes.map((terme, index) => (
-                      <tr key={index} className="hover:bg-green-50 transition-colors">
-                        <td className="px-4 py-3 text-sm">{terme.numero_contrat}</td>
-                        <td className="px-4 py-3 text-sm">{terme.assure}</td>
-                        {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
-                        <td className="px-4 py-3 text-sm">{formatDate(terme.echeance)}</td>
-                        <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {showCreditsDueTodayDetails && creditsDueToday.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-              <h3 className="text-xl font-bold text-purple-600 mb-4 flex items-center gap-2">
-                <DollarSign className="w-6 h-6" />
-                Crédits à Payer Aujourd'hui ({creditsDueToday.length})
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-purple-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Branche</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Crédit (DT)</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Payé (DT)</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Solde (DT)</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date Prévue</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {creditsDueToday.map((credit, index) => (
-                      <tr key={index} className="hover:bg-purple-50 transition-colors">
-                        <td className="px-4 py-3 text-sm font-medium">{credit.numero_contrat}</td>
-                        <td className="px-4 py-3 text-sm">{credit.assure}</td>
-                        <td className="px-4 py-3 text-sm">{credit.branche}</td>
-                        <td className="px-4 py-3 text-sm">{parseFloat(credit.montant_credit).toFixed(2)}</td>
-                        <td className="px-4 py-3 text-sm text-green-600 font-semibold">
-                          {parseFloat(credit.paiement || 0).toFixed(2)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-red-600 font-semibold">
-                          {parseFloat(credit.solde || credit.montant_credit).toFixed(2)}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                            credit.statut === 'Non payé' ? 'bg-red-100 text-red-800' :
-                            credit.statut === 'Payé partiellement' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-green-100 text-green-800'
-                          }`}>
-                            {credit.statut}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-purple-600 font-medium">
-                          {formatDate(credit.date_paiement_prevue)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-          <TrendingUp className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 text-lg">Veuillez sélectionner une année et un mois pour afficher les données</p>
         </div>
-      )}
 
-      <RemarqueModal
-        isOpen={isRemarqueModalOpen}
-        onClose={() => setIsRemarqueModalOpen(false)}
-        contrat={selectedContrat || { police: '', mois: '', terme: 0, echeance: '' }}
-        onSave={() => {
-          if (selectedMonth && selectedYear) {
-            loadTermesData();
-          }
-        }}
-      />
+        {showVerifyMessage && (
+          <div className={`mb-6 p-4 rounded-lg ${verifyMessage.includes('Erreur') ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
+            <pre className={`text-sm whitespace-pre-wrap ${verifyMessage.includes('Erreur') ? 'text-red-800' : 'text-green-800'}`}>
+              {verifyMessage}
+            </pre>
+          </div>
+        )}
+
+        {showSyncMessage && (
+          <div className={`mb-6 p-4 rounded-lg ${syncMessage.includes('Erreur') ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
+            <pre className={`text-sm whitespace-pre-wrap ${syncMessage.includes('Erreur') ? 'text-red-800' : 'text-green-800'}`}>
+              {syncMessage}
+            </pre>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="flex justify-center items-center py-12">
+            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : selectedMonth ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+              {(() => {
+                // Calculer les totaux uniquement pour les contrats du mois sélectionné
+                const totalPaid = calculateTotal(paidTermes);
+                const totalUnpaid = calculateTotal(unpaidTermes);
+                const totalUpcoming = calculateTotal(upcomingTermes);
+                const totalOverdue = calculateTotal(overdueTermes);
+                
+                // Pour les pourcentages: payés vs non payés = 100%
+                const totalTermesCount = paidTermes.length + unpaidTermes.length;
+                const paidPercentage = totalTermesCount > 0 ? (paidTermes.length / totalTermesCount) * 100 : 0;
+                const unpaidPercentage = totalTermesCount > 0 ? (unpaidTermes.length / totalTermesCount) * 100 : 0;
+                
+                // Pour les termes à venir et échus, on utilise leur propre total comme référence
+                const upcomingPercentage = totalUnpaid > 0 ? (totalUpcoming / totalUnpaid) * 100 : 0;
+                const overduePercentage = totalUnpaid > 0 ? (totalOverdue / totalUnpaid) * 100 : 0;
+
+                return (
+                  <>
+                    <CircularStatCard
+                      title="Termes Échus"
+                      subtitle="Non payés et en retard"
+                      count={overdueTermes.length}
+                      total={totalOverdue}
+                      percentage={overduePercentage}
+                      color="#EF4444"
+                      icon={<AlertCircle className="w-7 h-7" />}
+                      onClick={() => setShowOverdueDetails(!showOverdueDetails)}
+                      showAmount={isHamza}
+                    />
+                    <CircularStatCard
+                      title="Termes Non Payés"
+                      subtitle="Total dans le mois"
+                      count={unpaidTermes.length}
+                      total={totalUnpaid}
+                      percentage={unpaidPercentage}
+                      color="#F97316"
+                      icon={<Clock className="w-7 h-7" />}
+                      onClick={() => setShowUnpaidDetails(!showUnpaidDetails)}
+                      showAmount={isHamza}
+                    />
+                    <CircularStatCard
+                      title="Échéances Proches"
+                      subtitle={`${daysFilter} prochains jours`}
+                      count={upcomingTermes.length}
+                      total={totalUpcoming}
+                      percentage={upcomingPercentage}
+                      color="#3B82F6"
+                      icon={<Calendar className="w-7 h-7" />}
+                      onClick={() => setShowUpcomingDetails(!showUpcomingDetails)}
+                      showAmount={isHamza}
+                    />
+                    <CircularStatCard
+                      title="Termes Payés"
+                      subtitle="Total dans le mois"
+                      count={paidTermes.length}
+                      total={totalPaid}
+                      percentage={paidPercentage}
+                      color="#10B981"
+                      icon={<CheckCircle className="w-7 h-7" />}
+                      onClick={() => setShowPaidDetails(!showPaidDetails)}
+                      showAmount={isHamza}
+                    />
+                  </>
+                );
+              })()}
+            </div>
+
+            {creditsDueToday.length > 0 && (
+              <div className="mb-6">
+                <CircularStatCard
+                  title="Crédits à Payer Aujourd'hui"
+                  subtitle={`Date de session: ${getSessionDate()}`}
+                  count={creditsDueToday.length}
+                  total={calculateCreditTotal(creditsDueToday)}
+                  percentage={100}
+                  color="#8B5CF6"
+                  icon={<DollarSign className="w-7 h-7" />}
+                  onClick={() => setShowCreditsDueTodayDetails(!showCreditsDueTodayDetails)}
+                  showAmount={isHamza}
+                />
+              </div>
+            )}
+
+            {showOverdueDetails && overdueTermes.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                <h3 className="text-xl font-bold text-red-600 mb-4 flex items-center gap-2">
+                  <AlertCircle className="w-6 h-6" />
+                  Détails des Termes Échus ({overdueTermes.length})
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-red-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
+                        {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Remarque</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {overdueTermes.map((terme, index) => {
+                        const remarqueLower = terme.remarque?.toLowerCase() || '';
+                        const bgColor = remarqueLower === 'vendu' ? 'bg-yellow-100 hover:bg-yellow-200' :
+                                       remarqueLower === 'rt' ? 'bg-blue-100 hover:bg-blue-200' :
+                                       remarqueLower === 'a récupérer' ? 'bg-purple-100 hover:bg-purple-200' :
+                                       'hover:bg-red-50';
+
+                        return (
+                          <tr
+                            key={index}
+                            className={`transition-colors cursor-pointer ${bgColor}`}
+                            onClick={() => handleTermeClick(terme)}
+                            title="Cliquez pour ajouter/modifier une remarque"
+                          >
+                            <td className="px-4 py-3 text-sm font-medium">{terme.numero_contrat}</td>
+                            <td className="px-4 py-3 text-sm">{terme.assure}</td>
+                            {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
+                            <td className="px-4 py-3 text-sm text-red-600 font-medium">{formatDate(terme.echeance)}</td>
+                            <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
+                            <td className="px-4 py-3 text-sm">
+                              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                !terme.remarque ? 'bg-gray-100 text-gray-800' :
+                                terme.remarque.toLowerCase() === 'vendu' ? 'bg-yellow-100 text-yellow-800' :
+                                terme.remarque.toLowerCase() === 'rt' ? 'bg-blue-100 text-blue-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {terme.remarque || 'Aucune'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {showUnpaidDetails && unpaidTermes.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                <h3 className="text-xl font-bold text-orange-600 mb-4 flex items-center gap-2">
+                  <Clock className="w-6 h-6" />
+                  Détails des Termes Non Payés ({unpaidTermes.length})
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-orange-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
+                        {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Remarque</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {unpaidTermes.map((terme, index) => {
+                        const remarqueLower = terme.remarque?.toLowerCase() || '';
+                        const bgColor = remarqueLower === 'vendu' ? 'bg-yellow-100 hover:bg-yellow-200' :
+                                       remarqueLower === 'rt' ? 'bg-blue-100 hover:bg-blue-200' :
+                                       remarqueLower === 'a récupérer' ? 'bg-purple-100 hover:bg-purple-200' :
+                                       'hover:bg-orange-50';
+
+                        return (
+                          <tr
+                            key={index}
+                            className={`transition-colors cursor-pointer ${bgColor}`}
+                            onClick={() => handleTermeClick(terme)}
+                            title="Cliquez pour ajouter/modifier une remarque"
+                          >
+                            <td className="px-4 py-3 text-sm font-medium">{terme.numero_contrat}</td>
+                            <td className="px-4 py-3 text-sm">{terme.assure}</td>
+                            {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
+                            <td className="px-4 py-3 text-sm">{formatDate(terme.echeance)}</td>
+                            <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
+                            <td className="px-4 py-3 text-sm">
+                              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                !terme.remarque ? 'bg-gray-100 text-gray-800' :
+                                terme.remarque.toLowerCase() === 'vendu' ? 'bg-yellow-100 text-yellow-800' :
+                                terme.remarque.toLowerCase() === 'rt' ? 'bg-blue-100 text-blue-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {terme.remarque || 'Aucune'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {showUpcomingDetails && upcomingTermes.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                <h3 className="text-xl font-bold text-blue-600 mb-4 flex items-center gap-2">
+                  <Calendar className="w-6 h-6" />
+                  Détails des Échéances Proches ({upcomingTermes.length})
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-blue-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
+                        {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Remarque</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {upcomingTermes.map((terme, index) => {
+                        const remarqueLower = terme.remarque?.toLowerCase() || '';
+                        const bgColor = remarqueLower === 'vendu' ? 'bg-yellow-100 hover:bg-yellow-200' :
+                                       remarqueLower === 'rt' ? 'bg-blue-100 hover:bg-blue-200' :
+                                       remarqueLower === 'a récupérer' ? 'bg-purple-100 hover:bg-purple-200' :
+                                       'hover:bg-blue-50';
+
+                        return (
+                          <tr
+                            key={index}
+                            className={`transition-colors cursor-pointer ${bgColor}`}
+                            onClick={() => handleTermeClick(terme)}
+                            title="Cliquez pour ajouter/modifier une remarque"
+                          >
+                            <td className="px-4 py-3 text-sm font-medium">{terme.numero_contrat}</td>
+                            <td className="px-4 py-3 text-sm">{terme.assure}</td>
+                            {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
+                            <td className="px-4 py-3 text-sm text-blue-600 font-medium">{formatDate(terme.echeance)}</td>
+                            <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
+                            <td className="px-4 py-3 text-sm">
+                              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                !terme.remarque ? 'bg-gray-100 text-gray-800' :
+                                terme.remarque.toLowerCase() === 'vendu' ? 'bg-yellow-100 text-yellow-800' :
+                                terme.remarque.toLowerCase() === 'rt' ? 'bg-blue-100 text-blue-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {terme.remarque || 'Aucune'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {showPaidDetails && paidTermes.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                <h3 className="text-xl font-bold text-green-600 mb-4 flex items-center gap-2">
+                  <CheckCircle className="w-6 h-6" />
+                  Détails des Termes Payés ({paidTermes.length})
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-green-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
+                        {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Remarque</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {paidTermes.map((terme, index) => {
+                        const remarqueLower = terme.remarque?.toLowerCase() || '';
+                        const bgColor = remarqueLower === 'vendu' ? 'bg-yellow-100 hover:bg-yellow-200' :
+                                       remarqueLower === 'rt' ? 'bg-blue-100 hover:bg-blue-200' :
+                                       remarqueLower === 'a récupérer' ? 'bg-purple-100 hover:bg-purple-200' :
+                                       'hover:bg-green-50';
+
+                        return (
+                          <tr
+                            key={index}
+                            className={`transition-colors cursor-pointer ${bgColor}`}
+                            onClick={() => handleTermeClick(terme)}
+                            title="Cliquez pour ajouter/modifier une remarque"
+                          >
+                            <td className="px-4 py-3 text-sm font-medium">{terme.numero_contrat}</td>
+                            <td className="px-4 py-3 text-sm">{terme.assure}</td>
+                            {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
+                            <td className="px-4 py-3 text-sm">{formatDate(terme.echeance)}</td>
+                            <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
+                            <td className="px-4 py-3 text-sm">
+                              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                !terme.remarque ? 'bg-gray-100 text-gray-800' :
+                                terme.remarque.toLowerCase() === 'vendu' ? 'bg-yellow-100 text-yellow-800' :
+                                terme.remarque.toLowerCase() === 'rt' ? 'bg-blue-100 text-blue-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {terme.remarque || 'Aucune'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {showCreditsDueTodayDetails && creditsDueToday.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                <h3 className="text-xl font-bold text-purple-600 mb-4 flex items-center gap-2">
+                  <DollarSign className="w-6 h-6" />
+                  Crédits à Payer Aujourd'hui ({creditsDueToday.length})
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-purple-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Branche</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Crédit (DT)</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Payé (DT)</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Solde (DT)</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date Prévue</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {creditsDueToday.map((credit, index) => (
+                        <tr key={index} className="hover:bg-purple-50 transition-colors">
+                          <td className="px-4 py-3 text-sm font-medium">{credit.numero_contrat}</td>
+                          <td className="px-4 py-3 text-sm">{credit.assure}</td>
+                          <td className="px-4 py-3 text-sm">{credit.branche}</td>
+                          <td className="px-4 py-3 text-sm">{parseFloat(credit.montant_credit).toFixed(2)}</td>
+                          <td className="px-4 py-3 text-sm text-green-600 font-semibold">
+                            {parseFloat(credit.paiement || 0).toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-red-600 font-semibold">
+                            {parseFloat(credit.solde || credit.montant_credit).toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                              credit.statut === 'Non payé' ? 'bg-red-100 text-red-800' :
+                              credit.statut === 'Payé partiellement' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-green-100 text-green-800'
+                            }`}>
+                              {credit.statut}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-purple-600 font-medium">
+                            {formatDate(credit.date_paiement_prevue)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+            <TrendingUp className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600 text-lg">Veuillez sélectionner une année et un mois pour afficher les données</p>
+          </div>
+        )}
+
+        <RemarqueModal
+          isOpen={isRemarqueModalOpen}
+          onClose={() => setIsRemarqueModalOpen(false)}
+          contrat={selectedContrat || { police: '', mois: '', terme: 0, echeance: '' }}
+          onSave={() => {
+            if (selectedMonth && selectedYear) {
+              loadTermesData();
+            }
+          }}
+          username={username || 'Utilisateur'}
+        />
       </div>
     </div>
   );
