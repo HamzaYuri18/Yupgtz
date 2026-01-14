@@ -1740,10 +1740,12 @@ export const searchContractInTable = async (month: string, contractNumber: strin
 };
 
 
+// ... (code précédent)
+
 export const getUnpaidTermesByMonth = async (monthName: string, year: string): Promise<any[]> => {
   try {
     const tableName = `table_terme_${monthName}_${year}`;
-    console.log(`🔍 Récupération des termes non payés depuis ${tableName}...`);
+    console.log(`🔍 Récupération des termes NON PAYÉS depuis ${tableName}...`);
 
     const { data, error } = await supabase
       .from(tableName)
@@ -1755,8 +1757,11 @@ export const getUnpaidTermesByMonth = async (monthName: string, year: string): P
       return [];
     }
 
-    console.log(`✅ Termes non payés récupérés: ${data?.length || 0}`);
-    return data || [];
+    // Éliminer les doublons basés sur numero_contrat + echeance
+    const uniqueUnpaid = removeDuplicates(data || []);
+    console.log(`✅ Termes non payés uniques: ${uniqueUnpaid.length} (${data?.length || 0} avant déduplication)`);
+    
+    return uniqueUnpaid;
   } catch (error) {
     console.error('❌ Erreur générale:', error);
     return [];
@@ -1767,7 +1772,7 @@ export const getOverdueUnpaidTermes = async (monthName: string, year: string): P
   try {
     const tableName = `table_terme_${monthName}_${year}`;
     const today = new Date().toISOString().split('T')[0];
-    console.log(`🔍 Récupération des termes échus et non payés depuis ${tableName}...`);
+    console.log(`🔍 Récupération des termes ÉCHUS et non payés depuis ${tableName}...`);
 
     const { data, error } = await supabase
       .from(tableName)
@@ -1780,8 +1785,11 @@ export const getOverdueUnpaidTermes = async (monthName: string, year: string): P
       return [];
     }
 
-    console.log(`✅ Termes échus récupérés: ${data?.length || 0}`);
-    return data || [];
+    // Éliminer les doublons basés sur numero_contrat + echeance
+    const uniqueOverdue = removeDuplicates(data || []);
+    console.log(`✅ Termes échus uniques: ${uniqueOverdue.length} (${data?.length || 0} avant déduplication)`);
+    
+    return uniqueOverdue;
   } catch (error) {
     console.error('❌ Erreur générale:', error);
     return [];
@@ -1791,7 +1799,7 @@ export const getOverdueUnpaidTermes = async (monthName: string, year: string): P
 export const getPaidTermesByMonth = async (monthName: string, year: string): Promise<any[]> => {
   try {
     const tableName = `table_terme_${monthName}_${year}`;
-    console.log(`🔍 Récupération des termes payés depuis ${tableName}...`);
+    console.log(`🔍 Récupération des termes PAYÉS depuis ${tableName}...`);
 
     const { data, error } = await supabase
       .from(tableName)
@@ -1803,8 +1811,11 @@ export const getPaidTermesByMonth = async (monthName: string, year: string): Pro
       return [];
     }
 
-    console.log(`✅ Termes payés récupérés: ${data?.length || 0}`);
-    return data || [];
+    // Éliminer les doublons basés sur numero_contrat + echeance
+    const uniquePaid = removeDuplicates(data || []);
+    console.log(`✅ Termes payés uniques: ${uniquePaid.length} (${data?.length || 0} avant déduplication)`);
+    
+    return uniquePaid;
   } catch (error) {
     console.error('❌ Erreur générale:', error);
     return [];
@@ -1821,27 +1832,63 @@ export const getUpcomingTermes = async (monthName: string, year: string, daysAhe
     const todayStr = today.toISOString().split('T')[0];
     const futureDateStr = futureDate.toISOString().split('T')[0];
 
-    console.log(`🔍 Récupération des termes à venir depuis ${tableName}...`);
+    console.log(`🔍 Récupération des termes à VENIR depuis ${tableName}...`);
 
-    const { data, error } = await supabase
+    // Récupérer TOUS les contrats non payés de la table du mois
+    const { data: allUnpaid, error: allError } = await supabase
       .from(tableName)
       .select('*')
-      .eq('statut', 'non payé')
-      .gte('echeance', todayStr)
-      .lte('echeance', futureDateStr);
+      .eq('statut', 'non payé');
 
-    if (error) {
-      console.error(`❌ Erreur lors de la récupération des termes à venir:`, error);
+    if (allError) {
+      console.error(`❌ Erreur lors de la récupération des termes à venir:`, allError);
       return [];
     }
 
-    console.log(`✅ Termes à venir récupérés: ${data?.length || 0}`);
-    return data || [];
+    if (!allUnpaid) return [];
+
+    // Éliminer d'abord les doublons
+    const uniqueUnpaid = removeDuplicates(allUnpaid);
+    
+    // Filtrer manuellement pour garder ceux dont l'échéance est dans la période future
+    const upcomingTermes = uniqueUnpaid.filter(terme => {
+      const echeanceDate = new Date(terme.echeance);
+      const todayObj = new Date(todayStr);
+      const futureDateObj = new Date(futureDateStr);
+      
+      return echeanceDate >= todayObj && echeanceDate <= futureDateObj;
+    });
+
+    console.log(`✅ Termes à venir uniques: ${upcomingTermes.length} (${allUnpaid.length} avant déduplication)`);
+    return upcomingTermes;
   } catch (error) {
     console.error('❌ Erreur générale:', error);
     return [];
   }
 };
+
+// Fonction utilitaire pour éliminer les doublons basés sur numero_contrat + echeance
+const removeDuplicates = (termes: any[]): any[] => {
+  if (!termes || termes.length === 0) return [];
+  
+  const seen = new Set<string>();
+  const unique: any[] = [];
+  
+  for (const terme of termes) {
+    const key = `${terme.numero_contrat?.trim()?.toLowerCase()}_${terme.echeance}`;
+    
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(terme);
+    } else {
+      console.log(`🔄 Doublon ignoré: ${terme.numero_contrat} - ${terme.echeance}`);
+    }
+  }
+  
+  return unique;
+};
+
+// ... (code suivant reste inchangé)
 
 export const getCreditsDueToday = async (sessionDate: string): Promise<any[]> => {
   try {
