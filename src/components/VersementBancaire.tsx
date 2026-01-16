@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw, Edit, Save, X, MessageSquare } from 'lucide-react';
 import { 
@@ -50,6 +49,12 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   // État pour la gestion des remarques en édition
   const [editingRemarque, setEditingRemarque] = useState<number | null>(null);
   const [tempRemarque, setTempRemarque] = useState('');
+
+  // État pour les statistiques de la session actuelle
+  const [currentSessionStats, setCurrentSessionStats] = useState({
+    totalVersements: 0,
+    sessionsTraitees: 0
+  });
 
   const [formData, setFormData] = useState({
     sessionId: '',
@@ -137,68 +142,68 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     setTempRemarque('');
   };
 
-const saveRemarque = async (sessionId: number) => {
-  try {
-    console.log('💾 Sauvegarde remarque pour session:', sessionId, 'remarque:', tempRemarque);
-    
-    const success = await updateSessionRemarques(sessionId, tempRemarque.trim());
-    
-    if (success) {
-      setMessage('Remarque enregistrée avec succès');
-      // Mettre à jour l'état local
-      const updatedSessions = sessions.map(session =>
-        session.id === sessionId 
-          ? { ...session, Remarques: tempRemarque.trim() } 
-          : session
-      );
-      setSessions(updatedSessions);
-      setFilteredSessions(updatedSessions);
+  const saveRemarque = async (sessionId: number) => {
+    try {
+      console.log('💾 Sauvegarde remarque pour session:', sessionId, 'remarque:', tempRemarque);
       
-      setEditingRemarque(null);
-      setTempRemarque('');
+      const success = await updateSessionRemarques(sessionId, tempRemarque.trim());
       
-      console.log('✅ Remarque sauvegardée localement');
-    } else {
+      if (success) {
+        setMessage('Remarque enregistrée avec succès');
+        // Mettre à jour l'état local
+        const updatedSessions = sessions.map(session =>
+          session.id === sessionId 
+            ? { ...session, Remarques: tempRemarque.trim() } 
+            : session
+        );
+        setSessions(updatedSessions);
+        setFilteredSessions(updatedSessions);
+        
+        setEditingRemarque(null);
+        setTempRemarque('');
+        
+        console.log('✅ Remarque sauvegardée localement');
+      } else {
+        setMessage('Erreur lors de l\'enregistrement de la remarque');
+        console.error('❌ Erreur lors de la sauvegarde');
+      }
+    } catch (error) {
       setMessage('Erreur lors de l\'enregistrement de la remarque');
-      console.error('❌ Erreur lors de la sauvegarde');
+      console.error('❌ Erreur sauvegarde remarque:', error);
     }
-  } catch (error) {
-    setMessage('Erreur lors de l\'enregistrement de la remarque');
-    console.error('❌ Erreur sauvegarde remarque:', error);
-  }
-  
-  setTimeout(() => setMessage(''), 3000);
-};
+    
+    setTimeout(() => setMessage(''), 3000);
+  };
 
-const deleteRemarque = async (sessionId: number) => {
-  try {
-    console.log('🗑️ Suppression remarque pour session:', sessionId);
-    
-    const success = await updateSessionRemarques(sessionId, null);
-    
-    if (success) {
-      setMessage('Remarque supprimée avec succès');
-      // Mettre à jour l'état local
-      const updatedSessions = sessions.map(session =>
-        session.id === sessionId 
-          ? { ...session, Remarques: null } 
-          : session
-      );
-      setSessions(updatedSessions);
-      setFilteredSessions(updatedSessions);
+  const deleteRemarque = async (sessionId: number) => {
+    try {
+      console.log('🗑️ Suppression remarque pour session:', sessionId);
       
-      console.log('✅ Remarque supprimée localement');
-    } else {
+      const success = await updateSessionRemarques(sessionId, null);
+      
+      if (success) {
+        setMessage('Remarque supprimée avec succès');
+        // Mettre à jour l'état local
+        const updatedSessions = sessions.map(session =>
+          session.id === sessionId 
+            ? { ...session, Remarques: null } 
+            : session
+        );
+        setSessions(updatedSessions);
+        setFilteredSessions(updatedSessions);
+        
+        console.log('✅ Remarque supprimée localement');
+      } else {
+        setMessage('Erreur lors de la suppression de la remarque');
+        console.error('❌ Erreur lors de la suppression');
+      }
+    } catch (error) {
       setMessage('Erreur lors de la suppression de la remarque');
-      console.error('❌ Erreur lors de la suppression');
+      console.error('❌ Erreur suppression remarque:', error);
     }
-  } catch (error) {
-    setMessage('Erreur lors de la suppression de la remarque');
-    console.error('❌ Erreur suppression remarque:', error);
-  }
-  
-  setTimeout(() => setMessage(''), 3000);
-};
+    
+    setTimeout(() => setMessage(''), 3000);
+  };
 
   // Fonction pour vérifier et synchroniser tous les totaux espèce
   const verifySessionTotals = async () => {
@@ -323,6 +328,13 @@ const deleteRemarque = async (sessionId: number) => {
 
     if (success) {
       setMessage('Versement enregistré avec succès');
+      
+      // Mettre à jour les statistiques de la session actuelle
+      setCurrentSessionStats(prev => ({
+        totalVersements: prev.totalVersements + parseFloat(formData.versement),
+        sessionsTraitees: prev.sessionsTraitees + 1
+      }));
+      
       setFormData({
         sessionId: '',
         dateSession: '',
@@ -336,6 +348,16 @@ const deleteRemarque = async (sessionId: number) => {
       setMessage('Erreur lors de l\'enregistrement');
     }
 
+    setTimeout(() => setMessage(''), 3000);
+  };
+
+  // Fonction pour réinitialiser les statistiques de la session
+  const resetCurrentSessionStats = () => {
+    setCurrentSessionStats({
+      totalVersements: 0,
+      sessionsTraitees: 0
+    });
+    setMessage('Statistiques de session réinitialisées');
     setTimeout(() => setMessage(''), 3000);
   };
 
@@ -379,7 +401,7 @@ const deleteRemarque = async (sessionId: number) => {
   return (
     <div className="space-y-6">
       {monthlyStats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg shadow-lg p-6">
             <div className="flex items-center space-x-3 mb-3">
               <TrendingUp className="w-6 h-6 text-orange-600" />
@@ -435,6 +457,44 @@ const deleteRemarque = async (sessionId: number) => {
             </div>
             <p className="text-3xl font-bold text-purple-700">{quinzaineStats.deuxieme.toFixed(2)} DT</p>
             <p className="text-sm text-purple-600">{quinzaineDates.deuxieme}</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg shadow-lg p-6">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-3">
+                <DollarSign className="w-6 h-6 text-indigo-600" />
+                <h3 className="text-lg font-bold text-indigo-900">Session en Cours</h3>
+              </div>
+              <button
+                onClick={resetCurrentSessionStats}
+                className="p-1 hover:bg-indigo-200 rounded transition-colors"
+                title="Réinitialiser les statistiques"
+              >
+                <RefreshCw className="w-4 h-4 text-indigo-600" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm text-indigo-600">Total Versements</p>
+                <p className="text-2xl font-bold text-indigo-700">
+                  {currentSessionStats.totalVersements.toFixed(2)} DT
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-indigo-600">Sessions Traitées</p>
+                <p className="text-2xl font-bold text-indigo-700">
+                  {currentSessionStats.sessionsTraitees}
+                </p>
+              </div>
+              {currentSessionStats.sessionsTraitees > 0 && (
+                <div className="pt-2 border-t border-indigo-200">
+                  <p className="text-sm text-indigo-600">Moyenne par session</p>
+                  <p className="text-lg font-bold text-indigo-700">
+                    {(currentSessionStats.totalVersements / currentSessionStats.sessionsTraitees).toFixed(2)} DT
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
