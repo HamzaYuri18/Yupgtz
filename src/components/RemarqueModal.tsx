@@ -170,6 +170,8 @@ export default function RemarqueModal({ isOpen, onClose, contrat, onSave }: Rema
               <option value="RT">RT</option>
               <option value="vendu">Vendu</option>
               <option value="relancé">Relancé</option>
+              <option value="Payé par Note de Credit">Payé par Note de Credit</option>
+              <option value="CX deposé">CX deposé</option>
             </select>
           </div>
 
