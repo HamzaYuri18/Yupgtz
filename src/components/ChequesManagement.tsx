@@ -25,6 +25,7 @@ export default function ChequesManagement() {
   const [selectedCheque, setSelectedCheque] = useState<Cheque | null>(null);
   const [encaissementDate, setEncaissementDate] = useState<string>('');
   const [showModal, setShowModal] = useState(false);
+  const [hoveredChequeId, setHoveredChequeId] = useState<number | null>(null);
 
   useEffect(() => {
     loadCheques();
@@ -78,7 +79,7 @@ export default function ChequesManagement() {
     return Array.from(months).sort().reverse();
   };
 
-  const handleEncaisserClick = (cheque: Cheque) => {
+  const handleChequeClick = (cheque: Cheque) => {
     setSelectedCheque(cheque);
     setEncaissementDate(new Date().toISOString().split('T')[0]);
     setShowModal(true);
@@ -231,7 +232,17 @@ export default function ChequesManagement() {
                 </tr>
               ) : (
                 filteredCheques.map((cheque) => (
-                  <tr key={cheque.id} className="hover:bg-gray-50">
+                  <tr 
+                    key={cheque.id} 
+                    className={`
+                      transition-all duration-200 cursor-pointer
+                      ${cheque.Statut === 'Encaissé' ? 'bg-green-50 hover:bg-green-100' : 'bg-red-50 hover:bg-red-100'}
+                      ${hoveredChequeId === cheque.id ? (cheque.Statut === 'Encaissé' ? 'bg-green-100' : 'bg-red-100') : ''}
+                    `}
+                    onClick={() => handleChequeClick(cheque)}
+                    onMouseEnter={() => setHoveredChequeId(cheque.id)}
+                    onMouseLeave={() => setHoveredChequeId(null)}
+                  >
                     <td className="px-4 xl:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {cheque.Numero_Contrat}
                     </td>
@@ -257,7 +268,7 @@ export default function ChequesManagement() {
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         cheque.Statut === 'Encaissé'
                           ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
+                          : 'bg-red-100 text-red-800'
                       }`}>
                         {cheque.Statut}
                       </span>
@@ -268,7 +279,10 @@ export default function ChequesManagement() {
                     <td className="px-4 xl:px-6 py-4 whitespace-nowrap text-sm">
                       {cheque.Statut === 'Non Encaissé' && (
                         <button
-                          onClick={() => handleEncaisserClick(cheque)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleChequeClick(cheque);
+                          }}
                           className="inline-flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                         >
                           <Check className="w-4 h-4" />
@@ -291,7 +305,17 @@ export default function ChequesManagement() {
             </div>
           ) : (
             filteredCheques.map((cheque) => (
-              <div key={cheque.id} className="p-4 hover:bg-gray-50">
+              <div 
+                key={cheque.id} 
+                className={`
+                  p-4 transition-all duration-200 cursor-pointer
+                  ${cheque.Statut === 'Encaissé' ? 'bg-green-50 hover:bg-green-100' : 'bg-red-50 hover:bg-red-100'}
+                  ${hoveredChequeId === cheque.id ? (cheque.Statut === 'Encaissé' ? 'bg-green-100' : 'bg-red-100') : ''}
+                `}
+                onClick={() => handleChequeClick(cheque)}
+                onMouseEnter={() => setHoveredChequeId(cheque.id)}
+                onMouseLeave={() => setHoveredChequeId(null)}
+              >
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <p className="text-xs text-gray-500">N° Contrat</p>
@@ -300,7 +324,7 @@ export default function ChequesManagement() {
                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                     cheque.Statut === 'Encaissé'
                       ? 'bg-green-100 text-green-800'
-                      : 'bg-yellow-100 text-yellow-800'
+                      : 'bg-red-100 text-red-800'
                   }`}>
                     {cheque.Statut}
                   </span>
@@ -341,7 +365,10 @@ export default function ChequesManagement() {
 
                 {cheque.Statut === 'Non Encaissé' && (
                   <button
-                    onClick={() => handleEncaisserClick(cheque)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleChequeClick(cheque);
+                    }}
                     className="mt-3 w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     <Check className="w-4 h-4" />
@@ -354,64 +381,142 @@ export default function ChequesManagement() {
         </div>
       </div>
 
+      {/* Modal d'encaissement */}
       {showModal && selectedCheque && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Encaisser le chèque</h3>
-
-            <div className="space-y-4 mb-6">
-              <div>
-                <p className="text-sm text-gray-600">Numéro de contrat</p>
-                <p className="font-semibold">{selectedCheque.Numero_Contrat}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Assuré</p>
-                <p className="font-semibold">{selectedCheque.Assure}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Numéro de chèque</p>
-                <p className="font-semibold">{selectedCheque.Numero_Cheque}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Montant</p>
-                <p className="font-semibold text-lg">{formatCurrency(selectedCheque.Montant)}</p>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {selectedCheque.Statut === 'Non Encaissé' ? 'Encaisser le chèque' : 'Détails du chèque'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowModal(false);
+                    setSelectedCheque(null);
+                    setEncaissementDate('');
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Date d'encaissement *
-                </label>
-                <input
-                  type="date"
-                  value={encaissementDate}
-                  onChange={(e) => setEncaissementDate(e.target.value)}
-                  max={new Date().toISOString().split('T')[0]}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                />
-              </div>
-            </div>
+              <div className="space-y-4 mb-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">N° Contrat</p>
+                    <p className="font-medium">{selectedCheque.Numero_Contrat}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Assuré</p>
+                    <p className="font-medium">{selectedCheque.Assure}</p>
+                  </div>
+                </div>
 
-            <div className="flex gap-3">
-              <button
-                onClick={handleEncaisser}
-                disabled={!encaissementDate}
-                className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-              >
-                <Check className="w-4 h-4" />
-                Confirmer l'encaissement
-              </button>
-              <button
-                onClick={() => {
-                  setShowModal(false);
-                  setSelectedCheque(null);
-                  setEncaissementDate('');
-                }}
-                className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors flex items-center justify-center gap-2"
-              >
-                <X className="w-4 h-4" />
-                Annuler
-              </button>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">N° Chèque</p>
+                    <p className="font-medium">{selectedCheque.Numero_Cheque}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Banque</p>
+                    <p className="font-medium">{selectedCheque.Banque}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Titulaire</p>
+                    <p className="font-medium">{selectedCheque.Titulaire_Cheque}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Statut</p>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      selectedCheque.Statut === 'Encaissé'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {selectedCheque.Statut}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Date prévue</p>
+                    <p className="font-medium">{formatDate(selectedCheque.Date_Encaissement_prévue)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Date émission</p>
+                    <p className="font-medium">{formatDate(selectedCheque.created_at)}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Montant</p>
+                  <p className="font-bold text-lg text-gray-900">{formatCurrency(selectedCheque.Montant)}</p>
+                </div>
+
+                {selectedCheque.Statut === 'Encaissé' && selectedCheque.date_encaissement && (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Date d'encaissement</p>
+                    <p className="font-medium text-green-600">{formatDate(selectedCheque.date_encaissement)}</p>
+                  </div>
+                )}
+
+                {selectedCheque.Statut === 'Non Encaissé' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Date d'encaissement *
+                    </label>
+                    <input
+                      type="date"
+                      value={encaissementDate}
+                      onChange={(e) => setEncaissementDate(e.target.value)}
+                      max={new Date().toISOString().split('T')[0]}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Sélectionnez la date d'encaissement du chèque</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                {selectedCheque.Statut === 'Non Encaissé' ? (
+                  <>
+                    <button
+                      onClick={handleEncaisser}
+                      disabled={!encaissementDate}
+                      className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Check className="w-4 h-4" />
+                      Confirmer l'encaissement
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowModal(false);
+                        setSelectedCheque(null);
+                        setEncaissementDate('');
+                      }}
+                      className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
+                    >
+                      Annuler
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setShowModal(false);
+                      setSelectedCheque(null);
+                    }}
+                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Fermer
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
