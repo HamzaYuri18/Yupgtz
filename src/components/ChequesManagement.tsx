@@ -236,8 +236,16 @@ export default function ChequesManagement() {
                     key={cheque.id} 
                     className={`
                       transition-all duration-200 cursor-pointer
-                      ${cheque.Statut === 'Encaissé' ? 'bg-green-50 hover:bg-green-100' : 'bg-red-50 hover:bg-red-100'}
-                      ${hoveredChequeId === cheque.id ? (cheque.Statut === 'Encaissé' ? 'bg-green-100' : 'bg-red-100') : ''}
+                      ${cheque.Statut === 'Encaissé' 
+                        ? 'bg-green-100 hover:bg-green-200 border-l-4 border-green-600' 
+                        : 'bg-red-50 hover:bg-red-100 border-l-4 border-red-500'
+                      }
+                      ${hoveredChequeId === cheque.id 
+                        ? (cheque.Statut === 'Encaissé' 
+                          ? 'bg-green-200 shadow-sm' 
+                          : 'bg-red-200 shadow-sm') 
+                        : ''
+                      }
                     `}
                     onClick={() => handleChequeClick(cheque)}
                     onMouseEnter={() => setHoveredChequeId(cheque.id)}
@@ -265,16 +273,22 @@ export default function ChequesManagement() {
                       {formatDate(cheque.created_at)}
                     </td>
                     <td className="px-4 xl:px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
                         cheque.Statut === 'Encaissé'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
+                          ? 'bg-green-600 text-white shadow-sm'
+                          : 'bg-red-500 text-white shadow-sm'
                       }`}>
                         {cheque.Statut}
                       </span>
                     </td>
                     <td className="px-4 xl:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {cheque.date_encaissement ? formatDate(cheque.date_encaissement) : '-'}
+                      {cheque.date_encaissement ? (
+                        <span className={`font-medium ${cheque.Statut === 'Encaissé' ? 'text-green-700' : 'text-gray-900'}`}>
+                          {formatDate(cheque.date_encaissement)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
                     </td>
                     <td className="px-4 xl:px-6 py-4 whitespace-nowrap text-sm">
                       {cheque.Statut === 'Non Encaissé' && (
@@ -283,7 +297,7 @@ export default function ChequesManagement() {
                             e.stopPropagation();
                             handleChequeClick(cheque);
                           }}
-                          className="inline-flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                          className="inline-flex items-center gap-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-sm"
                         >
                           <Check className="w-4 h-4" />
                           Encaisser
@@ -308,9 +322,17 @@ export default function ChequesManagement() {
               <div 
                 key={cheque.id} 
                 className={`
-                  p-4 transition-all duration-200 cursor-pointer
-                  ${cheque.Statut === 'Encaissé' ? 'bg-green-50 hover:bg-green-100' : 'bg-red-50 hover:bg-red-100'}
-                  ${hoveredChequeId === cheque.id ? (cheque.Statut === 'Encaissé' ? 'bg-green-100' : 'bg-red-100') : ''}
+                  p-4 transition-all duration-200 cursor-pointer border-l-4
+                  ${cheque.Statut === 'Encaissé' 
+                    ? 'bg-green-100 hover:bg-green-200 border-green-600' 
+                    : 'bg-red-50 hover:bg-red-100 border-red-500'
+                  }
+                  ${hoveredChequeId === cheque.id 
+                    ? (cheque.Statut === 'Encaissé' 
+                      ? 'bg-green-200 shadow-sm' 
+                      : 'bg-red-200 shadow-sm') 
+                    : ''
+                  }
                 `}
                 onClick={() => handleChequeClick(cheque)}
                 onMouseEnter={() => setHoveredChequeId(cheque.id)}
@@ -321,10 +343,10 @@ export default function ChequesManagement() {
                     <p className="text-xs text-gray-500">N° Contrat</p>
                     <p className="font-semibold text-gray-900">{cheque.Numero_Contrat}</p>
                   </div>
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                  <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
                     cheque.Statut === 'Encaissé'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
+                      ? 'bg-green-600 text-white shadow-sm'
+                      : 'bg-red-500 text-white shadow-sm'
                   }`}>
                     {cheque.Statut}
                   </span>
@@ -358,7 +380,9 @@ export default function ChequesManagement() {
                   {cheque.date_encaissement && (
                     <div className="flex justify-between">
                       <span className="text-gray-600">Date encaissement:</span>
-                      <span className="text-gray-900">{formatDate(cheque.date_encaissement)}</span>
+                      <span className={`font-medium ${cheque.Statut === 'Encaissé' ? 'text-green-700' : 'text-gray-900'}`}>
+                        {formatDate(cheque.date_encaissement)}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -369,7 +393,7 @@ export default function ChequesManagement() {
                       e.stopPropagation();
                       handleChequeClick(cheque);
                     }}
-                    className="mt-3 w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="mt-3 w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-sm"
                   >
                     <Check className="w-4 h-4" />
                     Encaisser
@@ -403,6 +427,24 @@ export default function ChequesManagement() {
               </div>
 
               <div className="space-y-4 mb-6">
+                <div className={`p-4 rounded-lg ${selectedCheque.Statut === 'Encaissé' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-gray-500">Statut</p>
+                      <p className={`text-sm font-semibold ${selectedCheque.Statut === 'Encaissé' ? 'text-green-700' : 'text-red-700'}`}>
+                        {selectedCheque.Statut}
+                      </p>
+                    </div>
+                    <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                      selectedCheque.Statut === 'Encaissé'
+                        ? 'bg-green-600 text-white'
+                        : 'bg-red-500 text-white'
+                    }`}>
+                      {selectedCheque.Statut}
+                    </span>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-gray-500 mb-1">N° Contrat</p>
@@ -431,14 +473,8 @@ export default function ChequesManagement() {
                     <p className="font-medium">{selectedCheque.Titulaire_Cheque}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 mb-1">Statut</p>
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      selectedCheque.Statut === 'Encaissé'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {selectedCheque.Statut}
-                    </span>
+                    <p className="text-xs text-gray-500 mb-1">Montant</p>
+                    <p className="font-bold text-lg text-gray-900">{formatCurrency(selectedCheque.Montant)}</p>
                   </div>
                 </div>
 
@@ -453,15 +489,10 @@ export default function ChequesManagement() {
                   </div>
                 </div>
 
-                <div>
-                  <p className="text-xs text-gray-500 mb-1">Montant</p>
-                  <p className="font-bold text-lg text-gray-900">{formatCurrency(selectedCheque.Montant)}</p>
-                </div>
-
                 {selectedCheque.Statut === 'Encaissé' && selectedCheque.date_encaissement && (
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Date d'encaissement</p>
-                    <p className="font-medium text-green-600">{formatDate(selectedCheque.date_encaissement)}</p>
+                  <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                    <p className="text-xs text-green-600 mb-1">Date d'encaissement</p>
+                    <p className="font-medium text-green-700">{formatDate(selectedCheque.date_encaissement)}</p>
                   </div>
                 )}
 
@@ -489,7 +520,7 @@ export default function ChequesManagement() {
                     <button
                       onClick={handleEncaisser}
                       disabled={!encaissementDate}
-                      className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                      className="flex-1 bg-gradient-to-r from-green-600 to-green-700 text-white py-3 px-4 rounded-lg hover:from-green-700 hover:to-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm flex items-center justify-center gap-2"
                     >
                       <Check className="w-4 h-4" />
                       Confirmer l'encaissement
@@ -500,7 +531,7 @@ export default function ChequesManagement() {
                         setSelectedCheque(null);
                         setEncaissementDate('');
                       }}
-                      className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
+                      className="flex-1 bg-gray-300 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-400 transition-colors"
                     >
                       Annuler
                     </button>
@@ -511,7 +542,7 @@ export default function ChequesManagement() {
                       setShowModal(false);
                       setSelectedCheque(null);
                     }}
-                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
+                    className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-4 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-sm"
                   >
                     Fermer
                   </button>
