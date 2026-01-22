@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, Save, Edit2, Check, X, DollarSign, TrendingDown, TrendingUp, FileText, Download, Filter } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Calendar, Save, Edit2, Check, X, DollarSign, TrendingDown, TrendingUp, FileText, Download, Filter, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
 
@@ -31,6 +31,10 @@ const EtatCommissions: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [filterAnnee, setFilterAnnee] = useState<string>('all');
   const [filterQuinzaine, setFilterQuinzaine] = useState<string>('all');
+  const [autoUpdate, setAutoUpdate] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const dataLoadedRef = useRef(false);
+  const subscriptionsRef = useRef<any[]>([]);
 
   const moisNoms = [
     'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -140,8 +144,10 @@ const EtatCommissions: React.FC = () => {
     }
   };
 
-  const loadQuinzaines = async () => {
-    setLoading(true);
+  const loadQuinzaines = async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+    }
     setError('');
 
     try {
@@ -194,11 +200,14 @@ const EtatCommissions: React.FC = () => {
       );
 
       setQuinzaines(enrichedQuinzaines);
+      dataLoadedRef.current = true;
     } catch (err) {
       console.error('Erreur chargement quinzaines:', err);
       setError('Erreur lors du chargement des quinzaines');
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
@@ -261,7 +270,6 @@ const EtatCommissions: React.FC = () => {
       setSuccess('Données enregistrées avec succès');
       setEditingId(null);
       setEditData({});
-      await loadQuinzaines();
     } catch (err) {
       console.error('Erreur sauvegarde:', err);
       setError('Erreur lors de la sauvegarde');
@@ -375,9 +383,174 @@ const EtatCommissions: React.FC = () => {
     setFilteredQuinzaines(filtered);
   };
 
+  const setupSubscriptions = () => {
+    // Nettoyer les anciennes subscriptions
+    cleanupSubscriptions();
+
+    if (!autoUpdate) return;
+
+    // Subscription pour la table etat_commission
+    const etatCommissionSub = supabase
+      .channel('etat-commission-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'etat_commission'
+        },
+        async (payload) => {
+          console.log('Changement détecté dans etat_commission:', payload);
+          
+          if (dataLoadedRef.current) {
+            setIsRefreshing(true);
+            setSuccess('Mise à jour automatique des données...');
+            
+            // Délai pour permettre à l'utilisateur de voir le message
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            await loadQuinzaines(false);
+            setIsRefreshing(false);
+            
+            // Effacer le message après 3 secondes
+            setTimeout(() => {
+              setSuccess('');
+            }, 3000);
+          }
+        }
+      )
+      .subscribe();
+
+    // Subscription pour la table sessions (charges)
+    const sessionsSub = supabase
+      .channel('sessions-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sessions'
+        },
+        async (payload) => {
+          console.log('Changement détecté dans sessions:', payload);
+          
+          if (dataLoadedRef.current) {
+            // Vérifier si cette session affecte une période actuelle
+            const sessionDate = payload.new?.date_session || payload.old?.date_session;
+            if (!sessionDate) return;
+
+            const affectedQuinzaines = quinzaines.filter(q => 
+              sessionDate >= q.date_debut && sessionDate <= q.date_fin
+            );
+
+            if (affectedQuinzaines.length > 0) {
+              setIsRefreshing(true);
+              setSuccess('Actualisation des charges...');
+              
+              await new Promise(resolve => setTimeout(resolve, 500));
+              
+              await loadQuinzaines(false);
+              setIsRefreshing(false);
+              
+              setTimeout(() => {
+                setSuccess('');
+              }, 3000);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // Subscription pour la table depenses
+    const depensesSub = supabase
+      .channel('depenses-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'depenses'
+        },
+        async (payload) => {
+          console.log('Changement détecté dans depenses:', payload);
+          
+          if (dataLoadedRef.current) {
+            // Vérifier si c'est un type de dépense qui nous intéresse
+            const excludedTypes = ['Versement Bancaire', 'A/S Ahlem', 'A/S Islem', 'Reprise sur Avance Client'];
+            const depenseType = payload.new?.type_depense || payload.old?.type_depense;
+            
+            // Si c'est une dépense exclue, ignorer
+            if (excludedTypes.includes(depenseType)) {
+              return;
+            }
+
+            // Vérifier si cette dépense affecte une période actuelle
+            const depenseDate = payload.new?.date_depense || payload.old?.date_depense;
+            if (!depenseDate) return;
+
+            const affectedQuinzaines = quinzaines.filter(q => 
+              depenseDate >= q.date_debut && depenseDate <= q.date_fin
+            );
+
+            if (affectedQuinzaines.length > 0) {
+              setIsRefreshing(true);
+              setSuccess('Actualisation des dépenses...');
+              
+              await new Promise(resolve => setTimeout(resolve, 500));
+              
+              await loadQuinzaines(false);
+              setIsRefreshing(false);
+              
+              setTimeout(() => {
+                setSuccess('');
+              }, 3000);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // Stocker les subscriptions
+    subscriptionsRef.current = [etatCommissionSub, sessionsSub, depensesSub];
+  };
+
+  const cleanupSubscriptions = () => {
+    subscriptionsRef.current.forEach(sub => {
+      if (sub && sub.unsubscribe) {
+        sub.unsubscribe();
+      }
+    });
+    subscriptionsRef.current = [];
+  };
+
+  const toggleAutoUpdate = () => {
+    setAutoUpdate(!autoUpdate);
+    if (!autoUpdate) {
+      setupSubscriptions();
+    } else {
+      cleanupSubscriptions();
+    }
+  };
+
   useEffect(() => {
+    // Charger les données initiales
     loadQuinzaines();
+    
+    // Configurer les subscriptions
+    setupSubscriptions();
+
+    // Nettoyer les subscriptions à la destruction du composant
+    return () => {
+      cleanupSubscriptions();
+    };
   }, []);
+
+  // Re-configurer les subscriptions quand autoUpdate change
+  useEffect(() => {
+    if (dataLoadedRef.current) {
+      setupSubscriptions();
+    }
+  }, [autoUpdate, quinzaines]);
 
   useEffect(() => {
     applyFilters();
@@ -412,13 +585,38 @@ const EtatCommissions: React.FC = () => {
               <p className="text-sm text-gray-500">Gestion des commissions par quinzaine</p>
             </div>
           </div>
-          <button
-            onClick={loadQuinzaines}
-            disabled={loading}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:bg-gray-400"
-          >
-            {loading ? 'Chargement...' : 'Actualiser'}
-          </button>
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2">
+              <div className={`w-3 h-3 rounded-full ${autoUpdate ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
+              <button
+                onClick={toggleAutoUpdate}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  autoUpdate 
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {autoUpdate ? 'Auto-actualisation ON' : 'Auto-actualisation OFF'}
+              </button>
+            </div>
+            <button
+              onClick={() => loadQuinzaines()}
+              disabled={loading || isRefreshing}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:bg-gray-400 flex items-center space-x-2"
+            >
+              {loading || isRefreshing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Chargement...</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Actualiser</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -428,8 +626,14 @@ const EtatCommissions: React.FC = () => {
         )}
 
         {success && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-600 text-sm">
-            {success}
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-600 text-sm flex items-center justify-between">
+            <span>{success}</span>
+            {success.includes('automatique') && (
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse"></div>
+                <span className="text-xs">En cours...</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -472,7 +676,7 @@ const EtatCommissions: React.FC = () => {
                 setFilterAnnee('all');
                 setFilterQuinzaine('all');
               }}
-              className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors mt-5"
             >
               Réinitialiser
             </button>
