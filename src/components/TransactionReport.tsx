@@ -441,53 +441,104 @@ const TransactionReport: React.FC = () => {
 
         case 'Dépense':
           if (transaction.date_depense && transaction.montant) {
-            const { error: depenseError } = await supabase
+            const { data: matchingDepenses, error: findError } = await supabase
               .from('depenses')
-              .delete()
+              .select('*')
               .eq('date_depense', transaction.date_depense)
-              .eq('montant', Math.abs(transaction.montant));
+              .eq('montant', Math.abs(transaction.montant))
+              .limit(1);
 
-            sourceDeleteSuccess = !depenseError;
-            if (depenseError) console.error('Erreur suppression dépense:', depenseError);
+            if (!findError && matchingDepenses && matchingDepenses.length > 0) {
+              const { error: depenseError } = await supabase
+                .from('depenses')
+                .delete()
+                .eq('id', matchingDepenses[0].id);
+
+              sourceDeleteSuccess = !depenseError;
+              if (depenseError) console.error('Erreur suppression dépense:', depenseError);
+            } else {
+              console.warn('Dépense correspondante non trouvée dans la table depenses');
+            }
           }
           break;
 
         case 'Recette Exceptionnelle':
         case 'Recette':
           if (transaction.date_recette && transaction.montant) {
-            const { error: recetteError } = await supabase
+            const { data: matchingRecettes, error: findError } = await supabase
               .from('recettes_exceptionnelles')
-              .delete()
+              .select('*')
               .eq('date_recette', transaction.date_recette)
-              .eq('montant', transaction.montant);
+              .eq('montant', transaction.montant)
+              .limit(1);
 
-            sourceDeleteSuccess = !recetteError;
-            if (recetteError) console.error('Erreur suppression recette:', recetteError);
+            if (!findError && matchingRecettes && matchingRecettes.length > 0) {
+              const { error: recetteError } = await supabase
+                .from('recettes_exceptionnelles')
+                .delete()
+                .eq('id', matchingRecettes[0].id);
+
+              sourceDeleteSuccess = !recetteError;
+              if (recetteError) console.error('Erreur suppression recette:', recetteError);
+            } else {
+              console.warn('Recette correspondante non trouvée dans la table recettes_exceptionnelles');
+            }
           }
           break;
 
         case 'Ristourne':
           if (transaction.numero_contrat && transaction.date_ristourne) {
-            const { error: ristourneError } = await supabase
+            const { data: matchingRistournes, error: findError } = await supabase
               .from('ristournes')
-              .delete()
-              .eq('numero_contrat', transaction.numero_contrat)
+              .select('*')
               .eq('date_ristourne', transaction.date_ristourne);
 
-            sourceDeleteSuccess = !ristourneError;
-            if (ristourneError) console.error('Erreur suppression ristourne:', ristourneError);
+            if (!findError && matchingRistournes && matchingRistournes.length > 0) {
+              const ristourneToDelete = matchingRistournes.find(r =>
+                r.numero_contrat?.trim() === transaction.numero_contrat?.trim() ||
+                parseFloat(r.montant_ristourne) === Math.abs(transaction.montant)
+              );
+
+              if (ristourneToDelete) {
+                const { error: ristourneError } = await supabase
+                  .from('ristournes')
+                  .delete()
+                  .eq('id', ristourneToDelete.id);
+
+                sourceDeleteSuccess = !ristourneError;
+                if (ristourneError) console.error('Erreur suppression ristourne:', ristourneError);
+              } else {
+                console.warn('Ristourne correspondante non trouvée dans la table ristournes');
+              }
+            }
           }
           break;
 
         case 'Sinistre':
-          if (transaction.numero_sinistre) {
-            const { error: sinistreError } = await supabase
+          if (transaction.numero_sinistre && transaction.date_sinistre) {
+            const { data: matchingSinistres, error: findError } = await supabase
               .from('sinistres')
-              .delete()
-              .eq('numero_sinistre', transaction.numero_sinistre);
+              .select('*')
+              .eq('date_sinistre', transaction.date_sinistre);
 
-            sourceDeleteSuccess = !sinistreError;
-            if (sinistreError) console.error('Erreur suppression sinistre:', sinistreError);
+            if (!findError && matchingSinistres && matchingSinistres.length > 0) {
+              const sinistreToDelete = matchingSinistres.find(s =>
+                s.numero_sinistre?.trim() === transaction.numero_sinistre?.trim() ||
+                Math.abs(parseFloat(s.montant)) === Math.abs(transaction.montant)
+              );
+
+              if (sinistreToDelete) {
+                const { error: sinistreError } = await supabase
+                  .from('sinistres')
+                  .delete()
+                  .eq('id', sinistreToDelete.id);
+
+                sourceDeleteSuccess = !sinistreError;
+                if (sinistreError) console.error('Erreur suppression sinistre:', sinistreError);
+              } else {
+                console.warn('Sinistre correspondant non trouvé dans la table sinistres');
+              }
+            }
           }
           break;
 
