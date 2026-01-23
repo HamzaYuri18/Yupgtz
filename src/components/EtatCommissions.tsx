@@ -120,17 +120,22 @@ const EtatCommissions: React.FC = () => {
 
       const { data, error } = await supabase
         .from('depenses')
-        .select('montant, type_depense')
+        .select('montant, type_depense, statut_depense')
         .gte('date_depense', dateDebut)
         .lte('date_depense', dateFin);
 
       if (error) throw error;
 
       const total = data?.reduce((sum, depense) => {
-        if (!excludedTypes.includes(depense.type_depense)) {
-          return sum + (Number(depense.montant) || 0);
+        if (excludedTypes.includes(depense.type_depense)) {
+          return sum;
         }
-        return sum;
+
+        if (depense.type_depense === 'Dépense Récupérable' && depense.statut_depense === 'Payé') {
+          return sum;
+        }
+
+        return sum + (Number(depense.montant) || 0);
       }, 0) || 0;
 
       return total;
@@ -333,7 +338,15 @@ const EtatCommissions: React.FC = () => {
 
       if (error) throw error;
 
-      const filteredData = data?.filter(d => !excludedTypes.includes(d.type_depense));
+      const filteredData = data?.filter(d => {
+        if (excludedTypes.includes(d.type_depense)) {
+          return false;
+        }
+        if (d.type_depense === 'Dépense Récupérable' && d.statut_depense === 'Payé') {
+          return false;
+        }
+        return true;
+      });
 
       if (!filteredData || filteredData.length === 0) {
         setError('Aucune dépense trouvée pour cette période');
@@ -344,6 +357,7 @@ const EtatCommissions: React.FC = () => {
         'Date Dépense': depense.date_depense,
         'Type Dépense': depense.type_depense,
         'Montant': Number(depense.montant) || 0,
+        'Statut': depense.statut_depense || '',
         'Client': depense.Client || '',
         'Numéro Contrat': depense.Numero_Contrat || '',
         'Créé Par': depense.cree_par
