@@ -16,6 +16,23 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
   const [isCancelLocked, setIsCancelLocked] = useState(false);
   const [showReminderAlert, setShowReminderAlert] = useState(false);
 
+  // Sauvegarder la session si l'utilisateur ferme l'application après avoir généré la FC
+  React.useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (pdfGenerated) {
+        const dateSession = getSessionDate();
+        // Sauvegarde synchrone pour beforeunload
+        saveSessionData(username, dateSession, false);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [pdfGenerated, username]);
+
   const handleGeneratePDF = async () => {
     setIsGeneratingPDF(true);
     setIsCancelLocked(true);
@@ -23,6 +40,16 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
       await printSessionReport(username);
       setPdfGenerated(true);
       setShowReminderAlert(true);
+
+      // Sauvegarder immédiatement la session après génération de la FC
+      const dateSession = getSessionDate();
+      const saved = await saveSessionData(username, dateSession, false);
+
+      if (saved) {
+        console.log('✅ Session sauvegardée après génération FC');
+      } else {
+        console.error('❌ Erreur sauvegarde session après génération FC');
+      }
     } catch (error) {
       console.error('Erreur génération PDF:', error);
       alert('Erreur lors de la génération du PDF');
@@ -37,9 +64,9 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
       return;
     }
 
-    // Sauvegarder les données de session avant de se déconnecter
+    // Marquer la session comme fermée à la déconnexion
     const dateSession = getSessionDate();
-    await saveSessionData(username, dateSession);
+    await saveSessionData(username, dateSession, true);
 
     onConfirm();
   };

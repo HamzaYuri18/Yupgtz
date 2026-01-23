@@ -14,11 +14,13 @@ export const calculateTotalEspece = async (dateSession: string): Promise<number>
   return rapportTotal;
 };
 
-export const saveSessionData = async (username: string, dateSession: string): Promise<boolean> => {
+export const saveSessionData = async (username: string, dateSession: string, markAsClosed: boolean = false): Promise<boolean> => {
   try {
+    console.log('💾 Sauvegarde session:', { username, dateSession, markAsClosed });
+
     const totalEspece = await calculateTotalEspece(dateSession);
 
-    // Vérifier si la session existe déjà pour cette date (peu importe l'utilisateur)
+    // Vérifier si la session existe déjà pour cette date
     const { data: existingSession } = await supabase
       .from('sessions')
       .select('*')
@@ -26,18 +28,34 @@ export const saveSessionData = async (username: string, dateSession: string): Pr
       .maybeSingle();
 
     if (existingSession) {
-      // Mettre à jour la session existante et la marquer comme fermée
+      console.log('🔄 Session existante trouvée, mise à jour...');
+
+      // Mettre à jour la session existante
+      const updateData: any = {
+        total_espece: totalEspece
+      };
+
+      // Marquer comme fermée seulement si demandé
+      if (markAsClosed) {
+        updateData.session_fermee = true;
+      }
+
       const { error } = await supabase
         .from('sessions')
-        .update({
-          total_espece: totalEspece,
-          session_fermee: true
-        })
+        .update(updateData)
         .eq('id', existingSession.id);
 
-      return !error;
+      if (error) {
+        console.error('❌ Erreur mise à jour session:', error);
+        return false;
+      }
+
+      console.log('✅ Session mise à jour avec succès');
+      return true;
     } else {
-      // Créer une nouvelle session fermée
+      console.log('➕ Création nouvelle session...');
+
+      // Créer une nouvelle session
       const { error } = await supabase
         .from('sessions')
         .insert({
@@ -45,13 +63,19 @@ export const saveSessionData = async (username: string, dateSession: string): Pr
           total_espece: totalEspece,
           cree_par: username,
           statut: 'Non versé',
-          session_fermee: true
+          session_fermee: markAsClosed
         });
 
-      return !error;
+      if (error) {
+        console.error('❌ Erreur création session:', error);
+        return false;
+      }
+
+      console.log('✅ Session créée avec succès');
+      return true;
     }
   } catch (error) {
-    console.error('Erreur lors de l\'enregistrement de la session:', error);
+    console.error('❌ Erreur lors de l\'enregistrement de la session:', error);
     return false;
   }
 };

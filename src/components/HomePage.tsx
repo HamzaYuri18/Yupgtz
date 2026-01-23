@@ -173,6 +173,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
       const closed = await isSessionClosed(sessionDate);
       setSessionClosed(closed);
 
+      // Vérifier si une session existe déjà pour cette date
       const { data } = await supabase
         .from('sessions')
         .select('id')
@@ -181,6 +182,28 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
       if (data) {
         setCurrentSessionId(data.id);
+      } else {
+        // Créer une nouvelle session vide si elle n'existe pas
+        console.log('📅 Aucune session trouvée pour', sessionDate, '- Création automatique...');
+
+        const { data: newSession, error } = await supabase
+          .from('sessions')
+          .insert({
+            date_session: sessionDate,
+            total_espece: 0,
+            cree_par: username,
+            statut: 'Non versé',
+            session_fermee: false
+          })
+          .select('id')
+          .maybeSingle();
+
+        if (error) {
+          console.error('❌ Erreur création session automatique:', error);
+        } else if (newSession) {
+          console.log('✅ Session créée automatiquement:', newSession.id);
+          setCurrentSessionId(newSession.id);
+        }
       }
     }
   };
