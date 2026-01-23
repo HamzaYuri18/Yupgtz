@@ -150,6 +150,12 @@ const EtatCommissions: React.FC = () => {
     setError('');
 
     try {
+      // Actualiser les calculs de la table etat_commission
+      const { error: updateError } = await supabase.rpc('update_etat_commission');
+      if (updateError) {
+        console.error('Erreur actualisation etat_commission:', updateError);
+      }
+
       const generatedQuinzaines = generateQuinzaines();
 
       const { data: existingData, error: fetchError } = await supabase
