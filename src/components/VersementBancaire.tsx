@@ -104,20 +104,19 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
 
       const { data, error } = await supabase
         .from('sessions')
-        .select('total_espece, charges, statut, date_session')
-        .eq('date_session', today)
-        .eq('statut', 'Non versé'); // Filtrer uniquement les sessions non versées
+        .select('total_espece, charges, statut, date_session, date_versement')
+        .eq('date_versement', today); // Filtrer sur date_versement = aujourd'hui
 
       if (error) {
         console.error('❌ Erreur requête sessions:', error);
         throw error;
       }
 
-      console.log(`📊 Sessions non versées trouvées pour ${today}:`, data?.length || 0);
+      console.log(`📊 Sessions avec date_versement = ${today}:`, data?.length || 0);
 
       const total = data?.reduce((sum, session) => {
         const montantAVerser = session.total_espece - session.charges;
-        console.log(`  - Date: ${session.date_session}, Total: ${session.total_espece}, Charges: ${session.charges}, À verser: ${montantAVerser}`);
+        console.log(`  - Date session: ${session.date_session}, Date versement: ${session.date_versement}, Total: ${session.total_espece}, Charges: ${session.charges}, À verser: ${montantAVerser}`);
         return sum + montantAVerser;
       }, 0) || 0;
 
