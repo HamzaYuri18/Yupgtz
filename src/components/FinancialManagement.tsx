@@ -722,6 +722,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       client: newSinistre.client,
       date_sinistre: newSinistre.date_sinistre,
       date_paiement_sinistre: newSinistre.date_paiement_sinistre,
+      type_paiement: newSinistre.type_paiement,
       cree_par: username
     };
 
@@ -733,7 +734,8 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         montant: '',
         client: '',
         date_sinistre: new Date().toISOString().split('T')[0],
-        date_paiement_sinistre: getSessionDate()
+        date_paiement_sinistre: getSessionDate(),
+        type_paiement: 'Espece'
       });
       loadData();
     } else {
