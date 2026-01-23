@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
 import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw, Edit, Save, X, MessageSquare } from 'lucide-react';
-import { 
-  getRecentSessions, 
-  getSessionsByDateRange, 
-  updateSessionVersement, 
-  getMonthlyStats, 
-  verifyAndSyncSessionTotals, 
+import {
+  getRecentSessions,
+  getSessionsByDateRange,
+  updateSessionVersement,
+  getMonthlyStats,
+  verifyAndSyncSessionTotals,
   calculateTotalEspeceFromRapport,
-  updateSessionRemarques 
+  updateSessionRemarques
 } from '../utils/sessionService';
 import * as XLSX from 'xlsx';
+import { generateAvisVersementPDF } from '../utils/avisVersementPDF';
+import { supabase } from '../lib/supabase';
+import { numberToWords } from '../utils/numberToWords';
 
 interface VersementBancaireProps {
   username: string;
@@ -50,10 +53,12 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [editingRemarque, setEditingRemarque] = useState<number | null>(null);
   const [tempRemarque, setTempRemarque] = useState('');
 
-  // État pour les statistiques de la session actuelle
-  const [currentSessionStats, setCurrentSessionStats] = useState({
-    totalVersements: 0,
-    sessionsTraitees: 0
+  // État pour le total à verser aujourd'hui
+  const [totalAVerserAujourdhui, setTotalAVerserAujourdhui] = useState(0);
+  const [showAvisModal, setShowAvisModal] = useState(false);
+  const [avisFormData, setAvisFormData] = useState({
+    banque: 'ATTIJARI',
+    compteBancaire: ''
   });
 
   const [formData, setFormData] = useState({
@@ -71,7 +76,8 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   useEffect(() => {
     loadSessions();
     loadMonthlyStats();
-  }, [selectedMonth, selectedYear]);
+    calculateTotalAVerserAujourdhui();
+  }, [selectedMonth, selectedYear, sessions]);
 
   useEffect(() => {
     calculateQuinzaineStats();
@@ -87,6 +93,100 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const loadMonthlyStats = async () => {
     const stats = await getMonthlyStats(selectedMonth, selectedYear);
     setMonthlyStats(stats);
+  };
+
+  const calculateTotalAVerserAujourdhui = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('total_espece, charges')
+        .eq('date_session', today);
+
+      if (error) throw error;
+
+      const total = data?.reduce((sum, session) => {
+        return sum + (session.total_espece - session.charges);
+      }, 0) || 0;
+
+      setTotalAVerserAujourdhui(total);
+    } catch (error) {
+      console.error('Erreur calcul total à verser:', error);
+      setTotalAVerserAujourdhui(0);
+    }
+  };
+
+  const handleOpenAvisModal = () => {
+    if (totalAVerserAujourdhui > 0) {
+      setShowAvisModal(true);
+    } else {
+      setMessage('Aucun versement à effectuer aujourd\'hui');
+      setTimeout(() => setMessage(''), 3000);
+    }
+  };
+
+  const handleCloseAvisModal = () => {
+    setShowAvisModal(false);
+    setAvisFormData({
+      banque: 'ATTIJARI',
+      compteBancaire: ''
+    });
+  };
+
+  const handleGenerateAvis = async () => {
+    if (!avisFormData.compteBancaire.trim()) {
+      setMessage('Veuillez saisir le compte bancaire');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+
+    generateAvisVersementPDF({
+      banque: avisFormData.banque,
+      compteBancaire: avisFormData.compteBancaire,
+      dateSession: today,
+      montantTotal: totalAVerserAujourdhui
+    });
+
+    try {
+      const { data: sessionsToUpdate, error: fetchError } = await supabase
+        .from('sessions')
+        .select('id, total_espece, charges')
+        .eq('date_session', today);
+
+      if (fetchError) throw fetchError;
+
+      if (sessionsToUpdate && sessionsToUpdate.length > 0) {
+        for (const session of sessionsToUpdate) {
+          const versementAmount = session.total_espece - session.charges;
+
+          const { error: updateError } = await supabase
+            .from('sessions')
+            .update({
+              date_versement: today,
+              versement: versementAmount,
+              banque: avisFormData.banque,
+              statut: 'Versé'
+            })
+            .eq('id', session.id);
+
+          if (updateError) throw updateError;
+        }
+      }
+
+      setTotalAVerserAujourdhui(0);
+      setMessage('Avis de versement généré avec succès');
+      handleCloseAvisModal();
+      await loadSessions();
+      await calculateTotalAVerserAujourdhui();
+    } catch (error) {
+      console.error('Erreur mise à jour sessions:', error);
+      setMessage('Erreur lors de la mise à jour des sessions');
+    }
+
+    setTimeout(() => setMessage(''), 3000);
   };
 
   const calculateQuinzaineStats = () => {
@@ -328,13 +428,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
 
     if (success) {
       setMessage('Versement enregistré avec succès');
-      
-      // Mettre à jour les statistiques de la session actuelle
-      setCurrentSessionStats(prev => ({
-        totalVersements: prev.totalVersements + parseFloat(formData.versement),
-        sessionsTraitees: prev.sessionsTraitees + 1
-      }));
-      
+
       setFormData({
         sessionId: '',
         dateSession: '',
@@ -344,20 +438,11 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
         banque: 'ATTIJARI'
       });
       loadSessions();
+      calculateTotalAVerserAujourdhui();
     } else {
       setMessage('Erreur lors de l\'enregistrement');
     }
 
-    setTimeout(() => setMessage(''), 3000);
-  };
-
-  // Fonction pour réinitialiser les statistiques de la session
-  const resetCurrentSessionStats = () => {
-    setCurrentSessionStats({
-      totalVersements: 0,
-      sessionsTraitees: 0
-    });
-    setMessage('Statistiques de session réinitialisées');
     setTimeout(() => setMessage(''), 3000);
   };
 
@@ -459,41 +544,28 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
             <p className="text-sm text-purple-600">{quinzaineDates.deuxieme}</p>
           </div>
 
-          <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg shadow-lg p-6">
+          <div
+            className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-lg shadow-lg p-6 cursor-pointer hover:shadow-xl transition-all transform hover:scale-105"
+            onClick={handleOpenAvisModal}
+          >
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center space-x-3">
-                <DollarSign className="w-6 h-6 text-indigo-600" />
-                <h3 className="text-lg font-bold text-indigo-900">Session en Cours</h3>
+                <DollarSign className="w-6 h-6 text-emerald-600" />
+                <h3 className="text-lg font-bold text-emerald-900">Total à Verser Aujourd'hui</h3>
               </div>
-              <button
-                onClick={resetCurrentSessionStats}
-                className="p-1 hover:bg-indigo-200 rounded transition-colors"
-                title="Réinitialiser les statistiques"
-              >
-                <RefreshCw className="w-4 h-4 text-indigo-600" />
-              </button>
             </div>
             <div className="space-y-3">
               <div>
-                <p className="text-sm text-indigo-600">Total Versements</p>
-                <p className="text-2xl font-bold text-indigo-700">
-                  {currentSessionStats.totalVersements.toFixed(2)} DT
+                <p className="text-sm text-emerald-600">Cliquez pour générer l'avis</p>
+                <p className="text-3xl font-bold text-emerald-700">
+                  {totalAVerserAujourdhui.toFixed(3)} DT
                 </p>
               </div>
-              <div>
-                <p className="text-sm text-indigo-600">Sessions Traitées</p>
-                <p className="text-2xl font-bold text-indigo-700">
-                  {currentSessionStats.sessionsTraitees}
+              <div className="pt-2 border-t border-emerald-200">
+                <p className="text-xs text-emerald-600 italic">
+                  {new Date().toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                 </p>
               </div>
-              {currentSessionStats.sessionsTraitees > 0 && (
-                <div className="pt-2 border-t border-indigo-200">
-                  <p className="text-sm text-indigo-600">Moyenne par session</p>
-                  <p className="text-lg font-bold text-indigo-700">
-                    {(currentSessionStats.totalVersements / currentSessionStats.sessionsTraitees).toFixed(2)} DT
-                  </p>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -776,6 +848,98 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
           </div>
         </div>
       </div>
+
+      {showAvisModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full mx-4">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Avis de Versement Bancaire</h2>
+              <button
+                onClick={handleCloseAvisModal}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 rounded-lg p-4 border border-emerald-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-emerald-600 font-medium">Date de Session</p>
+                    <p className="text-lg font-bold text-emerald-900">
+                      {new Date().toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-emerald-600 font-medium">Montant Total</p>
+                    <p className="text-2xl font-bold text-emerald-700">
+                      {totalAVerserAujourdhui.toFixed(3)} DT
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-sm text-gray-600 font-medium mb-2">Montant en lettres :</p>
+                <p className="text-base text-gray-900 italic">
+                  {totalAVerserAujourdhui > 0 ? numberToWords(totalAVerserAujourdhui) : 'zéro dinars'}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Banque
+                  </label>
+                  <select
+                    value={avisFormData.banque}
+                    onChange={(e) => setAvisFormData({ ...avisFormData, banque: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  >
+                    <option value="ATTIJARI">ATTIJARI</option>
+                    <option value="BIAT">BIAT</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Compte Bancaire
+                  </label>
+                  <input
+                    type="text"
+                    value={avisFormData.compteBancaire}
+                    onChange={(e) => setAvisFormData({ ...avisFormData, compteBancaire: e.target.value })}
+                    placeholder="Ex: 12345678901234567890"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-gray-200 pt-4">
+                <p className="text-sm text-gray-500 italic mb-2">Signature :</p>
+                <p className="text-base font-bold text-gray-900">SHIRI FARES HAMZA</p>
+              </div>
+
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={handleGenerateAvis}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
+                >
+                  <Download className="w-5 h-5" />
+                  <span>Générer et Valider</span>
+                </button>
+                <button
+                  onClick={handleCloseAvisModal}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
