@@ -97,22 +97,34 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
 
   const calculateTotalAVerserAujourdhui = async () => {
     try {
+      // Format YYYY-MM-DD pour correspondre au format de la base de données
       const today = new Date().toISOString().split('T')[0];
+
+      console.log('📅 Calcul total à verser pour la date:', today);
 
       const { data, error } = await supabase
         .from('sessions')
-        .select('total_espece, charges')
-        .eq('date_session', today);
+        .select('total_espece, charges, statut, date_session')
+        .eq('date_session', today)
+        .eq('statut', 'Non versé'); // Filtrer uniquement les sessions non versées
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Erreur requête sessions:', error);
+        throw error;
+      }
+
+      console.log(`📊 Sessions non versées trouvées pour ${today}:`, data?.length || 0);
 
       const total = data?.reduce((sum, session) => {
-        return sum + (session.total_espece - session.charges);
+        const montantAVerser = session.total_espece - session.charges;
+        console.log(`  - Date: ${session.date_session}, Total: ${session.total_espece}, Charges: ${session.charges}, À verser: ${montantAVerser}`);
+        return sum + montantAVerser;
       }, 0) || 0;
 
+      console.log(`✅ Total à verser aujourd'hui: ${total.toFixed(3)} DT`);
       setTotalAVerserAujourdhui(total);
     } catch (error) {
-      console.error('Erreur calcul total à verser:', error);
+      console.error('❌ Erreur calcul total à verser:', error);
       setTotalAVerserAujourdhui(0);
     }
   };
@@ -141,7 +153,10 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       return;
     }
 
+    // Format YYYY-MM-DD pour correspondre au format de la base de données
     const today = new Date().toISOString().split('T')[0];
+
+    console.log('📝 Génération avis de versement pour:', today);
 
     generateAvisVersementPDF({
       banque: avisFormData.banque,
@@ -151,38 +166,51 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     });
 
     try {
+      // Récupérer uniquement les sessions non versées pour la date d'aujourd'hui
       const { data: sessionsToUpdate, error: fetchError } = await supabase
         .from('sessions')
-        .select('id, total_espece, charges')
-        .eq('date_session', today);
+        .select('id, total_espece, charges, statut')
+        .eq('date_session', today)
+        .eq('statut', 'Non versé'); // Filtrer uniquement les sessions non versées
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('❌ Erreur récupération sessions:', fetchError);
+        throw fetchError;
+      }
+
+      console.log(`📊 Sessions à mettre à jour: ${sessionsToUpdate?.length || 0}`);
 
       if (sessionsToUpdate && sessionsToUpdate.length > 0) {
         for (const session of sessionsToUpdate) {
           const versementAmount = session.total_espece - session.charges;
 
+          console.log(`💰 Mise à jour session ${session.id}: versement = ${versementAmount} DT`);
+
           const { error: updateError } = await supabase
             .from('sessions')
             .update({
-              date_versement: today,
+              date_versement: today, // Format YYYY-MM-DD
               versement: versementAmount,
               banque: avisFormData.banque,
               statut: 'Versé'
             })
             .eq('id', session.id);
 
-          if (updateError) throw updateError;
+          if (updateError) {
+            console.error(`❌ Erreur mise à jour session ${session.id}:`, updateError);
+            throw updateError;
+          }
         }
       }
 
       setTotalAVerserAujourdhui(0);
       setMessage('Avis de versement généré avec succès');
+      console.log('✅ Avis de versement généré et sessions mises à jour');
       handleCloseAvisModal();
       await loadSessions();
       await calculateTotalAVerserAujourdhui();
     } catch (error) {
-      console.error('Erreur mise à jour sessions:', error);
+      console.error('❌ Erreur mise à jour sessions:', error);
       setMessage('Erreur lors de la mise à jour des sessions');
     }
 
