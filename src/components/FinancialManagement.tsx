@@ -369,6 +369,29 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     }
   };
 
+  const handleMarquerDepensePayee = async (depenseId: number) => {
+    if (!confirm('Êtes-vous sûr de vouloir marquer cette dépense comme payée/soldée ?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('depenses')
+        .update({ statut_depense: 'Payé' })
+        .eq('id', depenseId);
+
+      if (error) throw error;
+
+      setMessage('✅ Dépense marquée comme payée et soldée avec succès');
+      loadDepensesRecuperables();
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du statut:', error);
+      setMessage('❌ Erreur lors de la mise à jour du statut');
+    }
+
+    setTimeout(() => setMessage(''), 3000);
+  };
+
   const handleSearchDepense = async () => {
     if (!newRecette.id_depense) {
       setMessage('Veuillez saisir un ID de dépense');
@@ -970,6 +993,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                   <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Date Récup. Prévue</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Statut</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Créé par</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Action</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -989,7 +1013,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {depense.statut_depense === 'Payé' ? (
                         <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                          Payé
+                          Soldé
                         </span>
                       ) : (
                         <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
@@ -998,6 +1022,20 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{depense.cree_par}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {depense.statut_depense !== 'Payé' && (
+                        <button
+                          onClick={() => handleMarquerDepensePayee(depense.id!)}
+                          className="px-3 py-1 text-xs font-semibold rounded bg-green-600 text-white hover:bg-green-700 transition-colors"
+                          title="Marquer comme payé/soldé"
+                        >
+                          Marquer Payé
+                        </button>
+                      )}
+                      {depense.statut_depense === 'Payé' && (
+                        <span className="text-xs text-gray-400 italic">Soldé</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1645,6 +1683,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                 <th className="px-6 py-3 text-left text-xs font-medium text-orange-600 uppercase tracking-wider">N° Sinistre</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-orange-600 uppercase tracking-wider">Client</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-orange-600 uppercase tracking-wider">Montant (DT)</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-orange-600 uppercase tracking-wider">Type Paiement</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-orange-600 uppercase tracking-wider">Date Sinistre</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-orange-600 uppercase tracking-wider">Date Paiement</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-orange-600 uppercase tracking-wider">Créé par</th>
@@ -1657,6 +1696,9 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{sinistre.client}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-orange-600">
                     {sinistre.montant.toLocaleString('fr-FR')}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {sinistre.type_paiement || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {sinistre.date_sinistre ? new Date(sinistre.date_sinistre).toLocaleDateString('fr-FR') : '-'}

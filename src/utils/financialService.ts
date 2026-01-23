@@ -392,7 +392,7 @@ export const saveSinistre = async (sinistre: Sinistre): Promise<boolean> => {
     }
 
     console.log('✅ Sinistre sauvegardé avec succès:', data);
-    
+
     // Sauvegarder aussi dans la table rapport
     try {
       await saveToRapport({
@@ -401,7 +401,7 @@ export const saveSinistre = async (sinistre: Sinistre): Promise<boolean> => {
         numero_contrat: sinistre.numero_sinistre,
         montant: -Math.abs(sinistre.montant), // Négatif pour les sinistres
         assure: sinistre.client,
-        mode_paiement: 'Espece', // Par défaut Espèce pour les sinistres
+        mode_paiement: sinistre.type_paiement || 'Espece',
         type_paiement: 'Au comptant',
         cree_par: sinistre.cree_par
       }, {
