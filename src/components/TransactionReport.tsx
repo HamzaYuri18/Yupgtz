@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Download, TrendingUp, DollarSign, FileText, CreditCard } from 'lucide-react';
+import { Calendar, Download, TrendingUp, DollarSign, FileText, CreditCard, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
 
@@ -20,6 +20,11 @@ interface Transaction {
   echeance?: string;
   retour_type?: string | null;
   prime_avant_retour?: number | null;
+  date_depense?: string | null;
+  date_recette?: string | null;
+  date_ristourne?: string | null;
+  date_sinistre?: string | null;
+  numero_sinistre?: string | null;
 }
 
 interface Statistics {
@@ -390,6 +395,158 @@ const TransactionReport: React.FC = () => {
 
     const fileName = `cheques_${dateFrom}_au_${dateTo}.xlsx`;
     XLSX.writeFile(wb, fileName);
+  };
+
+  const handleDeleteTransaction = async (transaction: Transaction) => {
+    if (!confirm(`Êtes-vous sûr de vouloir supprimer cette transaction ${transaction.type} ?`)) {
+      return;
+    }
+
+    try {
+      let sourceDeleteSuccess = false;
+
+      switch (transaction.type) {
+        case 'Terme':
+          if (transaction.numero_contrat && transaction.echeance) {
+            const echeanceDate = new Date(transaction.echeance);
+            const echeanceISO = echeanceDate.toISOString().split('T')[0];
+
+            const { error: termeError } = await supabase
+              .from('terme')
+              .delete()
+              .eq('numero_contrat', transaction.numero_contrat)
+              .eq('echeance', echeanceISO);
+
+            sourceDeleteSuccess = !termeError;
+            if (termeError) console.error('Erreur suppression terme:', termeError);
+          }
+          break;
+
+        case 'Affaire':
+          if (transaction.numero_contrat) {
+            const createdDate = new Date(transaction.created_at);
+            const createdISO = createdDate.toISOString().split('T')[0];
+
+            const { error: affaireError } = await supabase
+              .from('affaire')
+              .delete()
+              .eq('numero_contrat', transaction.numero_contrat)
+              .gte('created_at', `${createdISO}T00:00:00`)
+              .lt('created_at', `${createdISO}T23:59:59`);
+
+            sourceDeleteSuccess = !affaireError;
+            if (affaireError) console.error('Erreur suppression affaire:', affaireError);
+          }
+          break;
+
+        case 'Dépense':
+          if (transaction.date_depense && transaction.montant) {
+            const { error: depenseError } = await supabase
+              .from('depenses')
+              .delete()
+              .eq('date_depense', transaction.date_depense)
+              .eq('montant', Math.abs(transaction.montant));
+
+            sourceDeleteSuccess = !depenseError;
+            if (depenseError) console.error('Erreur suppression dépense:', depenseError);
+          }
+          break;
+
+        case 'Recette Exceptionnelle':
+        case 'Recette':
+          if (transaction.date_recette && transaction.montant) {
+            const { error: recetteError } = await supabase
+              .from('recettes_exceptionnelles')
+              .delete()
+              .eq('date_recette', transaction.date_recette)
+              .eq('montant', transaction.montant);
+
+            sourceDeleteSuccess = !recetteError;
+            if (recetteError) console.error('Erreur suppression recette:', recetteError);
+          }
+          break;
+
+        case 'Ristourne':
+          if (transaction.numero_contrat && transaction.date_ristourne) {
+            const { error: ristourneError } = await supabase
+              .from('ristournes')
+              .delete()
+              .eq('numero_contrat', transaction.numero_contrat)
+              .eq('date_ristourne', transaction.date_ristourne);
+
+            sourceDeleteSuccess = !ristourneError;
+            if (ristourneError) console.error('Erreur suppression ristourne:', ristourneError);
+          }
+          break;
+
+        case 'Sinistre':
+          if (transaction.numero_sinistre) {
+            const { error: sinistreError } = await supabase
+              .from('sinistres')
+              .delete()
+              .eq('numero_sinistre', transaction.numero_sinistre);
+
+            sourceDeleteSuccess = !sinistreError;
+            if (sinistreError) console.error('Erreur suppression sinistre:', sinistreError);
+          }
+          break;
+
+        case 'Paiement Crédit':
+          break;
+
+        case 'Encaissement pour autre code':
+          if (transaction.numero_contrat && transaction.echeance) {
+            const { error: encaissementError } = await supabase
+              .from('encaissement_autre_code')
+              .delete()
+              .eq('numero_contrat', transaction.numero_contrat)
+              .eq('echeance', transaction.echeance);
+
+            sourceDeleteSuccess = !encaissementError;
+            if (encaissementError) console.error('Erreur suppression encaissement:', encaissementError);
+          }
+          break;
+
+        case 'Avenant':
+          if (transaction.numero_contrat) {
+            const createdDate = new Date(transaction.created_at);
+            const createdISO = createdDate.toISOString().split('T')[0];
+
+            const { error: avenantError } = await supabase
+              .from('Avenant_Changement_véhicule')
+              .delete()
+              .eq('numero_contrat', transaction.numero_contrat)
+              .gte('created_at', `${createdISO}T00:00:00`)
+              .lt('created_at', `${createdISO}T23:59:59`);
+
+            sourceDeleteSuccess = !avenantError;
+            if (avenantError) console.error('Erreur suppression avenant:', avenantError);
+          }
+          break;
+
+        default:
+          sourceDeleteSuccess = true;
+      }
+
+      const { error: rapportError } = await supabase
+        .from('rapport')
+        .delete()
+        .eq('id', transaction.id);
+
+      if (rapportError) {
+        console.error('Erreur suppression rapport:', rapportError);
+        setError('❌ Erreur lors de la suppression de la transaction');
+        return;
+      }
+
+      setError('');
+      alert('✅ Transaction supprimée avec succès' + (sourceDeleteSuccess ? ' (y compris de la table source)' : ''));
+
+      handleSearch();
+    } catch (err) {
+      console.error('Erreur lors de la suppression:', err);
+      setError('❌ Erreur lors de la suppression de la transaction');
+    }
   };
 
   const handleExportByCategory = (category: string, categoryName: string) => {
@@ -844,6 +1001,7 @@ const TransactionReport: React.FC = () => {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Type Paiement</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Créé Par</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Date</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -883,6 +1041,15 @@ const TransactionReport: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">{transaction.cree_par}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{new Date(transaction.created_at).toLocaleString('fr-FR')}</td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => handleDeleteTransaction(transaction)}
+                        className="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                        title="Supprimer cette transaction"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
