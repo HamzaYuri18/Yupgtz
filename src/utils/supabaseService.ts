@@ -1628,7 +1628,7 @@ export const createMonthlyTable = async (month: string): Promise<void> => {
     // Si la table n'existe pas, la créer via la fonction RPC
     console.log(`📝 Création de la table ${tableName} via RPC...`);
     const { error: rpcError } = await supabase.rpc('create_terme_table', {
-      table_name: tableName
+      table_suffix: cleanMonth
     });
 
     if (rpcError) {
