@@ -1649,9 +1649,10 @@ export const insertContractsToTable = async (month: string, contracts: any[]): P
   try {
     const cleanMonth = month.toLowerCase().replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').trim();
     const tableName = `table_terme_${cleanMonth}`;
-    
+
     console.log(`📝 Insertion ${contracts.length} contrats dans ${tableName}...`);
-    
+    console.log(`🔍 Premier contrat à insérer:`, contracts[0]);
+
     // Vérifier si la table existe
     const { error: checkError } = await supabase
       .from(tableName)
@@ -1663,14 +1664,24 @@ export const insertContractsToTable = async (month: string, contracts: any[]): P
       return false;
     }
 
-    const contractsData = contracts.map(contract => ({
-      numero_contrat: contract.contractNumber,
-      prime: contract.premium || 0,
-      echeance: convertExcelDateToISO(contract.maturity),
-      assure: contract.insured,
-      num_tel: contract.numTel || null,
-      num_tel_2: contract.numTel2 || null
-    }));
+    const contractsData = contracts.map(contract => {
+      // La date est déjà au format ISO du parser XLSX
+      const echeanceDate = contract.maturity;
+
+      const data = {
+        numero_contrat: contract.contractNumber || '',
+        prime: Number(contract.premium) || 0,
+        echeance: echeanceDate,
+        assure: contract.insured || '',
+        num_tel: contract.numTel || null,
+        num_tel_2: contract.numTel2 || null
+      };
+
+      console.log(`📊 Contrat mappé:`, data);
+      return data;
+    });
+
+    console.log(`📦 Données à insérer (${contractsData.length} contrats):`, contractsData.slice(0, 2));
 
     const { error } = await supabase
       .from(tableName)
@@ -1678,10 +1689,11 @@ export const insertContractsToTable = async (month: string, contracts: any[]): P
 
     if (error) {
       console.error('❌ Erreur insertion contrats:', error);
+      console.error('❌ Détails erreur:', error.message, error.details, error.hint);
       return false;
     }
 
-    console.log(`✅ Contrats insérés dans ${tableName}`);
+    console.log(`✅ ${contractsData.length} contrats insérés dans ${tableName}`);
     return true;
   } catch (error) {
     console.error('❌ Erreur générale insertion contrats:', error);
