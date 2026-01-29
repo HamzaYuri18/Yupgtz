@@ -11,7 +11,7 @@ interface Tache {
   utilisateur_charge: 'Ahlem' | 'Islem';
   statut: 'A faire' | 'Accomplie';
   remarques: string;
-  session_id: string | null;
+  session_id: number | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -19,7 +19,7 @@ interface Tache {
 
 interface TaskManagementProps {
   currentUser: string;
-  sessionId: string | null;
+  sessionId: number | null;
   isSessionClosed: boolean;
   onTaskUpdate?: () => void;
 }

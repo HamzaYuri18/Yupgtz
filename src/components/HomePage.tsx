@@ -114,7 +114,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [showCreditAlert, setShowCreditAlert] = useState(false);
   const [showTaskAlert, setShowTaskAlert] = useState(false);
   const [sessionClosed, setSessionClosed] = useState(false);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
   const [sessionTasks, setSessionTasks] = useState<any[]>([]);
   const [totalUncompletedTasks, setTotalUncompletedTasks] = useState<number>(0);
 
