@@ -368,7 +368,7 @@ const Encaissement: React.FC<EncaissementProps> = ({ username }) => {
       const { data, error } = await supabase
         .from('terme')
         .select('*')
-        .eq('numero_contrat', cleanedNumeroContrat)
+        .ilike('numero_contrat', cleanedNumeroContrat)
         .eq('echeance', echeance)
         .maybeSingle();
 

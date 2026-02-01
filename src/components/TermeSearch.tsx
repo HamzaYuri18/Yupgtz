@@ -22,7 +22,7 @@ const TermeSearch: React.FC = () => {
       const { data, error } = await supabase
         .from('rapport')
         .select('*')
-        .eq('numero_contrat', contractNumber)
+        .ilike('numero_contrat', contractNumber)
         .eq('type', 'Terme')
         .eq('echeance', echeance)
         .maybeSingle();
