@@ -77,7 +77,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     loadSessions();
     loadMonthlyStats();
     calculateTotalAVerserAujourdhui();
-  }, [selectedMonth, selectedYear, sessions]);
+  }, [selectedMonth, selectedYear]);
 
   useEffect(() => {
     calculateQuinzaineStats();
@@ -87,7 +87,6 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     const data = await getRecentSessions(30);
     setSessions(data);
     setFilteredSessions(data);
-    setCurrentPage(1);
   };
 
   const loadMonthlyStats = async () => {
@@ -422,6 +421,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
 
     const data = await getSessionsByDateRange(dateDebut, dateFin);
     setFilteredSessions(data);
+    setCurrentPage(1);
   };
 
   const handleResetFilter = () => {
