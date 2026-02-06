@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw, Edit, Save, X, MessageSquare } from 'lucide-react';
+import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw, Edit, Save, X, MessageSquare, RotateCcw } from 'lucide-react';
 import {
   getRecentSessions,
   getSessionsByDateRange,
@@ -125,6 +125,12 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       console.error('❌ Erreur calcul total versé:', error);
       setTotalAVerserAujourdhui(0);
     }
+  };
+
+  const handleResetTotalAVerser = () => {
+    setTotalAVerserAujourdhui(0);
+    setMessage('Total à verser remis à zéro');
+    setTimeout(() => setMessage(''), 3000);
   };
 
   const handleOpenAvisModal = () => {
@@ -571,17 +577,24 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
             <p className="text-sm text-purple-600">{quinzaineDates.deuxieme}</p>
           </div>
 
-          <div
-            className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-lg shadow-lg p-6 cursor-pointer hover:shadow-xl transition-all transform hover:scale-105"
-            onClick={handleOpenAvisModal}
-          >
+          <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-lg shadow-lg p-6">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center space-x-3">
                 <DollarSign className="w-6 h-6 text-emerald-600" />
                 <h3 className="text-lg font-bold text-emerald-900">Total à Verser Aujourd'hui</h3>
               </div>
+              <button
+                onClick={handleResetTotalAVerser}
+                className="p-2 hover:bg-emerald-200 rounded-lg transition-colors duration-200"
+                title="Remettre à zéro"
+              >
+                <RotateCcw className="w-5 h-5 text-emerald-700" />
+              </button>
             </div>
-            <div className="space-y-3">
+            <div
+              className="space-y-3 cursor-pointer"
+              onClick={handleOpenAvisModal}
+            >
               <div>
                 <p className="text-sm text-emerald-600">Cliquez pour générer l'avis</p>
                 <p className="text-3xl font-bold text-emerald-700">
