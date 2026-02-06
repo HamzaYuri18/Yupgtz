@@ -100,12 +100,12 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       // Format YYYY-MM-DD pour correspondre au format de la base de données
       const today = new Date().toISOString().split('T')[0];
 
-      console.log('📅 Calcul total à verser pour la date:', today);
+      console.log('📅 Calcul total versé pour la date:', today);
 
       const { data, error } = await supabase
         .from('sessions')
-        .select('total_espece, charges, statut, date_session, date_versement')
-        .eq('date_versement', today); // Filtrer sur date_versement = aujourd'hui
+        .select('versement, date_session, date_versement')
+        .eq('date_versement', today);
 
       if (error) {
         console.error('❌ Erreur requête sessions:', error);
@@ -115,15 +115,15 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       console.log(`📊 Sessions avec date_versement = ${today}:`, data?.length || 0);
 
       const total = data?.reduce((sum, session) => {
-        const montantAVerser = session.total_espece - session.charges;
-        console.log(`  - Date session: ${session.date_session}, Date versement: ${session.date_versement}, Total: ${session.total_espece}, Charges: ${session.charges}, À verser: ${montantAVerser}`);
-        return sum + montantAVerser;
+        const versement = session.versement || 0;
+        console.log(`  - Date session: ${session.date_session}, Date versement: ${session.date_versement}, Versement: ${versement}`);
+        return sum + versement;
       }, 0) || 0;
 
-      console.log(`✅ Total à verser aujourd'hui: ${total.toFixed(3)} DT`);
+      console.log(`✅ Total versé aujourd'hui: ${total.toFixed(3)} DT`);
       setTotalAVerserAujourdhui(total);
     } catch (error) {
-      console.error('❌ Erreur calcul total à verser:', error);
+      console.error('❌ Erreur calcul total versé:', error);
       setTotalAVerserAujourdhui(0);
     }
   };
@@ -507,7 +507,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     return filteredSessions.slice(startIndex, endIndex);
   };
 
-  const totalPages = Math.ceil(filteredSessions.length / itemsPerPage);
+  const totalPages = Math.max(1, Math.ceil(filteredSessions.length / itemsPerPage));
   const paginatedSessions = getPaginatedSessions();
 
   return (
