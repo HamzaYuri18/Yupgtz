@@ -104,7 +104,7 @@ export const saveDepense = async (depense: Depense): Promise<boolean> => {
         numero_contrat: `DEP-${data[0].id}`,
         montant: -Math.abs(depense.montant), // Négatif pour les dépenses
         assure: depense.type_depense,
-        mode_paiement: 'Espece', // Par défaut Espèce pour les dépenses
+        mode_paiement: depense.type_paiement === 'Cheque' ? 'Cheque' : 'Espece',
         type_paiement: 'Au comptant',
         cree_par: depense.cree_par
       }, {
