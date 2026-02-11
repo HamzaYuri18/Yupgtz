@@ -13,6 +13,7 @@ export interface Depense {
   libelle?: string;
   date_recuperation_prevue?: string;
   statut_depense?: string | null;
+  type_paiement?: string;
 }
 
 export interface RecetteExceptionnelle {
@@ -78,6 +79,9 @@ export const saveDepense = async (depense: Depense): Promise<boolean> => {
     }
     if (depense.date_recuperation_prevue) {
       insertData.date_recuperation_prevue = depense.date_recuperation_prevue;
+    }
+    if (depense.type_paiement) {
+      insertData.type_paiement = depense.type_paiement;
     }
 
     const { data, error } = await supabase

@@ -36,7 +36,12 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     numero_contrat: '',
     client: '',
     libelle: '',
-    date_recuperation_prevue: ''
+    date_recuperation_prevue: '',
+    type_paiement: 'Espece',
+    numero_cheque: '',
+    titulaire_cheque: '',
+    banque: '',
+    date_encaissement_prevue: ''
   });
   const [monthFilter, setMonthFilter] = useState<string>('all');
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
@@ -453,6 +458,12 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         setMessage('Veuillez rechercher et valider un contrat pour la remise');
         return;
       }
+      if (newDepense.type_paiement === 'Cheque') {
+        if (!newDepense.numero_cheque || !newDepense.titulaire_cheque || !newDepense.banque || !newDepense.date_encaissement_prevue) {
+          setMessage('Veuillez remplir tous les champs du chèque');
+          return;
+        }
+      }
       console.log('📝 Tentative d\'enregistrement d\'une remise:', newDepense);
     }
 
@@ -502,6 +513,9 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         Numero_Contrat: newDepense.numero_contrat,
         Client: newDepense.client
       }),
+      ...(newDepense.type_depense === 'Remise' && {
+        type_paiement: newDepense.type_paiement
+      }),
       ...(newDepense.type_depense === 'Depense Recuperable' && {
         libelle: newDepense.libelle,
         date_recuperation_prevue: newDepense.date_recuperation_prevue
@@ -510,7 +524,35 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
     const success = await saveDepense(depense);
     if (success) {
-      setMessage('✅ Dépense enregistrée avec succès');
+      if (newDepense.type_depense === 'Remise' && newDepense.type_paiement === 'Cheque') {
+        try {
+          const { error: chequeError } = await supabase
+            .from('Cheques')
+            .insert([{
+              Numero_Contrat: newDepense.numero_contrat,
+              Assure: newDepense.client,
+              Numero_Cheque: parseFloat(newDepense.numero_cheque),
+              Titulaire_Cheque: newDepense.titulaire_cheque,
+              Montant: parseFloat(newDepense.montant),
+              Banque: newDepense.banque,
+              Date_Encaissement_prévue: newDepense.date_encaissement_prevue,
+              Statut: 'Non encaissé'
+            }]);
+
+          if (chequeError) {
+            console.error('Erreur lors de l\'enregistrement du chèque:', chequeError);
+            setMessage('⚠️ Dépense enregistrée mais erreur lors de l\'enregistrement du chèque');
+          } else {
+            setMessage('✅ Dépense et chèque enregistrés avec succès');
+          }
+        } catch (error) {
+          console.error('Erreur lors de l\'enregistrement du chèque:', error);
+          setMessage('⚠️ Dépense enregistrée mais erreur lors de l\'enregistrement du chèque');
+        }
+      } else {
+        setMessage('✅ Dépense enregistrée avec succès');
+      }
+
       console.log('✅ Dépense enregistrée avec succès, type:', depense.type_depense);
       setNewDepense({
         type_depense: 'Frais Bureau',
@@ -519,7 +561,12 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         numero_contrat: '',
         client: '',
         libelle: '',
-        date_recuperation_prevue: ''
+        date_recuperation_prevue: '',
+        type_paiement: 'Espece',
+        numero_cheque: '',
+        titulaire_cheque: '',
+        banque: '',
+        date_encaissement_prevue: ''
       });
       setContractSearchMessage('');
       setAvanceSearchMessage('');
@@ -847,6 +894,65 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                 contractSearchMessage.includes('✅') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
               }`}>
                 {contractSearchMessage}
+              </div>
+            )}
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Type de paiement *</label>
+              <select
+                value={newDepense.type_paiement}
+                onChange={(e) => setNewDepense({...newDepense, type_paiement: e.target.value})}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="Espece">Espèce</option>
+                <option value="Cheque">Chèque</option>
+              </select>
+            </div>
+
+            {newDepense.type_paiement === 'Cheque' && (
+              <div className="mt-4 p-4 bg-blue-100 rounded-lg border border-blue-300">
+                <h5 className="text-sm font-semibold text-blue-900 mb-3">Informations du chèque</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Numéro de chèque *</label>
+                    <input
+                      type="text"
+                      value={newDepense.numero_cheque}
+                      onChange={(e) => setNewDepense({...newDepense, numero_cheque: e.target.value})}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Numéro du chèque"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Titulaire du chèque *</label>
+                    <input
+                      type="text"
+                      value={newDepense.titulaire_cheque}
+                      onChange={(e) => setNewDepense({...newDepense, titulaire_cheque: e.target.value})}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Nom du titulaire"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Banque *</label>
+                    <input
+                      type="text"
+                      value={newDepense.banque}
+                      onChange={(e) => setNewDepense({...newDepense, banque: e.target.value})}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Nom de la banque"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Date d'encaissement prévue *</label>
+                    <input
+                      type="date"
+                      value={newDepense.date_encaissement_prevue}
+                      onChange={(e) => setNewDepense({...newDepense, date_encaissement_prevue: e.target.value})}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
               </div>
             )}
           </div>
