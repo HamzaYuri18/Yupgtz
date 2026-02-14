@@ -3,9 +3,14 @@ import { supabase } from '../lib/supabase';
 export interface SalaireLoyer {
   id?: string;
   mois: string;
-  statut: boolean;
-  mode_liquidation: string | null;
-  date_liquidation: string | null;
+  montant_salaires: number;
+  statut_salaires: boolean;
+  mode_liquidation_salaires: string | null;
+  date_liquidation_salaires: string | null;
+  montant_loyer: number;
+  statut_loyer: boolean;
+  mode_liquidation_loyer: string | null;
+  date_liquidation_loyer: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -35,9 +40,14 @@ export const upsertSalaireLoyer = async (salaire: SalaireLoyer): Promise<boolean
   try {
     const insertData: any = {
       mois: salaire.mois,
-      statut: salaire.statut,
-      mode_liquidation: salaire.statut ? salaire.mode_liquidation : null,
-      date_liquidation: salaire.statut ? salaire.date_liquidation : null,
+      montant_salaires: salaire.montant_salaires,
+      statut_salaires: salaire.statut_salaires,
+      mode_liquidation_salaires: salaire.statut_salaires ? salaire.mode_liquidation_salaires : null,
+      date_liquidation_salaires: salaire.statut_salaires ? salaire.date_liquidation_salaires : null,
+      montant_loyer: salaire.montant_loyer,
+      statut_loyer: salaire.statut_loyer,
+      mode_liquidation_loyer: salaire.statut_loyer ? salaire.mode_liquidation_loyer : null,
+      date_liquidation_loyer: salaire.statut_loyer ? salaire.date_liquidation_loyer : null,
     };
 
     if (salaire.id) {
@@ -98,9 +108,14 @@ export const initializeMissingMonths = async (months: string[]): Promise<void> =
     if (missingMonths.length > 0) {
       const insertData = missingMonths.map(mois => ({
         mois,
-        statut: false,
-        mode_liquidation: null,
-        date_liquidation: null
+        montant_salaires: 0,
+        statut_salaires: false,
+        mode_liquidation_salaires: null,
+        date_liquidation_salaires: null,
+        montant_loyer: 0,
+        statut_loyer: false,
+        mode_liquidation_loyer: null,
+        date_liquidation_loyer: null
       }));
 
       const { error } = await supabase
