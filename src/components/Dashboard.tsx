@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, FileText, Upload, BarChart3, Clock, User, Search, Calendar, Receipt, Building2, DollarSign, TrendingUp, Home } from 'lucide-react';
+import { LogOut, FileText, Upload, BarChart3, Clock, User, Search, Calendar, Receipt, Building2, DollarSign, TrendingUp, Home, Briefcase } from 'lucide-react';
 import { getSession, clearSession, isAdmin } from '../utils/auth';
 import LogoutConfirmation from './LogoutConfirmation';
 import { shouldShowLogoutConfirmation } from '../utils/auth';
@@ -17,6 +17,7 @@ import VersementBancaire from './VersementBancaire';
 import Encaissement from './Encaissement';
 import EtatCommissions from './EtatCommissions';
 import StatisticsChart from './StatisticsChart';
+import SalairesLoyer from './SalairesLoyer';
 
 interface DashboardProps {
   username: string;
@@ -24,7 +25,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'home' | 'contract' | 'xml' | 'reports' | 'credits' | 'financial' | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement' | 'encaissement' | 'commissions' | 'statistics'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'contract' | 'xml' | 'reports' | 'credits' | 'financial' | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement' | 'encaissement' | 'commissions' | 'statistics' | 'salaires'>('home');
   const [sessionInfo, setSessionInfo] = useState<any>(null);
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false);
 
@@ -279,6 +280,18 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
                   <TrendingUp className="w-4 h-4" />
                   <span>Etat des Commissions</span>
                 </button>
+
+                <button
+                  onClick={() => setActiveTab('salaires')}
+                  className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
+                    activeTab === 'salaires'
+                      ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
+                      : 'text-white/90 hover:bg-white/20 hover:text-white'
+                  }`}
+                >
+                  <Briefcase className="w-4 h-4" />
+                  <span>Salaires et Loyer</span>
+                </button>
               </>
             )}
 
@@ -314,6 +327,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
         {activeTab === 'versement' && isHamza && <VersementBancaire username={username} />}
         {activeTab === 'encaissement' && <Encaissement username={username} />}
         {activeTab === 'commissions' && isHamza && <EtatCommissions />}
+        {activeTab === 'salaires' && isHamza && <SalairesLoyer />}
       </main>
 
       {/* Modal de confirmation de déconnexion */}
