@@ -2241,3 +2241,40 @@ export default {
   syncTermeStatusesWithMainTable,
   verifyTermeStatusWithEcheance
 };
+
+export const saveTermeSuspenduPaye = async (data: {
+  sessionDate: string;
+  numPolice: string;
+  codeSte: string;
+  numAv: string;
+  souscripteur: string;
+  dateEcheance: string;
+  joursDepasses: number;
+  primeTotale: number;
+}): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('terme_suspendu_paye')
+      .insert([{
+        session_date: data.sessionDate,
+        num_police: data.numPolice,
+        code_ste: data.codeSte,
+        num_av: data.numAv,
+        souscripteur: data.souscripteur,
+        date_echeance: data.dateEcheance,
+        jours_depasses: data.joursDepasses,
+        prime_totale: data.primeTotale
+      }]);
+
+    if (error) {
+      console.error('Erreur lors de la sauvegarde dans terme_suspendu_paye:', error);
+      return false;
+    }
+
+    console.log('✅ Terme suspendu enregistré avec succès');
+    return true;
+  } catch (error) {
+    console.error('Erreur dans saveTermeSuspenduPaye:', error);
+    return false;
+  }
+};

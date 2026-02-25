@@ -3,8 +3,9 @@ import { Save, FileText, DollarSign, Calendar, Search, CreditCard, User, Hash, B
 import { Contract } from '../types';
 import { saveContract, generateContractId, getXMLContracts } from '../utils/storage';
 import { findContractInXLSX } from '../utils/xlsxParser';
-import { searchContractInTable, getAvailableMonths, saveAffaireContract, saveCreditContract, saveContractToRapport, checkTermeContractExists, saveTermeContract,checkAffaireContractExists,checkAffaireInRapport,checkTermeInRapport, saveCheque, checkEncaissementAutreCodeExists, saveEncaissementAutreCode, checkAvenantChangementVehiculeExists, saveAvenantChangementVehicule} from '../utils/supabaseService';
+import { searchContractInTable, getAvailableMonths, saveAffaireContract, saveCreditContract, saveContractToRapport, checkTermeContractExists, saveTermeContract,checkAffaireContractExists,checkAffaireInRapport,checkTermeInRapport, saveCheque, checkEncaissementAutreCodeExists, saveEncaissementAutreCode, checkAvenantChangementVehiculeExists, saveAvenantChangementVehicule, saveTermeSuspenduPaye} from '../utils/supabaseService';
 import { getSessionDate } from '../utils/auth';
+import TermeSuspenduModal from './TermeSuspenduModal';
 
 interface ContractFormProps {
   username: string;
@@ -63,6 +64,14 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const [isRetourContentieuxMode, setIsRetourContentieuxMode] = useState(false);
   const [originalPremiumAmount, setOriginalPremiumAmount] = useState('');
   const [showAutreCodeMessage, setShowAutreCodeMessage] = useState(false);
+  const [showTermeSuspenduModal, setShowTermeSuspenduModal] = useState(false);
+  const [termeSuspenduData, setTermeSuspenduData] = useState<{
+    contractNumber: string;
+    insuredName: string;
+    dateEcheance: string;
+    joursDepasses: number;
+    primeTotale: number;
+  } | null>(null);
 
   React.useEffect(() => {
     loadAvailableMonths();
@@ -590,6 +599,38 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
           await saveTermeContract(contract, retourType, originalPrime);
           setMessage(prev => prev + ' + Terme');
+
+          // VÉRIFICATION DU DÉLAI DE 45 JOURS
+          const sessionDate = new Date(getSessionDate());
+          const dateEcheance = new Date(xmlSearchResult.maturity);
+
+          const diffTime = sessionDate.getTime() - dateEcheance.getTime();
+          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+          if (diffDays > 45) {
+            const joursDepasses = diffDays - 45;
+
+            await saveTermeSuspenduPaye({
+              sessionDate: getSessionDate(),
+              numPolice: contract.contractNumber,
+              codeSte: xmlSearchResult.codeCompany || '',
+              numAv: xmlSearchResult.avenantNumber || '0',
+              souscripteur: contract.insuredName,
+              dateEcheance: xmlSearchResult.maturity,
+              joursDepasses: joursDepasses,
+              primeTotale: contract.premiumAmount
+            });
+
+            setTermeSuspenduData({
+              contractNumber: contract.contractNumber,
+              insuredName: contract.insuredName,
+              dateEcheance: xmlSearchResult.maturity,
+              joursDepasses: joursDepasses,
+              primeTotale: contract.premiumAmount
+            });
+
+            setShowTermeSuspenduModal(true);
+          }
         } catch (termeError) {
           console.error('Erreur Terme:', termeError);
           setMessage(prev => prev + ' (erreur Terme)');
@@ -1218,6 +1259,18 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           </div>
         </form>
       </div>
+
+      {termeSuspenduData && (
+        <TermeSuspenduModal
+          isOpen={showTermeSuspenduModal}
+          onClose={() => setShowTermeSuspenduModal(false)}
+          contractNumber={termeSuspenduData.contractNumber}
+          insuredName={termeSuspenduData.insuredName}
+          dateEcheance={termeSuspenduData.dateEcheance}
+          joursDepasses={termeSuspenduData.joursDepasses}
+          primeTotale={termeSuspenduData.primeTotale}
+        />
+      )}
     </div>
   );
 };
