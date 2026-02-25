@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Search, Download } from 'lucide-react';
+import { Search, Download, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
+import TermeSuspenduList from './TermeSuspenduList';
 
 const TermeSearch: React.FC = () => {
   const [contractNumber, setContractNumber] = useState('');
@@ -12,6 +13,7 @@ const TermeSearch: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showTermeSuspendu, setShowTermeSuspendu] = useState(false);
 
   const handleSearch = async () => {
     setLoading(true);
@@ -139,7 +141,16 @@ const TermeSearch: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-5">Recherche Terme</h2>
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="text-2xl font-bold text-gray-900">Recherche Terme</h2>
+        <button
+          onClick={() => setShowTermeSuspendu(true)}
+          className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors shadow-lg"
+        >
+          <AlertTriangle className="w-5 h-5" />
+          <span>Termes Suspendus</span>
+        </button>
+      </div>
 
       {/* Section Recherche */}
       <div className="mb-8">
@@ -247,6 +258,11 @@ const TermeSearch: React.FC = () => {
           </div>
         </div>
       )}
+
+      <TermeSuspenduList
+        isOpen={showTermeSuspendu}
+        onClose={() => setShowTermeSuspendu(false)}
+      />
     </div>
   );
 };

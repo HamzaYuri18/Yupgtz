@@ -2278,3 +2278,46 @@ export const saveTermeSuspenduPaye = async (data: {
     return false;
   }
 };
+
+export const getTermeSuspenduPaye = async (
+  sessionDateFrom: string,
+  sessionDateTo: string,
+  echeanceDateFrom?: string,
+  echeanceDateTo?: string
+): Promise<any[]> => {
+  try {
+    let query = supabase
+      .from('terme_suspendu_paye')
+      .select('*')
+      .order('session_date', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (sessionDateFrom) {
+      query = query.gte('session_date', sessionDateFrom);
+    }
+
+    if (sessionDateTo) {
+      query = query.lte('session_date', sessionDateTo);
+    }
+
+    if (echeanceDateFrom) {
+      query = query.gte('date_echeance', echeanceDateFrom);
+    }
+
+    if (echeanceDateTo) {
+      query = query.lte('date_echeance', echeanceDateTo);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Erreur lors de la récupération des termes suspendus:', error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Erreur dans getTermeSuspenduPaye:', error);
+    throw error;
+  }
+};
