@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, RefreshCw, DollarSign, X } from 'lucide-react';
-import { getAvailableMonths, getUnpaidTermesByMonth, getOverdueUnpaidTermes, getPaidTermesByMonth, getUpcomingTermes, getCreditsDueToday, syncTermeStatusesWithMainTable, verifyTermeStatusWithEcheance } from '../utils/supabaseService';
+import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, DollarSign, X } from 'lucide-react';
+import { getAvailableMonths, getUnpaidTermesByMonth, getOverdueUnpaidTermes, getPaidTermesByMonth, getUpcomingTermes, getCreditsDueToday, verifyTermeStatusWithEcheance } from '../utils/supabaseService';
 import { getSessionDate } from '../utils/auth';
 import { isSessionClosed } from '../utils/sessionService';
 import { supabase } from '../lib/supabase';
@@ -105,12 +105,6 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
   const [daysFilter, setDaysFilter] = useState<number>(7);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string>('');
-  const [showSyncMessage, setShowSyncMessage] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verifyMessage, setVerifyMessage] = useState<string>('');
-  const [showVerifyMessage, setShowVerifyMessage] = useState(false);
   const [showCreditAlert, setShowCreditAlert] = useState(false);
   const [showTaskAlert, setShowTaskAlert] = useState(false);
   const [sessionClosed, setSessionClosed] = useState(false);
@@ -135,9 +129,30 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
   useEffect(() => {
     if (selectedMonth && selectedYear) {
-      loadTermesData();
+      syncAndLoadData();
     }
   }, [selectedMonth, selectedYear, daysFilter]);
+
+  const syncAndLoadData = async () => {
+    if (!selectedMonth || !selectedYear) return;
+
+    setIsLoading(true);
+    try {
+      const monthParts = selectedMonth.toLowerCase().split(' ');
+      const monthName = monthParts[0];
+      const year = monthParts[1];
+
+      console.log(`🔄 Synchronisation automatique pour ${monthName} ${year}...`);
+
+      await verifyTermeStatusWithEcheance(monthName, year);
+
+      console.log('✅ Synchronisation automatique terminée, chargement des données...');
+      await loadTermesData();
+    } catch (error) {
+      console.error('❌ Erreur lors de la synchronisation automatique:', error);
+      await loadTermesData();
+    }
+  };
 
   useEffect(() => {
     if (creditsDueToday.length > 0 && !showCreditAlert && !hasShownCreditAlert) {
@@ -392,104 +407,6 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'
   ];
 
-  const handleSyncStatuses = async () => {
-    if (!selectedMonth || !selectedYear) {
-      setSyncMessage('Veuillez sélectionner un mois et une année avant de synchroniser');
-      setShowSyncMessage(true);
-      setTimeout(() => setShowSyncMessage(false), 5000);
-      return;
-    }
-
-    setIsSyncing(true);
-    setSyncMessage('');
-    setShowSyncMessage(false);
-
-    try {
-      const monthParts = selectedMonth.toLowerCase().split(' ');
-      const monthName = monthParts[0];
-      const year = monthParts[1];
-
-      console.log(`🔄 Synchronisation pour ${monthName} ${year}...`);
-
-      const result = await syncTermeStatusesWithMainTable(monthName, year);
-
-      if (result.success) {
-        setSyncMessage(
-          `✅ ${result.message}\n\n` +
-          `📊 Statistiques:\n` +
-          `   • Tables traitées: ${result.details.totalTables}\n` +
-          `   • Contrats vérifiés: ${result.details.totalContracts}\n` +
-          `   • Contrats payés: ${result.details.paidCount}\n` +
-          `   • Contrats non payés: ${result.details.unpaidCount}\n` +
-          `   • Statuts mis à jour: ${result.details.updated}\n` +
-          `   • Erreurs: ${result.details.errors}`
-        );
-        setShowSyncMessage(true);
-
-        console.log('✅ Synchronisation terminée, rechargement des statistiques...');
-        await loadTermesData();
-      } else {
-        setSyncMessage(`❌ Erreur: ${result.message}`);
-        setShowSyncMessage(true);
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de la synchronisation:', error);
-      setSyncMessage('❌ Erreur lors de la synchronisation des statuts');
-      setShowSyncMessage(true);
-    } finally {
-      setIsSyncing(false);
-      setTimeout(() => setShowSyncMessage(false), 15000);
-    }
-  };
-
-  const handleVerifyTermeStatus = async () => {
-    if (!selectedMonth || !selectedYear) {
-      setVerifyMessage('Veuillez sélectionner un mois et une année avant de vérifier');
-      setShowVerifyMessage(true);
-      setTimeout(() => setShowVerifyMessage(false), 5000);
-      return;
-    }
-
-    setIsVerifying(true);
-    setVerifyMessage('');
-    setShowVerifyMessage(false);
-
-    try {
-      const monthParts = selectedMonth.toLowerCase().split(' ');
-      const monthName = monthParts[0];
-      const year = monthParts[1];
-
-      console.log(`🔍 Vérification pour ${monthName} ${year} avec echeance...`);
-
-      const result = await verifyTermeStatusWithEcheance(monthName, year);
-
-      if (result.success) {
-        setVerifyMessage(
-          `✅ ${result.message}\n\n` +
-          `📊 Statistiques:\n` +
-          `   • Contrats vérifiés: ${result.details.totalContracts}\n` +
-          `   • Contrats payés: ${result.details.paidCount}\n` +
-          `   • Contrats non payés: ${result.details.unpaidCount}\n` +
-          `   • Statuts mis à jour: ${result.details.updated}\n` +
-          `   • Erreurs: ${result.details.errors}`
-        );
-        setShowVerifyMessage(true);
-
-        console.log('✅ Vérification terminée, rechargement des statistiques...');
-        await loadTermesData();
-      } else {
-        setVerifyMessage(`❌ Erreur: ${result.message}`);
-        setShowVerifyMessage(true);
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors de la vérification:', error);
-      setVerifyMessage('❌ Erreur lors de la vérification des statuts');
-      setShowVerifyMessage(true);
-    } finally {
-      setIsVerifying(false);
-      setTimeout(() => setShowVerifyMessage(false), 15000);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -812,53 +729,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
             </div>
           </div>
 
-          {isHamza && (
-            <div className="mt-6 space-y-4">
-              <div>
-                <button
-                  onClick={handleVerifyTermeStatus}
-                  disabled={isVerifying || !selectedMonth || !selectedYear}
-                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                >
-                  <RefreshCw className={`w-5 h-5 ${isVerifying ? 'animate-spin' : ''}`} />
-                  <span>{isVerifying ? 'Vérification en cours...' : 'Vérifier avec Échéance'}</span>
-                </button>
-                <p className="text-sm text-gray-600 mt-2">
-                  Vérifie les contrats en comparant numero_contrat + echeance avec la table terme principale
-                </p>
-              </div>
-              <div>
-                <button
-                  onClick={handleSyncStatuses}
-                  disabled={isSyncing || !selectedMonth || !selectedYear}
-                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                >
-                  <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
-                  <span>{isSyncing ? 'Synchronisation en cours...' : 'Synchroniser les statuts'}</span>
-                </button>
-                <p className="text-sm text-gray-600 mt-2">
-                  Compare les contrats de ce mois avec la table principale et met à jour les statuts
-                </p>
-              </div>
-            </div>
-          )}
         </div>
-
-        {showVerifyMessage && (
-          <div className={`mb-6 p-4 rounded-lg ${verifyMessage.includes('Erreur') ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
-            <pre className={`text-sm whitespace-pre-wrap ${verifyMessage.includes('Erreur') ? 'text-red-800' : 'text-green-800'}`}>
-              {verifyMessage}
-            </pre>
-          </div>
-        )}
-
-        {showSyncMessage && (
-          <div className={`mb-6 p-4 rounded-lg ${syncMessage.includes('Erreur') ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
-            <pre className={`text-sm whitespace-pre-wrap ${syncMessage.includes('Erreur') ? 'text-red-800' : 'text-green-800'}`}>
-              {syncMessage}
-            </pre>
-          </div>
-        )}
 
         {isLoading ? (
           <div className="flex justify-center items-center py-12">
