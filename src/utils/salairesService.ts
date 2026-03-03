@@ -140,6 +140,14 @@ const updateCommissionNette = async (
 
 export const upsertSalaireLoyer = async (salaire: SalaireLoyer): Promise<boolean> => {
   try {
+    // Récupérer l'ancien enregistrement s'il existe
+    const { data: oldRecord } = await supabase
+      .from('salaires_loyer')
+      .select('*')
+      .eq('mois', salaire.mois)
+      .eq('annee', salaire.annee)
+      .maybeSingle();
+
     const insertData: any = {
       mois: salaire.mois,
       annee: salaire.annee,
@@ -168,6 +176,28 @@ export const upsertSalaireLoyer = async (salaire: SalaireLoyer): Promise<boolean
       return false;
     }
 
+    // Si l'ancien enregistrement était liquidé par compensation, annuler la déduction
+    if (oldRecord &&
+        oldRecord.statut_salaires &&
+        oldRecord.date_liquidation_salaires &&
+        oldRecord.mode_liquidation_salaires === 'Compensation sur commission') {
+
+      const oldQuinzaineInfo = await findQuinzaineForDate(oldRecord.date_liquidation_salaires);
+
+      if (oldQuinzaineInfo) {
+        console.log(`🔄 Annulation de l'ancienne déduction: +${oldRecord.montant_salaires}`);
+        await updateCommissionNette(
+          oldQuinzaineInfo.annee,
+          oldQuinzaineInfo.mois,
+          oldQuinzaineInfo.quinzaine,
+          -oldRecord.montant_salaires, // Montant négatif pour rajouter
+          oldRecord.mois,
+          oldRecord.annee
+        );
+      }
+    }
+
+    // Si le nouveau statut est liquidé par compensation, appliquer la déduction
     if (salaire.statut_salaires &&
         salaire.date_liquidation_salaires &&
         salaire.mode_liquidation_salaires === 'Compensation sur commission') {
