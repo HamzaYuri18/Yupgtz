@@ -36,6 +36,104 @@ export const getSalairesLoyers = async (startMonth: string, endMonth: string): P
   }
 };
 
+const findQuinzaineForDate = async (dateLiquidation: string): Promise<{ annee: number; mois: number; quinzaine: number } | null> => {
+  try {
+    const liquidationDate = new Date(dateLiquidation);
+
+    const { data, error } = await supabase
+      .from('etat_commission')
+      .select('*')
+      .lte('date_debut', dateLiquidation)
+      .gte('date_fin', dateLiquidation)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Erreur lors de la recherche de quinzaine:', error);
+      return null;
+    }
+
+    if (data) {
+      return {
+        annee: data.annee,
+        mois: data.mois,
+        quinzaine: data.quinzaine
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Erreur générale lors de la recherche de quinzaine:', error);
+    return null;
+  }
+};
+
+const updateCommissionNette = async (
+  annee: number,
+  mois: number,
+  quinzaine: number,
+  montantSalaire: number,
+  moisSalaire: string
+): Promise<boolean> => {
+  try {
+    const { data: currentData, error: fetchError } = await supabase
+      .from('etat_commission')
+      .select('commission_nette, remarques')
+      .eq('annee', annee)
+      .eq('mois', mois)
+      .eq('quinzaine', quinzaine)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('Erreur lors de la récupération de la commission:', fetchError);
+      return false;
+    }
+
+    if (!currentData) {
+      console.error('Quinzaine introuvable dans etat_commission');
+      return false;
+    }
+
+    const nouvelleCommissionNette = (currentData.commission_nette || 0) - montantSalaire;
+
+    const [anneeStr, moisStr] = moisSalaire.split('-');
+    const moisNoms = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
+    const nomMois = moisNoms[parseInt(moisStr) - 1];
+    const remarquesSalaire = `Salaires de ${nomMois} ${anneeStr} liquidé`;
+
+    const remarquesExistantes = currentData.remarques ? currentData.remarques.split('\n') : [];
+    if (!remarquesExistantes.includes(remarquesSalaire)) {
+      remarquesExistantes.push(remarquesSalaire);
+    }
+    const nouvellesRemarques = remarquesExistantes.join('\n');
+
+    const { error: updateError } = await supabase
+      .from('etat_commission')
+      .update({
+        commission_nette: nouvelleCommissionNette,
+        remarques: nouvellesRemarques,
+        updated_at: new Date().toISOString()
+      })
+      .eq('annee', annee)
+      .eq('mois', mois)
+      .eq('quinzaine', quinzaine);
+
+    if (updateError) {
+      console.error('Erreur lors de la mise à jour de la commission nette:', updateError);
+      return false;
+    }
+
+    console.log(`✅ Commission nette mise à jour: ${nouvelleCommissionNette.toFixed(3)} (${annee}-${mois} Q${quinzaine})`);
+    console.log(`✅ Remarque ajoutée: ${remarquesSalaire}`);
+    return true;
+  } catch (error) {
+    console.error('Erreur générale lors de la mise à jour de la commission nette:', error);
+    return false;
+  }
+};
+
 export const upsertSalaireLoyer = async (salaire: SalaireLoyer): Promise<boolean> => {
   try {
     const insertData: any = {
@@ -63,6 +161,29 @@ export const upsertSalaireLoyer = async (salaire: SalaireLoyer): Promise<boolean
     if (error) {
       console.error('Erreur lors de la sauvegarde du salaire/loyer:', error);
       return false;
+    }
+
+    if (salaire.statut_salaires &&
+        salaire.date_liquidation_salaires &&
+        salaire.mode_liquidation_salaires === 'Compensation sur commission') {
+
+      console.log(`🔍 Recherche de la quinzaine pour la date ${salaire.date_liquidation_salaires}...`);
+
+      const quinzaineInfo = await findQuinzaineForDate(salaire.date_liquidation_salaires);
+
+      if (quinzaineInfo) {
+        console.log(`✅ Quinzaine trouvée: ${quinzaineInfo.annee}-${quinzaineInfo.mois} Q${quinzaineInfo.quinzaine}`);
+
+        await updateCommissionNette(
+          quinzaineInfo.annee,
+          quinzaineInfo.mois,
+          quinzaineInfo.quinzaine,
+          salaire.montant_salaires,
+          salaire.mois
+        );
+      } else {
+        console.warn('⚠️ Aucune quinzaine trouvée pour la date de liquidation');
+      }
     }
 
     return true;

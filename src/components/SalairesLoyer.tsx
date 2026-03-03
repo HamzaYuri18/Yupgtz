@@ -46,7 +46,7 @@ export default function SalairesLoyer() {
           mode_liquidation_loyer: null,
           date_liquidation_loyer: null
         };
-      });
+      }).reverse();
 
       setSalaires(sortedData);
     } catch (error) {
