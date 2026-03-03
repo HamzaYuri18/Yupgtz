@@ -1,8 +1,9 @@
 import { supabase } from '../lib/supabase';
 
 export interface SalaireLoyer {
-  id?: string;
-  mois: string;
+  id?: number;
+  mois: number;
+  annee: number;
   montant_salaires: number;
   statut_salaires: boolean;
   mode_liquidation_salaires: string | null;
@@ -12,16 +13,16 @@ export interface SalaireLoyer {
   mode_liquidation_loyer: string | null;
   date_liquidation_loyer: string | null;
   created_at?: string;
-  updated_at?: string;
+  moisDisplay?: string;
 }
 
-export const getSalairesLoyers = async (startMonth: string, endMonth: string): Promise<SalaireLoyer[]> => {
+export const getSalairesLoyers = async (startYear: number, startMois: number, endYear: number, endMois: number): Promise<SalaireLoyer[]> => {
   try {
     const { data, error } = await supabase
       .from('salaires_loyer')
       .select('*')
-      .gte('mois', startMonth)
-      .lte('mois', endMonth)
+      .or(`and(annee.eq.${startYear},mois.gte.${startMois}),and(annee.gt.${startYear},annee.lt.${endYear}),and(annee.eq.${endYear},mois.lte.${endMois})`)
+      .order('annee', { ascending: false })
       .order('mois', { ascending: false });
 
     if (error) {
@@ -29,7 +30,10 @@ export const getSalairesLoyers = async (startMonth: string, endMonth: string): P
       return [];
     }
 
-    return data || [];
+    return (data || []).map(d => ({
+      ...d,
+      moisDisplay: `${d.annee}-${d.mois.toString().padStart(2, '0')}`
+    }));
   } catch (error) {
     console.error('Erreur générale lors de la récupération des salaires/loyers:', error);
     return [];
@@ -72,7 +76,8 @@ const updateCommissionNette = async (
   mois: number,
   quinzaine: number,
   montantSalaire: number,
-  moisSalaire: string
+  moisSalaire: number,
+  anneeSalaire: number
 ): Promise<boolean> => {
   try {
     const { data: currentData, error: fetchError } = await supabase
@@ -95,13 +100,12 @@ const updateCommissionNette = async (
 
     const nouvelleCommissionNette = (currentData.commission_nette || 0) - montantSalaire;
 
-    const [anneeStr, moisStr] = moisSalaire.split('-');
     const moisNoms = [
       'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
       'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
     ];
-    const nomMois = moisNoms[parseInt(moisStr) - 1];
-    const remarquesSalaire = `Salaires de ${nomMois} ${anneeStr} liquidé`;
+    const nomMois = moisNoms[moisSalaire - 1];
+    const remarquesSalaire = `Salaires de ${nomMois} ${anneeSalaire} liquidé`;
 
     const remarquesExistantes = currentData.remarques ? currentData.remarques.split('\n') : [];
     if (!remarquesExistantes.includes(remarquesSalaire)) {
@@ -138,6 +142,7 @@ export const upsertSalaireLoyer = async (salaire: SalaireLoyer): Promise<boolean
   try {
     const insertData: any = {
       mois: salaire.mois,
+      annee: salaire.annee,
       montant_salaires: salaire.montant_salaires,
       statut_salaires: salaire.statut_salaires,
       mode_liquidation_salaires: salaire.statut_salaires ? salaire.mode_liquidation_salaires : null,
@@ -155,7 +160,7 @@ export const upsertSalaireLoyer = async (salaire: SalaireLoyer): Promise<boolean
     const { error } = await supabase
       .from('salaires_loyer')
       .upsert([insertData], {
-        onConflict: 'mois'
+        onConflict: 'mois,annee'
       });
 
     if (error) {
@@ -179,7 +184,8 @@ export const upsertSalaireLoyer = async (salaire: SalaireLoyer): Promise<boolean
           quinzaineInfo.mois,
           quinzaineInfo.quinzaine,
           salaire.montant_salaires,
-          salaire.mois
+          salaire.mois,
+          salaire.annee
         );
       } else {
         console.warn('⚠️ Aucune quinzaine trouvée pour la date de liquidation');
@@ -221,23 +227,40 @@ export const formatMonthDisplay = (monthStr: string): string => {
 
 export const initializeMissingMonths = async (months: string[]): Promise<void> => {
   try {
-    const existingData = await getSalairesLoyers(months[0], months[months.length - 1]);
-    const existingMonths = new Set(existingData.map(s => s.mois));
+    if (months.length === 0) return;
 
-    const missingMonths = months.filter(m => !existingMonths.has(m));
+    const firstMonth = months[0].split('-');
+    const lastMonth = months[months.length - 1].split('-');
+
+    const startYear = parseInt(firstMonth[0]);
+    const startMois = parseInt(firstMonth[1]);
+    const endYear = parseInt(lastMonth[0]);
+    const endMois = parseInt(lastMonth[1]);
+
+    const existingData = await getSalairesLoyers(startYear, startMois, endYear, endMois);
+    const existingKeys = new Set(existingData.map(s => `${s.annee}-${s.mois}`));
+
+    const missingMonths = months.filter(m => {
+      const [y, mo] = m.split('-');
+      return !existingKeys.has(`${parseInt(y)}-${parseInt(mo)}`);
+    });
 
     if (missingMonths.length > 0) {
-      const insertData = missingMonths.map(mois => ({
-        mois,
-        montant_salaires: 0,
-        statut_salaires: false,
-        mode_liquidation_salaires: null,
-        date_liquidation_salaires: null,
-        montant_loyer: 0,
-        statut_loyer: false,
-        mode_liquidation_loyer: null,
-        date_liquidation_loyer: null
-      }));
+      const insertData = missingMonths.map(moisStr => {
+        const [annee, mois] = moisStr.split('-').map(Number);
+        return {
+          mois,
+          annee,
+          montant_salaires: 0,
+          statut_salaires: false,
+          mode_liquidation_salaires: null,
+          date_liquidation_salaires: null,
+          montant_loyer: 0,
+          statut_loyer: false,
+          mode_liquidation_loyer: null,
+          date_liquidation_loyer: null
+        };
+      });
 
       const { error } = await supabase
         .from('salaires_loyer')

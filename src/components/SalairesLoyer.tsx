@@ -32,11 +32,23 @@ export default function SalairesLoyer() {
 
       await initializeMissingMonths(displayMonths);
 
-      const data = await getSalairesLoyers(displayMonths[displayMonths.length - 1], displayMonths[0]);
+      const firstMonth = displayMonths[0].split('-');
+      const lastMonth = displayMonths[displayMonths.length - 1].split('-');
 
-      const sortedData = displayMonths.map(month => {
-        return data.find(s => s.mois === month) || {
-          mois: month,
+      const startYear = parseInt(firstMonth[0]);
+      const startMois = parseInt(firstMonth[1]);
+      const endYear = parseInt(lastMonth[0]);
+      const endMois = parseInt(lastMonth[1]);
+
+      const data = await getSalairesLoyers(startYear, startMois, endYear, endMois);
+
+      const sortedData = displayMonths.map(monthStr => {
+        const [annee, mois] = monthStr.split('-').map(Number);
+        const found = data.find(s => s.annee === annee && s.mois === mois);
+        return found || {
+          mois,
+          annee,
+          moisDisplay: monthStr,
           montant_salaires: 0,
           statut_salaires: false,
           mode_liquidation_salaires: null,
@@ -61,19 +73,21 @@ export default function SalairesLoyer() {
   }, [currentPage]);
 
   const handleEdit = (salaire: SalaireLoyer, type: EditType) => {
-    setEditingId(salaire.id || salaire.mois);
+    const uniqueKey = salaire.id || `${salaire.annee}-${salaire.mois}`;
+    setEditingId(uniqueKey);
     setEditType(type);
     setEditData({ ...salaire });
   };
 
   const handleSave = async () => {
-    if (!editData.mois) return;
+    if (!editData.mois || !editData.annee) return;
 
     setSaving(true);
     try {
       const success = await upsertSalaireLoyer({
         id: editData.id,
         mois: editData.mois,
+        annee: editData.annee,
         montant_salaires: editData.montant_salaires || 0,
         statut_salaires: editData.statut_salaires || false,
         mode_liquidation_salaires: editData.statut_salaires ? editData.mode_liquidation_salaires || null : null,
@@ -166,13 +180,14 @@ export default function SalairesLoyer() {
               </div>
               <div className="space-y-3">
                 {salaires.map((salaire) => {
-                  const isEditing = editingId === (salaire.id || salaire.mois) && editType === 'salaires';
+                  const uniqueKey = salaire.id || `${salaire.annee}-${salaire.mois}`;
+                  const isEditing = editingId === uniqueKey && editType === 'salaires';
 
                   return (
-                    <div key={`salaires-${salaire.id || salaire.mois}`} className="bg-white rounded-lg p-4 shadow-sm">
+                    <div key={`salaires-${uniqueKey}`} className="bg-white rounded-lg p-4 shadow-sm">
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-sm font-semibold text-gray-700">
-                          {formatMonthDisplay(salaire.mois)}
+                          {formatMonthDisplay(salaire.moisDisplay || `${salaire.annee}-${salaire.mois.toString().padStart(2, '0')}`)}
                         </span>
                         {isEditing ? (
                           <span
@@ -316,13 +331,14 @@ export default function SalairesLoyer() {
               </div>
               <div className="space-y-3">
                 {salaires.map((salaire) => {
-                  const isEditing = editingId === (salaire.id || salaire.mois) && editType === 'loyer';
+                  const uniqueKey = salaire.id || `${salaire.annee}-${salaire.mois}`;
+                  const isEditing = editingId === uniqueKey && editType === 'loyer';
 
                   return (
-                    <div key={`loyer-${salaire.id || salaire.mois}`} className="bg-white rounded-lg p-4 shadow-sm">
+                    <div key={`loyer-${uniqueKey}`} className="bg-white rounded-lg p-4 shadow-sm">
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-sm font-semibold text-gray-700">
-                          {formatMonthDisplay(salaire.mois)}
+                          {formatMonthDisplay(salaire.moisDisplay || `${salaire.annee}-${salaire.mois.toString().padStart(2, '0')}`)}
                         </span>
                         {isEditing ? (
                           <span
