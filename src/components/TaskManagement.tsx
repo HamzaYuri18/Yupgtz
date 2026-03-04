@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { AlertCircle, CheckCircle, Clock, Plus, Edit2, Save, X, ChevronDown, ChevronUp, Calendar, Trash2, Filter, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, Plus, CreditCard as Edit2, Save, X, ChevronDown, ChevronUp, Calendar, Trash2, Filter, RefreshCw } from 'lucide-react';
 
 interface Tache {
   id: string;

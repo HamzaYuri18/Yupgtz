@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Save, Edit2, Check, X, DollarSign, TrendingDown, TrendingUp, FileText, Download, Filter } from 'lucide-react';
+import { Calendar, Save, CreditCard as Edit2, Check, X, DollarSign, TrendingDown, TrendingUp, FileText, Download, Filter } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
 
