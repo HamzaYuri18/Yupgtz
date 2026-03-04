@@ -118,7 +118,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
   useEffect(() => {
     loadData();
-  }, [activeSection, monthFilter, showRistourneDateFilter, ristourneDateFilter.dateFrom, ristourneDateFilter.dateTo, showSinistreDateFilter, sinistreDateFilter.dateFrom, sinistreDateFilter.dateTo, showRecetteDateFilter, recetteDateFilter.dateFrom, recetteDateFilter.dateTo]);
+  }, [activeSection, monthFilter]);
 
   useEffect(() => {
     loadAvailableMonths();
@@ -820,7 +820,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
               <option value="STEG">STEG</option>
               <option value="SONED">SONED</option>
               <option value="A/S Ahlem">A/S Ahlem</option>
-              <option value="A/S Islem">A/S Islem</option>
+              <option value="A/S Rouae">A/S Rouae</option>
               <option value="Reprise sur Avance Client">Reprise sur Avance Client</option>
               <option value="Versement Bancaire">Versement Bancaire</option>
               <option value="Remise">Remise</option>
@@ -844,8 +844,13 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
             <input
               type="date"
               value={newDepense.date_depense}
-              readOnly
-              className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
+              onChange={(e) => setNewDepense({...newDepense, date_depense: e.target.value})}
+              readOnly={username !== 'Hamza'}
+              className={`w-full p-3 border border-gray-300 rounded-lg ${
+                username !== 'Hamza'
+                  ? 'bg-gray-100 cursor-not-allowed'
+                  : 'focus:ring-2 focus:ring-red-500 focus:border-transparent'
+              }`}
             />
           </div>
         </div>
@@ -1229,7 +1234,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
       {showRecetteDateFilter && (
         <div className="bg-white rounded-lg p-4 mb-4 border border-green-200">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 mb-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Date début</label>
               <input
@@ -1249,6 +1254,12 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
               />
             </div>
           </div>
+          <button
+            onClick={() => loadData()}
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+          >
+            Appliquer le filtre
+          </button>
         </div>
       )}
 
@@ -1265,7 +1276,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
             >
               <option value="Hamza">Hamza</option>
               <option value="Récupération A/S Ahlem">Récupération A/S Ahlem</option>
-              <option value="Récupération A/S Islem">Récupération A/S Islem</option>
+              <option value="Récupération A/S Rouae">Récupération A/S Rouae</option>
               <option value="Avance Client">Avance Client</option>
               <option value="Recuperation Depense">Recuperation Depense</option>
             </select>
@@ -1437,7 +1448,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
       {showRistourneDateFilter && (
         <div className="bg-white rounded-lg p-4 mb-4 border border-purple-200">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 mb-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Date début</label>
               <input
@@ -1457,6 +1468,12 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
               />
             </div>
           </div>
+          <button
+            onClick={() => loadData()}
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+          >
+            Appliquer le filtre
+          </button>
         </div>
       )}
 
@@ -1573,25 +1590,33 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         </div>
 
         {showRistourneDateFilter && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Date du</label>
-              <input
-                type="date"
-                value={ristourneDateFilter.dateFrom}
-                onChange={(e) => setRistourneDateFilter({...ristourneDateFilter, dateFrom: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              />
+          <div className="mt-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Date du</label>
+                <input
+                  type="date"
+                  value={ristourneDateFilter.dateFrom}
+                  onChange={(e) => setRistourneDateFilter({...ristourneDateFilter, dateFrom: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Date à</label>
+                <input
+                  type="date"
+                  value={ristourneDateFilter.dateTo}
+                  onChange={(e) => setRistourneDateFilter({...ristourneDateFilter, dateTo: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Date à</label>
-              <input
-                type="date"
-                value={ristourneDateFilter.dateTo}
-                onChange={(e) => setRistourneDateFilter({...ristourneDateFilter, dateTo: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              />
-            </div>
+            <button
+              onClick={() => loadData()}
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+            >
+              Appliquer le filtre
+            </button>
           </div>
         )}
       </div>
@@ -1683,7 +1708,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
       {showSinistreDateFilter && (
         <div className="bg-white rounded-lg p-4 mb-4 border border-orange-200">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 mb-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Date début</label>
               <input
@@ -1703,6 +1728,12 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
               />
             </div>
           </div>
+          <button
+            onClick={() => loadData()}
+            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+          >
+            Appliquer le filtre
+          </button>
         </div>
       )}
 

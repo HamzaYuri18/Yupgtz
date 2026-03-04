@@ -3,7 +3,7 @@ import { User, Session } from '../types';
 export const users: User[] = [
   { username: 'Hamza', password: '007H', isAdmin: true },
   { username: 'Ahlem', password: '123', isAdmin: false },
-  { username: 'Islem', password: '456', isAdmin: false }
+  { username: 'Rouae', password: '987', isAdmin: false }
 ];
 
 export const authenticateUser = (username: string, password: string): User | null => {

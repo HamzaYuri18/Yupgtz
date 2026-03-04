@@ -116,7 +116,7 @@ const EtatCommissions: React.FC = () => {
 
   const calculateDepenses = async (dateDebut: string, dateFin: string): Promise<number> => {
     try {
-      const excludedTypes = ['Versement Bancaire', 'A/S Ahlem', 'A/S Islem', 'Reprise sur Avance Client'];
+      const excludedTypes = ['Versement Bancaire', 'A/S Ahlem', 'A/S Rouae', 'Reprise sur Avance Client'];
 
       const { data, error } = await supabase
         .from('depenses')
@@ -333,7 +333,7 @@ const EtatCommissions: React.FC = () => {
 
   const exportDepenses = async (quinzaine: QuinzaineData) => {
     try {
-      const excludedTypes = ['Versement Bancaire', 'A/S Ahlem', 'A/S Islem', 'Reprise sur Avance Client'];
+      const excludedTypes = ['Versement Bancaire', 'A/S Ahlem', 'A/S Rouae', 'Reprise sur Avance Client'];
 
       const { data, error } = await supabase
         .from('depenses')

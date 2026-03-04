@@ -8,7 +8,7 @@ interface Tache {
   description: string;
   date_effectuer: string;
   degre_importance: 'Urgent' | 'Haute' | 'Moyenne' | 'Basse';
-  utilisateur_charge: 'Ahlem' | 'Islem';
+  utilisateur_charge: 'Ahlem' | 'Rouae';
   statut: 'A faire' | 'Accomplie';
   remarques: string;
   session_id: number | null;
@@ -41,15 +41,15 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
     description: '',
     date_effectuer: '',
     degre_importance: 'Moyenne' as 'Urgent' | 'Haute' | 'Moyenne' | 'Basse',
-    utilisateur_charge: 'Ahlem' as 'Ahlem' | 'Islem',
+    utilisateur_charge: 'Ahlem' as 'Ahlem' | 'Rouae',
   });
   const [remarquesTemp, setRemarquesTemp] = useState<{ [key: string]: string }>({});
   const [newDateTemp, setNewDateTemp] = useState<{ [key: string]: string }>({});
 
   const isHamza = currentUser === 'Hamza';
-  const isIslemOrAhlem = currentUser === 'Islem' || currentUser === 'Ahlem';
-  const canEditRemarks = isHamza || isIslemOrAhlem;
-  const canMarkAsComplete = isHamza || isIslemOrAhlem;
+  const isRouaeOrAhlem = currentUser === 'Rouae' || currentUser === 'Ahlem';
+  const canEditRemarks = isHamza || isRouaeOrAhlem;
+  const canMarkAsComplete = isHamza || isRouaeOrAhlem;
 
   useEffect(() => {
     loadTaches();
@@ -331,7 +331,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="Ahlem">Ahlem</option>
-                  <option value="Islem">Islem</option>
+                  <option value="Rouae">Rouae</option>
                 </select>
               </div>
             </div>
