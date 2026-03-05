@@ -686,19 +686,13 @@ const CreditsList: React.FC = () => {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
               {viewMode === 'mois' && (
-                <select
+                <input
+                  type="month"
                   name="mois"
                   value={filters.mois}
                   onChange={handleFilterChange}
-                  className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent max-h-48 overflow-y-auto"
-                  size={1}
-                >
-                  {uniqueMonths.map(month => (
-                    <option key={month} value={month}>
-                      {getMonthName(month)}
-                    </option>
-                  ))}
-                </select>
+                  className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
               )}
 
               <select
