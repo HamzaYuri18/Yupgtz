@@ -19,7 +19,9 @@ const CreditsList: React.FC = () => {
   const [viewMode, setViewMode] = useState<'mois' | 'tous'>('mois');
   const [activeFilter, setActiveFilter] = useState<'none' | 'echeances' | 'retard'>('none');
   const [isExporting, setIsExporting] = useState(false);
-  
+  const [hoveredCredit, setHoveredCredit] = useState<any | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const isHamza = currentUser === 'Hamza';
 
@@ -688,7 +690,8 @@ const CreditsList: React.FC = () => {
                   name="mois"
                   value={filters.mois}
                   onChange={handleFilterChange}
-                  className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent max-h-48 overflow-y-auto"
+                  size={1}
                 >
                   {uniqueMonths.map(month => (
                     <option key={month} value={month}>
@@ -841,7 +844,16 @@ const CreditsList: React.FC = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredCredits.map((credit) => (
-                <tr key={credit.id} className="hover:bg-gray-50">
+                <tr
+                  key={credit.id}
+                  className="hover:bg-blue-50 transition-colors cursor-pointer relative"
+                  onMouseEnter={(e) => {
+                    setHoveredCredit(credit);
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setTooltipPosition({ x: rect.left + rect.width / 2, y: rect.top - 10 });
+                  }}
+                  onMouseLeave={() => setHoveredCredit(null)}
+                >
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {credit.numero_contrat}
                   </td>
@@ -918,14 +930,99 @@ const CreditsList: React.FC = () => {
           
           {filteredCredits.length === 0 && (
             <div className="text-center py-8 text-gray-500">
-              {activeFilter === 'echeances' 
-                ? 'Aucun crédit avec échéance dans les 7 prochains jours' 
+              {activeFilter === 'echeances'
+                ? 'Aucun crédit avec échéance dans les 7 prochains jours'
                 : activeFilter === 'retard'
                 ? 'Aucun crédit en retard'
                 : 'Aucun crédit trouvé avec les filtres sélectionnés'}
             </div>
           )}
         </div>
+
+        {hoveredCredit && (
+          <div
+            className="fixed z-50 bg-white border-2 border-blue-500 shadow-2xl rounded-lg p-6 max-w-md"
+            style={{
+              left: `${tooltipPosition.x}px`,
+              top: `${tooltipPosition.y}px`,
+              transform: 'translate(-50%, -100%)',
+              pointerEvents: 'none'
+            }}
+          >
+            <div className="space-y-3">
+              <div className="border-b border-gray-200 pb-2">
+                <h3 className="text-lg font-bold text-blue-900">Détails du Crédit</h3>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-gray-500 font-medium">Numéro Contrat</p>
+                  <p className="font-semibold text-gray-900">{hoveredCredit.numero_contrat}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Branche</p>
+                  <p className="font-semibold text-gray-900">{hoveredCredit.branche}</p>
+                </div>
+
+                <div className="col-span-2">
+                  <p className="text-gray-500 font-medium">Assuré</p>
+                  <p className="font-semibold text-gray-900">{hoveredCredit.assure}</p>
+                </div>
+
+                <div>
+                  <p className="text-gray-500 font-medium">Prime</p>
+                  <p className="font-semibold text-blue-600">{(hoveredCredit.prime || 0).toLocaleString('fr-FR')} DT</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Montant Crédit</p>
+                  <p className="font-semibold text-blue-600">{(hoveredCredit.montant_credit || 0).toLocaleString('fr-FR')} DT</p>
+                </div>
+
+                <div>
+                  <p className="text-gray-500 font-medium">Paiement</p>
+                  <p className="font-semibold text-green-600">{(hoveredCredit.paiement || 0).toLocaleString('fr-FR')} DT</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Solde</p>
+                  <p className={`font-semibold ${(hoveredCredit.solde || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {(hoveredCredit.solde || 0).toLocaleString('fr-FR')} DT
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-gray-500 font-medium">Date Crédit</p>
+                  <p className="font-semibold text-gray-900">
+                    {hoveredCredit.date_credit ? new Date(hoveredCredit.date_credit).toLocaleDateString('fr-FR') : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Date Prévue</p>
+                  <p className="font-semibold text-gray-900">
+                    {hoveredCredit.date_paiement_prevue ? new Date(hoveredCredit.date_paiement_prevue).toLocaleDateString('fr-FR') : '-'}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-gray-500 font-medium">Statut</p>
+                  <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(hoveredCredit.statut)}`}>
+                    {hoveredCredit.statut}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Date Effectif</p>
+                  <p className="font-semibold text-gray-900">
+                    {hoveredCredit.date_paiement_effectif ? new Date(hoveredCredit.date_paiement_effectif).toLocaleDateString('fr-FR') : '-'}
+                  </p>
+                </div>
+
+                <div className="col-span-2">
+                  <p className="text-gray-500 font-medium">Créé par</p>
+                  <p className="font-semibold text-gray-900">{hoveredCredit.cree_par}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
