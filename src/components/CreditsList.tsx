@@ -13,7 +13,8 @@ const CreditsList: React.FC = () => {
     createdBy: 'all',
     dateFrom: '',
     dateTo: '',
-    mois: new Date().toISOString().slice(0, 7)
+    mois: new Date().toISOString().slice(0, 7),
+    nomClient: ''
   });
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'mois' | 'tous'>('mois');
@@ -247,8 +248,12 @@ const CreditsList: React.FC = () => {
     });
   };
 
+  const normalizeString = (str: string) => {
+    return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  };
+
   const applyFilters = () => {
-    let filtered = viewMode === 'mois' 
+    let filtered = viewMode === 'mois'
       ? getCreditsByMonth(filters.mois)
       : credits;
 
@@ -261,20 +266,26 @@ const CreditsList: React.FC = () => {
         const creditDate = credit.date_credit ? new Date(credit.date_credit) : new Date();
         const fromDate = filters.dateFrom ? new Date(filters.dateFrom) : new Date('1900-01-01');
         const toDate = filters.dateTo ? new Date(filters.dateTo) : new Date('2100-12-31');
-        
+
         fromDate.setHours(0, 0, 0, 0);
         toDate.setHours(23, 59, 59, 999);
         creditDate.setHours(0, 0, 0, 0);
-        
+
+        // Filtre par nom de client avec tolérance
+        const matchesClientName = filters.nomClient
+          ? normalizeString(credit.assure || '').includes(normalizeString(filters.nomClient))
+          : true;
+
         return (
           (filters.statut === 'all' || credit.statut === filters.statut) &&
           (filters.branche === 'all' || credit.branche === filters.branche) &&
           (filters.createdBy === 'all' || credit.cree_par === filters.createdBy) &&
-          creditDate >= fromDate && creditDate <= toDate
+          creditDate >= fromDate && creditDate <= toDate &&
+          matchesClientName
         );
       });
     }
-    
+
     setFilteredCredits(filtered);
   };
 
@@ -345,7 +356,8 @@ const CreditsList: React.FC = () => {
       createdBy: 'all',
       dateFrom: '',
       dateTo: '',
-      mois: new Date().toISOString().slice(0, 7)
+      mois: new Date().toISOString().slice(0, 7),
+      nomClient: ''
     });
   };
 
@@ -694,6 +706,15 @@ const CreditsList: React.FC = () => {
                   className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               )}
+
+              <input
+                type="text"
+                name="nomClient"
+                value={filters.nomClient}
+                onChange={handleFilterChange}
+                placeholder="Nom du client..."
+                className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
 
               <select
                 name="statut"
