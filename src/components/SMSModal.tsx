@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Send, MessageSquare, Phone, Languages } from 'lucide-react';
+import { getSession } from '../utils/auth';
 
 interface SMSModalProps {
   isOpen: boolean;
@@ -18,11 +19,16 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
   const [isSending, setIsSending] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [language, setLanguage] = useState<'fr' | 'ar'>('fr');
+  const [isMessageEditable, setIsMessageEditable] = useState(false);
 
   useEffect(() => {
     if (isOpen && credit && credit.numero_contrat) {
       console.log('SMS Modal ouvert pour:', credit);
       setPhoneNumber(credit.telephone || '');
+
+      const session = getSession();
+      const currentUsername = session?.username || '';
+      setIsMessageEditable(currentUsername === 'Hamza');
 
       const formatContractNumber = (contrat: string): string => {
         if (contrat.length >= 4) {
@@ -197,12 +203,18 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
               onChange={(e) => setMessage(e.target.value)}
               rows={5}
               maxLength={160}
+              disabled={!isMessageEditable}
               className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${
                 language === 'ar' ? 'text-right' : 'text-left'
-              }`}
+              } ${!isMessageEditable ? 'bg-gray-100 cursor-not-allowed' : ''}`}
               placeholder="Votre message..."
               dir={language === 'ar' ? 'rtl' : 'ltr'}
             />
+            {!isMessageEditable && (
+              <p className="text-xs text-orange-600 mt-1">
+                Seul Hamza peut modifier le message
+              </p>
+            )}
             <div className="flex justify-between items-center mt-2">
               <p className="text-xs text-gray-500">Limite: 160 caractères</p>
               <p className={`text-sm font-medium ${remainingChars < 20 ? 'text-red-600' : 'text-gray-600'}`}>
