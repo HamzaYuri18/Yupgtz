@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Send, MessageSquare, Phone } from 'lucide-react';
+import { X, Send, MessageSquare, Phone, Languages } from 'lucide-react';
 
 interface SMSModalProps {
   isOpen: boolean;
@@ -17,6 +17,7 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [language, setLanguage] = useState<'fr' | 'ar'>('fr');
 
   useEffect(() => {
     if (isOpen && credit && credit.numero_contrat) {
@@ -34,12 +35,18 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
 
       const formattedContract = formatContractNumber(credit.numero_contrat);
 
-      setMessage(
-        `Bonjour ${credit.assure}, vous avez un solde impayé de ${Math.abs(credit.solde).toLocaleString('fr-FR')} DT pour le contrat ${formattedContract}. Merci de régulariser votre situation. STAR SHIRI votre assureur de confiance 72486210`
-      );
+      if (language === 'fr') {
+        setMessage(
+          `Bonjour ${credit.assure}, vous avez un solde impayé de ${Math.abs(credit.solde).toLocaleString('fr-FR')} DT pour le contrat ${formattedContract}. Merci de régulariser votre situation. Salutations. STAR SHIRI 72486210`
+        );
+      } else {
+        setMessage(
+          `مرحبا ${credit.assure}، لديك رصيد غير مدفوع قدره ${Math.abs(credit.solde).toLocaleString('fr-FR')} دت للعقد ${formattedContract}. يرجى تسوية وضعيتك. تحياتنا. STAR SHIRI 72486210`
+        );
+      }
       setStatus(null);
     }
-  }, [isOpen, credit]);
+  }, [isOpen, credit, language]);
 
   if (!isOpen) return null;
 
@@ -155,17 +162,46 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <MessageSquare className="w-4 h-4 inline mr-2" />
-              Message SMS
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                <MessageSquare className="w-4 h-4 inline mr-2" />
+                Message SMS
+              </label>
+              <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setLanguage('fr')}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                    language === 'fr'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Languages className="w-4 h-4 inline mr-1" />
+                  Français
+                </button>
+                <button
+                  onClick={() => setLanguage('ar')}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                    language === 'ar'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Languages className="w-4 h-4 inline mr-1" />
+                  العربية
+                </button>
+              </div>
+            </div>
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               rows={5}
               maxLength={160}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${
+                language === 'ar' ? 'text-right' : 'text-left'
+              }`}
               placeholder="Votre message..."
+              dir={language === 'ar' ? 'rtl' : 'ltr'}
             />
             <div className="flex justify-between items-center mt-2">
               <p className="text-xs text-gray-500">Limite: 160 caractères</p>
