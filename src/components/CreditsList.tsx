@@ -3,6 +3,7 @@ import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, 
 import { getCredits, updateCreditStatus } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
 import * as XLSX from 'xlsx';
+import SMSModal from './SMSModal';
 
 const CreditsList: React.FC = () => {
   const [credits, setCredits] = useState<any[]>([]);
@@ -22,6 +23,7 @@ const CreditsList: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [hoveredCredit, setHoveredCredit] = useState<any | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const [selectedCreditForSMS, setSelectedCreditForSMS] = useState<any | null>(null);
 
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const isHamza = currentUser === 'Hamza';
@@ -888,11 +890,24 @@ const CreditsList: React.FC = () => {
                     {(credit.paiement || 0).toLocaleString('fr-FR')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <span className={`font-semibold ${
-                      (credit.solde || 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {(credit.solde || 0).toLocaleString('fr-FR')}
-                    </span>
+                    {credit.solde && credit.solde !== 0 ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedCreditForSMS(credit);
+                        }}
+                        className={`font-semibold hover:underline cursor-pointer ${
+                          (credit.solde || 0) >= 0 ? 'text-green-600 hover:text-green-700' : 'text-red-600 hover:text-red-700'
+                        }`}
+                        title="Cliquez pour envoyer un SMS"
+                      >
+                        {(credit.solde || 0).toLocaleString('fr-FR')}
+                      </button>
+                    ) : (
+                      <span className="font-semibold text-gray-400">
+                        0
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {credit.date_credit ? new Date(credit.date_credit).toLocaleDateString('fr-FR') : '-'}
@@ -1038,6 +1053,18 @@ const CreditsList: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* SMS Modal */}
+        <SMSModal
+          isOpen={!!selectedCreditForSMS}
+          onClose={() => setSelectedCreditForSMS(null)}
+          credit={selectedCreditForSMS || {
+            numero_contrat: '',
+            assure: '',
+            solde: 0,
+            telephone: ''
+          }}
+        />
       </div>
     </div>
   );

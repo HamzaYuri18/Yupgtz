@@ -391,7 +391,8 @@ export const saveCreditContract = async (contractData: ContractData): Promise<bo
         cree_par: contractData.createdBy,
         statut: 'Non payé',
         solde: creditAmountValue,
-        paiement: 0
+        paiement: 0,
+        telephone: contractData.telephone || null
       }]);
 
     if (error) {
