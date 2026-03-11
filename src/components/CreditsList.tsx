@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, DollarSign, User, Download } from 'lucide-react';
+import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, DollarSign, User, Download, MessageSquare } from 'lucide-react';
 import { getCredits, updateCreditStatus } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
 import * as XLSX from 'xlsx';
@@ -890,22 +890,30 @@ const CreditsList: React.FC = () => {
                     {(credit.paiement || 0).toLocaleString('fr-FR')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {credit.solde && credit.solde !== 0 ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedCreditForSMS(credit);
-                        }}
-                        className={`font-semibold hover:underline cursor-pointer ${
-                          (credit.solde || 0) >= 0 ? 'text-green-600 hover:text-green-700' : 'text-red-600 hover:text-red-700'
-                        }`}
-                        title="Cliquez pour envoyer un SMS"
-                      >
-                        {(credit.solde || 0).toLocaleString('fr-FR')}
-                      </button>
+                    {(credit.solde !== null && credit.solde !== undefined && credit.solde !== 0) ? (
+                      <div className="flex items-center space-x-2">
+                        <span className={`font-bold ${
+                          credit.solde > 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {credit.solde.toLocaleString('fr-FR')}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            console.log('Crédit sélectionné pour SMS:', credit);
+                            setSelectedCreditForSMS(credit);
+                          }}
+                          className="p-1.5 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 hover:text-blue-700 transition-all hover:scale-110"
+                          title="Envoyer un SMS de rappel"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                        </button>
+                      </div>
                     ) : (
                       <span className="font-semibold text-gray-400">
-                        0
+                        {(credit.solde || 0).toLocaleString('fr-FR')}
                       </span>
                     )}
                   </td>

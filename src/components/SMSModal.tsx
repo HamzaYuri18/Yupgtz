@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Send, MessageSquare, Phone } from 'lucide-react';
 
 interface SMSModalProps {
@@ -13,12 +13,21 @@ interface SMSModalProps {
 }
 
 const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
-  const [phoneNumber, setPhoneNumber] = useState(credit.telephone || '');
-  const [message, setMessage] = useState(
-    `Bonjour ${credit.assure}, vous avez un solde impayé de ${credit.solde.toLocaleString('fr-FR')} DT pour le contrat ${credit.numero_contrat}. Merci de régulariser votre situation. STAR SHIRI`
-  );
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  useEffect(() => {
+    if (isOpen && credit && credit.numero_contrat) {
+      console.log('SMS Modal ouvert pour:', credit);
+      setPhoneNumber(credit.telephone || '');
+      setMessage(
+        `Bonjour ${credit.assure}, vous avez un solde impayé de ${Math.abs(credit.solde).toLocaleString('fr-FR')} DT pour le contrat ${credit.numero_contrat}. Merci de régulariser votre situation. STAR SHIRI`
+      );
+      setStatus(null);
+    }
+  }, [isOpen, credit]);
 
   if (!isOpen) return null;
 
@@ -79,8 +88,14 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
   const remainingChars = 160 - message.length;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center space-x-3">
             <MessageSquare className="w-6 h-6 text-blue-600" />
