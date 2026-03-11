@@ -22,8 +22,20 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
     if (isOpen && credit && credit.numero_contrat) {
       console.log('SMS Modal ouvert pour:', credit);
       setPhoneNumber(credit.telephone || '');
+
+      const formatContractNumber = (contrat: string): string => {
+        if (contrat.length >= 4) {
+          const firstTwo = contrat.substring(0, 2);
+          const lastTwo = contrat.substring(contrat.length - 2);
+          return `${firstTwo}xx${lastTwo}`;
+        }
+        return contrat;
+      };
+
+      const formattedContract = formatContractNumber(credit.numero_contrat);
+
       setMessage(
-        `Bonjour ${credit.assure}, vous avez un solde impayé de ${Math.abs(credit.solde).toLocaleString('fr-FR')} DT pour le contrat ${credit.numero_contrat}. Merci de régulariser votre situation. STAR SHIRI`
+        `Bonjour ${credit.assure}, vous avez un solde impayé de ${Math.abs(credit.solde).toLocaleString('fr-FR')} DT pour le contrat ${formattedContract}. Merci de régulariser votre situation. STAR SHIRI votre assureur de confiance 72486210`
       );
       setStatus(null);
     }
