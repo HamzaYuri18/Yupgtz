@@ -29,6 +29,16 @@ interface Statistics {
   totalSession: number;
 }
 
+interface CarnetStatistics {
+  total_carnets: number;
+  carnets_accomplis: number;
+  carnets_en_cours: number;
+  total_attestations: number;
+  attestations_en_stock: number;
+  attestations_servies: number;
+  attestations_annulees: number;
+}
+
 const AttestationSequences: React.FC = () => {
   const [numeroDebut, setNumeroDebut] = useState('');
   const [numeroFin, setNumeroFin] = useState('');
@@ -44,12 +54,22 @@ const AttestationSequences: React.FC = () => {
     ratees: 0,
     totalSession: 0
   });
+  const [carnetStats, setCarnetStats] = useState<CarnetStatistics>({
+    total_carnets: 0,
+    carnets_accomplis: 0,
+    carnets_en_cours: 0,
+    total_attestations: 0,
+    attestations_en_stock: 0,
+    attestations_servies: 0,
+    attestations_annulees: 0
+  });
 
   const itemsPerPage = 5;
 
   useEffect(() => {
     loadCarnets();
     loadStatistics();
+    loadCarnetStatistics();
   }, []);
 
   useEffect(() => {
@@ -166,6 +186,31 @@ const AttestationSequences: React.FC = () => {
       });
     } catch (error) {
       console.error('Erreur lors du calcul des statistiques:', error);
+    }
+  };
+
+  const loadCarnetStatistics = async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_carnet_statistics');
+
+      if (error) {
+        console.error('Erreur lors du chargement des statistiques de carnets:', error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        setCarnetStats({
+          total_carnets: data[0].total_carnets || 0,
+          carnets_accomplis: data[0].carnets_accomplis || 0,
+          carnets_en_cours: data[0].carnets_en_cours || 0,
+          total_attestations: data[0].total_attestations || 0,
+          attestations_en_stock: data[0].attestations_en_stock || 0,
+          attestations_servies: data[0].attestations_servies || 0,
+          attestations_annulees: data[0].attestations_annulees || 0
+        });
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des statistiques de carnets:', error);
     }
   };
 
@@ -307,7 +352,7 @@ const AttestationSequences: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
@@ -338,6 +383,17 @@ const AttestationSequences: React.FC = () => {
               <p className="text-green-100 text-xs mt-1">Enregistrés</p>
             </div>
             <TrendingUp className="w-12 h-12 text-green-200" />
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-purple-100 text-sm font-medium">Carnets Accomplis</p>
+              <p className="text-3xl font-bold mt-2">{carnetStats.carnets_accomplis}</p>
+              <p className="text-purple-100 text-xs mt-1">sur {carnetStats.total_carnets} carnets</p>
+            </div>
+            <CheckCircle className="w-12 h-12 text-purple-200" />
           </div>
         </div>
       </div>

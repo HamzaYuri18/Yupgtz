@@ -4,6 +4,7 @@ import { Contract } from '../types';
 import { saveContract, generateContractId, getXMLContracts } from '../utils/storage';
 import { findContractInXLSX } from '../utils/xlsxParser';
 import { searchContractInTable, getAvailableMonths, saveAffaireContract, saveCreditContract, saveContractToRapport, checkTermeContractExists, saveTermeContract,checkAffaireContractExists,checkAffaireInRapport,checkTermeInRapport, saveCheque, checkEncaissementAutreCodeExists, saveEncaissementAutreCode, checkAvenantChangementVehiculeExists, saveAvenantChangementVehicule, saveTermeSuspenduPaye} from '../utils/supabaseService';
+import { supabase } from '../lib/supabase';
 import { getSessionDate } from '../utils/auth';
 import TermeSuspenduModal from './TermeSuspenduModal';
 
@@ -312,6 +313,52 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
         setTimeout(() => setMessage(''), 5000);
         return;
       }
+
+      // VALIDATION POUR NUMERO D'ATTESTATION (obligatoire pour branche Auto)
+      if (cleanedFormData.branch === 'Auto') {
+        if (!cleanedFormData.numeroAttestation || cleanedFormData.numeroAttestation.trim() === '') {
+          setMessage('❌ Le numéro d\'attestation est obligatoire pour les contrats Auto');
+          setTimeout(() => setMessage(''), 5000);
+          return;
+        }
+
+        const attestationNum = parseInt(cleanedFormData.numeroAttestation);
+        if (isNaN(attestationNum) || attestationNum <= 0) {
+          setMessage('❌ Le numéro d\'attestation doit être un nombre valide');
+          setTimeout(() => setMessage(''), 5000);
+          return;
+        }
+
+        // Vérifier si l'attestation existe et est disponible
+        const { data: attestationCheck, error: attestationError } = await supabase
+          .rpc('check_attestation_disponible', { attestation_numero: attestationNum });
+
+        if (attestationError) {
+          console.error('Erreur lors de la vérification de l\'attestation:', attestationError);
+          setMessage('❌ Erreur lors de la vérification du numéro d\'attestation');
+          setTimeout(() => setMessage(''), 5000);
+          return;
+        }
+
+        if (!attestationCheck || attestationCheck.length === 0 || !attestationCheck[0].existe) {
+          setMessage('❌ Le numéro d\'attestation n\'existe pas dans le système');
+          setTimeout(() => setMessage(''), 5000);
+          return;
+        }
+
+        if (!attestationCheck[0].disponible) {
+          const statut = attestationCheck[0].statut_actuel;
+          if (statut === 'servie') {
+            setMessage('❌ Cette attestation a déjà été servie');
+          } else if (statut === 'annulee') {
+            setMessage('❌ Cette attestation a été annulée');
+          } else {
+            setMessage('❌ Cette attestation n\'est pas disponible');
+          }
+          setTimeout(() => setMessage(''), 5000);
+          return;
+        }
+      }
     }
 
     // VALIDATION POUR PAIEMENT PAR CHÈQUE
@@ -415,6 +462,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
         createdBy: username,
         createdAt: Date.now(),
         telephone: cleanedFormData.type === 'Affaire' ? cleanedFormData.telephone : undefined,
+        numeroAttestation: (cleanedFormData.type === 'Affaire' && cleanedFormData.branch === 'Auto') ? cleanedFormData.numeroAttestation : undefined,
         xmlData: xmlSearchResult || undefined
       };
 
@@ -694,7 +742,24 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       } else {
         console.log('⚠️ Conditions non remplies pour enregistrer le chèque');
       }
-      
+
+      // MARQUER L'ATTESTATION COMME SERVIE (pour Auto seulement)
+      if (contract.type === 'Affaire' && contract.branch === 'Auto' && contract.numeroAttestation) {
+        try {
+          const attestationNum = parseInt(contract.numeroAttestation);
+          const { data: markResult, error: markError } = await supabase
+            .rpc('mark_attestation_servie', { attestation_numero: attestationNum });
+
+          if (markError) {
+            console.error('❌ Erreur lors du marquage de l\'attestation comme servie:', markError);
+          } else if (markResult) {
+            console.log('✅ Attestation marquée comme servie');
+          }
+        } catch (attestationError) {
+          console.error('❌ Erreur attestation:', attestationError);
+        }
+      }
+
       // Reset form
       resetForm();
 

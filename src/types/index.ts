@@ -24,6 +24,7 @@ export interface Contract {
   createdBy: string;
   createdAt: number;
   telephone?: string;
+  numeroAttestation?: string;
   xmlData?: {
     contractNumber: string;
     premium: number;

@@ -42,6 +42,7 @@ interface ContractData {
   };
   echeance?: string;
   telephone?: string;
+  numeroAttestation?: string;
 }
 
 interface RapportData {
@@ -864,6 +865,11 @@ export const saveTermeContract = async (
       date_paiement: new Date().toISOString().split('T')[0],
       cree_par: contractData.createdBy || 'Système'
     };
+
+    // Ajouter NumATT si branche Auto et numéro fourni
+    if (contractData.branch === 'Auto' && contractData.numeroAttestation) {
+      insertData.numatt = parseInt(contractData.numeroAttestation);
+    }
 
     // Ajouter les informations de retour si applicable
     if (retourType) {
