@@ -96,10 +96,6 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [paidTermes, setPaidTermes] = useState<any[]>([]);
   const [upcomingTermes, setUpcomingTermes] = useState<any[]>([]);
   const [creditsDueToday, setCreditsDueToday] = useState<any[]>([]);
-  const [carnetStats, setCarnetStats] = useState<{
-    carnets_accomplis: number;
-    total_carnets: number;
-  } | null>(null);
 
   const [showOverdueDetails, setShowOverdueDetails] = useState(false);
   const [showUnpaidDetails, setShowUnpaidDetails] = useState(false);
@@ -129,7 +125,6 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     loadCreditsDueToday();
     loadSessionTasks();
     loadTotalUncompletedTasks();
-    loadCarnetStatistics();
   }, []);
 
   useEffect(() => {
@@ -364,22 +359,6 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     }
   };
 
-  const loadCarnetStatistics = async () => {
-    try {
-      const { data, error } = await supabase.rpc('get_carnet_statistics');
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        setCarnetStats({
-          carnets_accomplis: data[0].carnets_accomplis || 0,
-          total_carnets: data[0].total_carnets || 0
-        });
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des statistiques de carnets:', error);
-    }
-  };
 
   const calculateTotal = (termes: any[]) => {
     return termes.reduce((sum, terme) => {
@@ -690,27 +669,6 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
           />
         </div>
 
-        {carnetStats && (
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 mb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <CheckCircle className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Carnets d'Attestations</h3>
-                  <p className="text-sm text-gray-600">Statistique des carnets accomplis</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-3xl font-bold text-blue-600">
-                  {carnetStats.carnets_accomplis} / {carnetStats.total_carnets}
-                </div>
-                <p className="text-sm text-gray-600">carnets accomplis</p>
-              </div>
-            </div>
-          </div>
-        )}
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-2 mb-4">
