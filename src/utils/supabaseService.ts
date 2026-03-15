@@ -2328,3 +2328,30 @@ export const getTermeSuspenduPaye = async (
     throw error;
   }
 };
+
+export const updateAttestationServie = async (
+  attestationNumero: number,
+  numeroContrat: string,
+  assure: string,
+  montant: number
+): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase.rpc('update_attestation_servie', {
+      attestation_numero: attestationNumero,
+      numero_contrat: numeroContrat,
+      assure: assure,
+      montant: montant,
+      date_impression: new Date().toISOString()
+    });
+
+    if (error) {
+      console.error('Erreur lors de la mise à jour de l\'attestation:', error);
+      return false;
+    }
+
+    return data === true;
+  } catch (error) {
+    console.error('Erreur dans updateAttestationServie:', error);
+    return false;
+  }
+};

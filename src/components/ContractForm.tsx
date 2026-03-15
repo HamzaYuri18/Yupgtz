@@ -3,7 +3,7 @@ import { Save, FileText, DollarSign, Calendar, Search, CreditCard, User, Hash, B
 import { Contract } from '../types';
 import { saveContract, generateContractId, getXMLContracts } from '../utils/storage';
 import { findContractInXLSX } from '../utils/xlsxParser';
-import { searchContractInTable, getAvailableMonths, saveAffaireContract, saveCreditContract, saveContractToRapport, checkTermeContractExists, saveTermeContract,checkAffaireContractExists,checkAffaireInRapport,checkTermeInRapport, saveCheque, checkEncaissementAutreCodeExists, saveEncaissementAutreCode, checkAvenantChangementVehiculeExists, saveAvenantChangementVehicule, saveTermeSuspenduPaye} from '../utils/supabaseService';
+import { searchContractInTable, getAvailableMonths, saveAffaireContract, saveCreditContract, saveContractToRapport, checkTermeContractExists, saveTermeContract,checkAffaireContractExists,checkAffaireInRapport,checkTermeInRapport, saveCheque, checkEncaissementAutreCodeExists, saveEncaissementAutreCode, checkAvenantChangementVehiculeExists, saveAvenantChangementVehicule, saveTermeSuspenduPaye, updateAttestationServie} from '../utils/supabaseService';
 import { supabase } from '../lib/supabase';
 import { getSessionDate } from '../utils/auth';
 import TermeSuspenduModal from './TermeSuspenduModal';
@@ -743,20 +743,27 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
         console.log('⚠️ Conditions non remplies pour enregistrer le chèque');
       }
 
-      // MARQUER L'ATTESTATION COMME SERVIE (pour tous les types Auto)
+      // METTRE À JOUR L'ATTESTATION DANS LE CARNET (pour tous les types Auto)
       if (contract.branch === 'Auto' && contract.numeroAttestation) {
         try {
           const attestationNum = parseInt(contract.numeroAttestation);
-          const { data: markResult, error: markError } = await supabase
-            .rpc('mark_attestation_servie', { attestation_numero: attestationNum });
+          const updateSuccess = await updateAttestationServie(
+            attestationNum,
+            contract.contractNumber,
+            contract.insuredName,
+            contract.premiumAmount
+          );
 
-          if (markError) {
-            console.error('❌ Erreur lors du marquage de l\'attestation comme servie:', markError);
-          } else if (markResult) {
-            console.log('✅ Attestation marquée comme servie');
+          if (updateSuccess) {
+            console.log('✅ Attestation mise à jour dans le carnet');
+            setMessage(prev => prev + ' + Attestation imprimée');
+          } else {
+            console.error('❌ Erreur lors de la mise à jour de l\'attestation');
+            setMessage(prev => prev + ' (erreur mise à jour attestation)');
           }
         } catch (attestationError) {
           console.error('❌ Erreur attestation:', attestationError);
+          setMessage(prev => prev + ' (erreur attestation)');
         }
       }
 
