@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Plus, Download, Filter, X, Search } from 'lucide-react';
+import { FileText, Plus, Download, Filter, X, Search, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
 
@@ -13,30 +13,50 @@ interface Attestation {
   created_at: string;
 }
 
+interface Carnet {
+  id: string;
+  nom_carnet: string;
+  numero_debut: number;
+  numero_fin: number;
+  nombre_total: number;
+  table_name: string;
+  created_at: string;
+}
+
+interface Statistics {
+  imprimees: number;
+  ratees: number;
+  totalSession: number;
+}
+
 const AttestationSequences: React.FC = () => {
   const [numeroDebut, setNumeroDebut] = useState('');
   const [numeroFin, setNumeroFin] = useState('');
   const [nombreAttestations, setNombreAttestations] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [attestations, setAttestations] = useState<Attestation[]>([]);
-  const [filteredAttestations, setFilteredAttestations] = useState<Attestation[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState({
-    numeroAttestation: '',
-    numeroContrat: '',
-    assure: '',
-    dateDebut: '',
-    dateFin: ''
+  const [carnets, setCarnets] = useState<Carnet[]>([]);
+  const [selectedCarnet, setSelectedCarnet] = useState<string>('');
+  const [statistics, setStatistics] = useState<Statistics>({
+    imprimees: 0,
+    ratees: 0,
+    totalSession: 0
   });
 
+  const itemsPerPage = 5;
+
   useEffect(() => {
-    loadAttestations();
+    loadCarnets();
+    loadStatistics();
   }, []);
 
   useEffect(() => {
-    applyFilters();
-  }, [attestations, filters]);
+    if (selectedCarnet) {
+      loadAttestationsFromCarnet(selectedCarnet);
+    }
+  }, [selectedCarnet]);
 
   useEffect(() => {
     if (numeroDebut && numeroFin) {
@@ -52,58 +72,121 @@ const AttestationSequences: React.FC = () => {
     }
   }, [numeroDebut, numeroFin]);
 
-  const loadAttestations = async () => {
+  const loadCarnets = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('carnets_attestations')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setCarnets(data || []);
+      if (data && data.length > 0) {
+        setSelectedCarnet(data[0].table_name);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des carnets:', error);
+    }
+  };
+
+  const loadAttestationsFromCarnet = async (tableName: string) => {
     setIsLoading(true);
     try {
       const { data, error } = await supabase
-        .from('attestations')
+        .from(tableName)
         .select('*')
-        .order('numero_attestation', { ascending: true });
+        .not('date_impression', 'is', null)
+        .order('date_impression', { ascending: false })
+        .limit(20);
 
       if (error) throw error;
       setAttestations(data || []);
+      setCurrentPage(1);
     } catch (error) {
       console.error('Erreur lors du chargement des attestations:', error);
-      alert('Erreur lors du chargement des attestations');
+      setAttestations([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const applyFilters = () => {
-    let filtered = [...attestations];
+  const loadStatistics = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
 
-    if (filters.numeroAttestation) {
-      filtered = filtered.filter(a =>
-        a.numero_attestation.toLowerCase().includes(filters.numeroAttestation.toLowerCase())
-      );
+      const { data: carnetsData } = await supabase
+        .from('carnets_attestations')
+        .select('table_name');
+
+      if (!carnetsData || carnetsData.length === 0) {
+        setStatistics({ imprimees: 0, ratees: 0, totalSession: 0 });
+        return;
+      }
+
+      let totalImprimees = 0;
+      let totalRatees = 0;
+
+      for (const carnet of carnetsData) {
+        const { data: allData } = await supabase
+          .from(carnet.table_name)
+          .select('numero_attestation, date_impression')
+          .order('numero_attestation', { ascending: true });
+
+        if (!allData) continue;
+
+        const { data: todayData } = await supabase
+          .from(carnet.table_name)
+          .select('numero_attestation')
+          .gte('date_impression', today)
+          .lt('date_impression', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+
+        totalImprimees += todayData?.length || 0;
+
+        const printedData = allData.filter(a => a.date_impression !== null);
+        if (printedData.length > 0) {
+          printedData.sort((a, b) =>
+            parseInt(a.numero_attestation) - parseInt(b.numero_attestation)
+          );
+
+          for (let i = 1; i < printedData.length; i++) {
+            const current = parseInt(printedData[i].numero_attestation);
+            const previous = parseInt(printedData[i - 1].numero_attestation);
+            const gap = current - previous - 1;
+            if (gap > 0) {
+              totalRatees += gap;
+            }
+          }
+        }
+      }
+
+      setStatistics({
+        imprimees: totalImprimees,
+        ratees: totalRatees,
+        totalSession: totalImprimees
+      });
+    } catch (error) {
+      console.error('Erreur lors du calcul des statistiques:', error);
     }
+  };
 
-    if (filters.numeroContrat) {
-      filtered = filtered.filter(a =>
-        a.numero_contrat?.toLowerCase().includes(filters.numeroContrat.toLowerCase())
-      );
+  const checkSequenceOverlap = async (debut: number, fin: number): Promise<{ exists: boolean; carnetName: string | null }> => {
+    try {
+      const { data, error } = await supabase
+        .rpc('check_sequence_overlap', {
+          p_numero_debut: debut,
+          p_numero_fin: fin
+        });
+
+      if (error) throw error;
+
+      if (data && data.length > 0 && data[0].overlap_exists) {
+        return { exists: true, carnetName: data[0].carnet_name };
+      }
+      return { exists: false, carnetName: null };
+    } catch (error) {
+      console.error('Erreur lors de la vérification:', error);
+      return { exists: false, carnetName: null };
     }
-
-    if (filters.assure) {
-      filtered = filtered.filter(a =>
-        a.assure?.toLowerCase().includes(filters.assure.toLowerCase())
-      );
-    }
-
-    if (filters.dateDebut) {
-      filtered = filtered.filter(a =>
-        a.date_impression && a.date_impression >= filters.dateDebut
-      );
-    }
-
-    if (filters.dateFin) {
-      filtered = filtered.filter(a =>
-        a.date_impression && a.date_impression <= filters.dateFin
-      );
-    }
-
-    setFilteredAttestations(filtered);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -130,53 +213,72 @@ const AttestationSequences: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      const attestationsToInsert = [];
-      for (let i = debut; i <= fin; i++) {
-        attestationsToInsert.push({
-          numero_attestation: i.toString(),
-          numero_contrat: null,
-          assure: null,
-          date_impression: null,
-          montant: null
+      const overlap = await checkSequenceOverlap(debut, fin);
+      if (overlap.exists) {
+        alert(`Cette séquence est déjà enregistrée dans le carnet: ${overlap.carnetName}`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      const nomCarnet = `carnet_${debut}`;
+      const tableName = `attestations_${debut}`;
+
+      const { data: createResult, error: createError } = await supabase
+        .rpc('create_carnet_table', {
+          p_table_name: tableName,
+          p_numero_debut: debut,
+          p_numero_fin: fin
         });
+
+      if (createError) throw createError;
+
+      if (!createResult) {
+        throw new Error('Échec de la création de la table');
       }
 
-      const { error } = await supabase
-        .from('attestations')
-        .insert(attestationsToInsert);
+      const { error: carnetError } = await supabase
+        .from('carnets_attestations')
+        .insert({
+          nom_carnet: nomCarnet,
+          numero_debut: debut,
+          numero_fin: fin,
+          nombre_total: fin - debut + 1,
+          table_name: tableName
+        });
 
-      if (error) {
-        if (error.code === '23505') {
-          alert('Certains numéros d\'attestation existent déjà. Veuillez vérifier la séquence.');
-        } else {
-          throw error;
-        }
-      } else {
-        alert(`${nombreAttestations} attestations ont été enregistrées avec succès!`);
-        setNumeroDebut('');
-        setNumeroFin('');
-        setNombreAttestations(0);
-        await loadAttestations();
-      }
-    } catch (error) {
+      if (carnetError) throw carnetError;
+
+      alert(`Carnet "${nomCarnet}" créé avec succès!\n${nombreAttestations} attestations enregistrées.`);
+      setNumeroDebut('');
+      setNumeroFin('');
+      setNombreAttestations(0);
+      await loadCarnets();
+      await loadStatistics();
+    } catch (error: any) {
       console.error('Erreur lors de l\'enregistrement:', error);
-      alert('Erreur lors de l\'enregistrement des attestations');
+      if (error.code === '23505') {
+        alert('Ce carnet existe déjà.');
+      } else {
+        alert('Erreur lors de l\'enregistrement du carnet');
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleExport = () => {
-    if (filteredAttestations.length === 0) {
+    if (attestations.length === 0) {
       alert('Aucune attestation à exporter');
       return;
     }
 
-    const dataToExport = filteredAttestations.map(a => ({
+    const dataToExport = attestations.map(a => ({
       'N° Attestation': a.numero_attestation,
       'N° Contrat': a.numero_contrat || '',
       'Assuré': a.assure || '',
-      'Date Impression': a.date_impression || '',
+      'Date Impression': a.date_impression
+        ? new Date(a.date_impression).toLocaleString('fr-FR')
+        : '',
       'Montant': a.montant || ''
     }));
 
@@ -188,7 +290,7 @@ const AttestationSequences: React.FC = () => {
       { wch: 15 },
       { wch: 15 },
       { wch: 30 },
-      { wch: 15 },
+      { wch: 20 },
       { wch: 12 }
     ];
     ws['!cols'] = colWidths;
@@ -196,22 +298,54 @@ const AttestationSequences: React.FC = () => {
     XLSX.writeFile(wb, `attestations_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const clearFilters = () => {
-    setFilters({
-      numeroAttestation: '',
-      numeroContrat: '',
-      assure: '',
-      dateDebut: '',
-      dateFin: ''
-    });
-  };
+  const paginatedAttestations = attestations.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const totalPages = Math.ceil(attestations.length / itemsPerPage);
 
   return (
     <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-blue-100 text-sm font-medium">Attestations Imprimées</p>
+              <p className="text-3xl font-bold mt-2">{statistics.imprimees}</p>
+              <p className="text-blue-100 text-xs mt-1">Aujourd'hui</p>
+            </div>
+            <CheckCircle className="w-12 h-12 text-blue-200" />
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-lg p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-red-100 text-sm font-medium">Attestations Ratées</p>
+              <p className="text-3xl font-bold mt-2">{statistics.ratees}</p>
+              <p className="text-red-100 text-xs mt-1">Non séquentielles</p>
+            </div>
+            <AlertCircle className="w-12 h-12 text-red-200" />
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-green-100 text-sm font-medium">Total Carnets</p>
+              <p className="text-3xl font-bold mt-2">{carnets.length}</p>
+              <p className="text-green-100 text-xs mt-1">Enregistrés</p>
+            </div>
+            <TrendingUp className="w-12 h-12 text-green-200" />
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex items-center gap-3 mb-6">
           <FileText className="w-6 h-6 text-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-800">Séquences Attestation</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Nouveau Carnet d'Attestations</h2>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -262,7 +396,7 @@ const AttestationSequences: React.FC = () => {
               className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
               <Plus className="w-5 h-5" />
-              {isSubmitting ? 'Enregistrement...' : 'Enregistrer la Séquence'}
+              {isSubmitting ? 'Enregistrement...' : 'Créer le Carnet'}
             </button>
           </div>
         </form>
@@ -270,162 +404,114 @@ const AttestationSequences: React.FC = () => {
 
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-bold text-gray-800">Liste des Attestations</h3>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          <h3 className="text-xl font-bold text-gray-800">
+            Dernières Attestations Imprimées (20)
+          </h3>
+          <div className="flex gap-2 items-center">
+            <select
+              value={selectedCarnet}
+              onChange={(e) => setSelectedCarnet(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
-              <Filter className="w-4 h-4" />
-              Filtres
-            </button>
+              {carnets.map((carnet) => (
+                <option key={carnet.id} value={carnet.table_name}>
+                  {carnet.nom_carnet} ({carnet.numero_debut} - {carnet.numero_fin})
+                </option>
+              ))}
+            </select>
             <button
               onClick={handleExport}
               className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             >
               <Download className="w-4 h-4" />
-              Exporter Excel
+              Exporter
             </button>
           </div>
         </div>
 
-        {showFilters && (
-          <div className="bg-gray-50 p-4 rounded-lg mb-4 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  N° Attestation
-                </label>
-                <input
-                  type="text"
-                  value={filters.numeroAttestation}
-                  onChange={(e) => setFilters({...filters, numeroAttestation: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="Rechercher..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  N° Contrat
-                </label>
-                <input
-                  type="text"
-                  value={filters.numeroContrat}
-                  onChange={(e) => setFilters({...filters, numeroContrat: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="Rechercher..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Assuré
-                </label>
-                <input
-                  type="text"
-                  value={filters.assure}
-                  onChange={(e) => setFilters({...filters, assure: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="Rechercher..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date Début
-                </label>
-                <input
-                  type="date"
-                  value={filters.dateDebut}
-                  onChange={(e) => setFilters({...filters, dateDebut: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date Fin
-                </label>
-                <input
-                  type="date"
-                  value={filters.dateFin}
-                  onChange={(e) => setFilters({...filters, dateFin: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                onClick={clearFilters}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                <X className="w-4 h-4" />
-                Réinitialiser
-              </button>
-            </div>
-          </div>
-        )}
-
         {isLoading ? (
           <div className="text-center py-8 text-gray-500">Chargement...</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Attestation</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date Impression</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Montant</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredAttestations.length === 0 ? (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-100">
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                      <Search className="w-12 h-12 mx-auto mb-2 text-gray-400" />
-                      Aucune attestation trouvée
-                    </td>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Attestation</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date Impression</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Montant</th>
                   </tr>
-                ) : (
-                  filteredAttestations.map((attestation) => (
-                    <tr key={attestation.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm text-gray-900 font-medium">
-                        {attestation.numero_attestation}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-700">
-                        {attestation.numero_contrat || '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-700">
-                        {attestation.assure || '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-700">
-                        {attestation.date_impression
-                          ? new Date(attestation.date_impression).toLocaleDateString('fr-FR')
-                          : '-'
-                        }
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-700">
-                        {attestation.montant
-                          ? `${attestation.montant.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`
-                          : '-'
-                        }
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {paginatedAttestations.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                        <Search className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                        Aucune attestation imprimée
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+                  ) : (
+                    paginatedAttestations.map((attestation) => (
+                      <tr key={attestation.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm text-gray-900 font-medium">
+                          {attestation.numero_attestation}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {attestation.numero_contrat || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {attestation.assure || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {attestation.date_impression
+                            ? new Date(attestation.date_impression).toLocaleString('fr-FR')
+                            : '-'
+                          }
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {attestation.montant
+                            ? `${attestation.montant.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`
+                            : '-'
+                          }
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-        {filteredAttestations.length > 0 && (
-          <div className="mt-4 text-sm text-gray-600">
-            Total: {filteredAttestations.length} attestation(s)
-          </div>
+            {attestations.length > 0 && (
+              <div className="mt-4 flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Affichage {(currentPage - 1) * itemsPerPage + 1} à {Math.min(currentPage * itemsPerPage, attestations.length)} sur {attestations.length}
+                </div>
+                {totalPages > 1 && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Précédent
+                    </button>
+                    <span className="px-4 py-2 text-gray-700">
+                      Page {currentPage} sur {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Suivant
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
