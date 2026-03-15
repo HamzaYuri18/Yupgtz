@@ -107,8 +107,8 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       [name]: cleanedValue
     };
 
-    // Déterminer automatiquement la branche pour les contrats Affaire
-    if (name === 'contractNumber' && formData.type === 'Affaire' && cleanedValue) {
+    // Déterminer automatiquement la branche pour les contrats Affaire UNIQUEMENT si la valeur change réellement
+    if (name === 'contractNumber' && formData.type === 'Affaire' && cleanedValue && cleanedValue !== formData.contractNumber) {
       const autoBranche = determineBrancheForAffaire(cleanedValue);
       updatedData.branch = autoBranche;
     }
