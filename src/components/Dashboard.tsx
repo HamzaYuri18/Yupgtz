@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, FileText, Upload, BarChart3, Clock, User, Search, Calendar, Receipt, Building2, DollarSign, TrendingUp, Home, Briefcase } from 'lucide-react';
+import { LogOut, FileText, Upload, BarChart3, Clock, User, Search, Calendar, Receipt, Building2, DollarSign, TrendingUp, Home, Briefcase, Award } from 'lucide-react';
 import { getSession, clearSession, isAdmin } from '../utils/auth';
 import LogoutConfirmation from './LogoutConfirmation';
 import { shouldShowLogoutConfirmation } from '../utils/auth';
@@ -18,6 +18,7 @@ import Encaissement from './Encaissement';
 import EtatCommissions from './EtatCommissions';
 import StatisticsChart from './StatisticsChart';
 import SalairesLoyer from './SalairesLoyer';
+import AttestationSequences from './AttestationSequences';
 
 interface DashboardProps {
   username: string;
@@ -25,7 +26,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'home' | 'contract' | 'xml' | 'reports' | 'credits' | 'financial' | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement' | 'encaissement' | 'commissions' | 'statistics' | 'salaires'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'contract' | 'xml' | 'reports' | 'credits' | 'financial' | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement' | 'encaissement' | 'commissions' | 'statistics' | 'salaires' | 'attestations'>('home');
   const [sessionInfo, setSessionInfo] = useState<any>(null);
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false);
 
@@ -292,6 +293,18 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
                   <Briefcase className="w-4 h-4" />
                   <span>Salaires et Loyer</span>
                 </button>
+
+                <button
+                  onClick={() => setActiveTab('attestations')}
+                  className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
+                    activeTab === 'attestations'
+                      ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
+                      : 'text-white/90 hover:bg-white/20 hover:text-white'
+                  }`}
+                >
+                  <Award className="w-4 h-4" />
+                  <span>Séquences Attestation</span>
+                </button>
               </>
             )}
 
@@ -328,6 +341,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
         {activeTab === 'encaissement' && <Encaissement username={username} />}
         {activeTab === 'commissions' && isHamza && <EtatCommissions />}
         {activeTab === 'salaires' && isHamza && <SalairesLoyer />}
+        {activeTab === 'attestations' && isHamza && <AttestationSequences />}
       </main>
 
       {/* Modal de confirmation de déconnexion */}
