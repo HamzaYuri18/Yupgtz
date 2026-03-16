@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Plus, Download, Filter, X, Search, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react';
+import { FileText, Plus, Download, Filter, X, Search, TrendingUp, AlertCircle, CheckCircle, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
+import { getSession } from '../utils/auth';
 
 interface Attestation {
   id: string;
@@ -63,8 +64,16 @@ const AttestationSequences: React.FC = () => {
     attestations_servies: 0,
     attestations_annulees: 0
   });
+  const [currentUser, setCurrentUser] = useState<string>('');
 
   const itemsPerPage = 5;
+
+  useEffect(() => {
+    const session = getSession();
+    if (session) {
+      setCurrentUser(session.username);
+    }
+  }, []);
 
   useEffect(() => {
     loadCarnets();
@@ -311,6 +320,48 @@ const AttestationSequences: React.FC = () => {
     }
   };
 
+  const handleResetAttestation = async (attestationId: string, numeroAttestation: string) => {
+    if (currentUser !== 'Hamza') {
+      alert('Seul Hamza peut vider les données d\'une attestation');
+      return;
+    }
+
+    const confirmReset = window.confirm(
+      `Voulez-vous vraiment vider les données de l'attestation n° ${numeroAttestation} ?\n\n` +
+      `Cette action va réinitialiser :\n` +
+      `- Le numéro de contrat\n` +
+      `- L'assuré\n` +
+      `- La date d'impression\n` +
+      `- Le montant\n\n` +
+      `Le numéro d'attestation sera conservé.`
+    );
+
+    if (!confirmReset) return;
+
+    try {
+      const { error } = await supabase
+        .from(selectedCarnet)
+        .update({
+          numero_contrat: null,
+          assure: null,
+          date_impression: null,
+          montant: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', attestationId);
+
+      if (error) throw error;
+
+      alert(`Attestation n° ${numeroAttestation} vidée avec succès`);
+      await loadAttestationsFromCarnet(selectedCarnet);
+      await loadStatistics();
+      await loadCarnetStatistics();
+    } catch (error) {
+      console.error('Erreur lors de la réinitialisation de l\'attestation:', error);
+      alert('Erreur lors de la réinitialisation de l\'attestation');
+    }
+  };
+
   const handleExport = () => {
     if (attestations.length === 0) {
       alert('Aucune attestation à exporter');
@@ -498,12 +549,15 @@ const AttestationSequences: React.FC = () => {
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date Impression</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Montant</th>
+                    {currentUser === 'Hamza' && (
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Actions</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {paginatedAttestations.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                      <td colSpan={currentUser === 'Hamza' ? 6 : 5} className="px-4 py-8 text-center text-gray-500">
                         <Search className="w-12 h-12 mx-auto mb-2 text-gray-400" />
                         Aucune attestation imprimée
                       </td>
@@ -532,6 +586,18 @@ const AttestationSequences: React.FC = () => {
                             : '-'
                           }
                         </td>
+                        {currentUser === 'Hamza' && (
+                          <td className="px-4 py-3 text-sm">
+                            <button
+                              onClick={() => handleResetAttestation(attestation.id, attestation.numero_attestation)}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                              title="Vider les données de cette attestation"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Vider
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))
                   )}
