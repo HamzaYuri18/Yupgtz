@@ -927,13 +927,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="contractNumber"
                 value={formData.contractNumber}
                 onChange={handleInputChange}
-                onBlur={(e) => {
-                  // Nettoyer aussi lors de la perte de focus (uniquement pour le numéro de contrat)
-                  const cleanedValue = trimSpaces(e.target.value);
-                  if (cleanedValue !== e.target.value) {
-                    setFormData(prev => ({ ...prev, contractNumber: cleanedValue }));
-                  }
-                }}
                 className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
                 placeholder="Entrez le numéro de contrat"
                 required
@@ -1079,52 +1072,50 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
           {/* Champ Téléphone pour les contrats Affaire */}
           {formData.type === 'Affaire' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                  <span className="text-lg mr-2">📱</span>
-                  Numéro de téléphone *
-                  <span className="text-xs text-red-600 ml-2">(Format: +21612345678)</span>
-                </label>
-                <input
-                  type="tel"
-                  name="telephone"
-                  value={formData.telephone}
-                  onChange={handleInputChange}
-                  pattern="\+216[0-9]{8}"
-                  maxLength={12}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
-                  placeholder="+21623502362"
-                  title="Format: +216 suivi de 8 chiffres (ex: +21623502362)"
-                  required
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Format requis: +216 suivi de 8 chiffres (ex: +21623502362)
-                </p>
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                <span className="text-lg mr-2">📱</span>
+                Numéro de téléphone *
+                <span className="text-xs text-red-600 ml-2">(Format: +21612345678)</span>
+              </label>
+              <input
+                type="tel"
+                name="telephone"
+                value={formData.telephone}
+                onChange={handleInputChange}
+                pattern="\+216[0-9]{8}"
+                maxLength={12}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
+                placeholder="+21623502362"
+                title="Format: +216 suivi de 8 chiffres (ex: +21623502362)"
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Format requis: +216 suivi de 8 chiffres (ex: +21623502362)
+              </p>
+            </div>
+          )}
 
-              {/* Numéro Attestation pour branche Auto */}
-              {formData.branch === 'Auto' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                    <FileText className="w-4 h-4 mr-2" />
-                    Numéro d'attestation *
-                    <span className="text-xs text-blue-600 ml-2">(Obligatoire pour Auto)</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="numeroAttestation"
-                    value={formData.numeroAttestation}
-                    onChange={handleInputChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
-                    placeholder="Ex: 12345"
-                    required
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Saisir le numéro d'attestation Auto
-                  </p>
-                </div>
-              )}
+          {/* Numéro Attestation pour branche Auto (Affaire ET Terme) */}
+          {formData.branch === 'Auto' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                <FileText className="w-4 h-4 mr-2" />
+                Numéro d'attestation *
+                <span className="text-xs text-blue-600 ml-2">(Obligatoire pour Auto)</span>
+              </label>
+              <input
+                type="number"
+                name="numeroAttestation"
+                value={formData.numeroAttestation}
+                onChange={handleInputChange}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
+                placeholder="Ex: 12345"
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Saisir le numéro d'attestation Auto
+              </p>
             </div>
           )}
 
