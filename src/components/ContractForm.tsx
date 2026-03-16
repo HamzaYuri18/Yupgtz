@@ -315,8 +315,9 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       }
     }
 
-    // VALIDATION POUR NUMERO D'ATTESTATION (obligatoire pour branche Auto pour tous les types)
-    if (cleanedFormData.branch === 'Auto') {
+    // VALIDATION POUR NUMERO D'ATTESTATION (obligatoire pour branche Auto sauf Terme avec Retour Contentieux)
+    const isRetourContentieuxTerme = cleanedFormData.type === 'Terme' && isRetourContentieuxMode;
+    if (cleanedFormData.branch === 'Auto' && !isRetourContentieuxTerme) {
       if (!cleanedFormData.numeroAttestation || cleanedFormData.numeroAttestation.trim() === '') {
         setMessage('❌ Le numéro d\'attestation est obligatoire pour les contrats Auto');
         setTimeout(() => setMessage(''), 5000);
@@ -1097,7 +1098,8 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           )}
 
           {/* Numéro Attestation pour branche Auto (Affaire ET Terme) */}
-          {formData.branch === 'Auto' && (
+          {/* Ne pas demander l'attestation pour Terme avec Retour Contentieux */}
+          {formData.branch === 'Auto' && !(formData.type === 'Terme' && isRetourContentieuxMode) && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
                 <FileText className="w-4 h-4 mr-2" />
