@@ -37,6 +37,8 @@ export default function MissingAttestationModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
 
+  console.log('Modal opened with:', { missingNumbers, currentUser, carnetTable, attestations });
+
   if (!isOpen) return null;
 
   // Vérification de sécurité
@@ -55,6 +57,8 @@ export default function MissingAttestationModal({
     const updated = [...attestations];
     updated[currentIndex].motif = motif;
     setAttestations(updated);
+    console.log('Motif changed to:', motif);
+    console.log('Updated attestations:', updated);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -90,6 +94,10 @@ export default function MissingAttestationModal({
   };
 
   const handleNext = async () => {
+    console.log('handleNext called');
+    console.log('Current attestation:', currentAttestation);
+    console.log('Current motif:', currentAttestation.motif);
+
     if (!currentAttestation.motif) {
       alert('Veuillez sélectionner un motif');
       return;
@@ -274,7 +282,10 @@ export default function MissingAttestationModal({
                 </button>
               )}
               <button
-                onClick={handleNext}
+                onClick={() => {
+                  console.log('Button clicked!');
+                  handleNext();
+                }}
                 disabled={isSubmitting || !currentAttestation.motif}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold"
               >
