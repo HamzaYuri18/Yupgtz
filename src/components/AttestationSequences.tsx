@@ -362,6 +362,109 @@ const AttestationSequences: React.FC = () => {
     }
   };
 
+  const handleExportImprimees = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const { data: carnetsData } = await supabase.from('carnets_attestations').select('table_name');
+
+      if (!carnetsData) return;
+
+      let allImprimees: any[] = [];
+      for (const carnet of carnetsData) {
+        const { data } = await supabase
+          .from(carnet.table_name)
+          .select('*')
+          .gte('date_impression', today)
+          .lt('date_impression', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+
+        if (data) allImprimees = allImprimees.concat(data);
+      }
+
+      const dataToExport = allImprimees.map(a => ({
+        'N° Attestation': a.numero_attestation,
+        'N° Contrat': a.numero_contrat || '',
+        'Assuré': a.assure || '',
+        'Date Impression': a.date_impression ? new Date(a.date_impression).toLocaleString('fr-FR') : '',
+        'Montant': a.montant || ''
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Imprimées Aujourd\'hui');
+      XLSX.writeFile(wb, `attestations_imprimees_${today}.xlsx`);
+    } catch (error) {
+      console.error('Erreur export:', error);
+    }
+  };
+
+  const handleExportRatees = async () => {
+    try {
+      const { data: carnetsData } = await supabase.from('carnets_attestations').select('table_name');
+      if (!carnetsData) return;
+
+      let allRatees: any[] = [];
+      for (const carnet of carnetsData) {
+        const { data: attestationsManquantes } = await supabase
+          .from('attestations_manquantes')
+          .select('*')
+          .eq('carnet_table', carnet.table_name);
+
+        if (attestationsManquantes) allRatees = allRatees.concat(attestationsManquantes);
+      }
+
+      const dataToExport = allRatees.map(a => ({
+        'N° Attestation': a.numero_attestation,
+        'Motif': a.motif,
+        'Date Enregistrement': a.created_at ? new Date(a.created_at).toLocaleString('fr-FR') : '',
+        'Utilisateur': a.user || ''
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Attestations Ratées');
+      XLSX.writeFile(wb, `attestations_ratees_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (error) {
+      console.error('Erreur export:', error);
+    }
+  };
+
+  const handleExportCarnets = () => {
+    if (carnets.length === 0) {
+      alert('Aucun carnet à exporter');
+      return;
+    }
+
+    const dataToExport = carnets.map(c => ({
+      'Nom Carnet': c.nom_carnet,
+      'Numéro Début': c.numero_debut,
+      'Numéro Fin': c.numero_fin,
+      'Nombre Total': c.nombre_total,
+      'Date Création': new Date(c.created_at).toLocaleString('fr-FR')
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Carnets');
+    XLSX.writeFile(wb, `carnets_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const handleExportCarnetStats = () => {
+    const dataToExport = [{
+      'Total Carnets': carnetStats.total_carnets,
+      'Carnets Accomplis': carnetStats.carnets_accomplis,
+      'Carnets En Cours': carnetStats.carnets_en_cours,
+      'Total Attestations': carnetStats.total_attestations,
+      'Attestations En Stock': carnetStats.attestations_en_stock,
+      'Attestations Servies': carnetStats.attestations_servies,
+      'Attestations Annulées': carnetStats.attestations_annulees
+    }];
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Statistiques Carnets');
+    XLSX.writeFile(wb, `statistiques_carnets_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   const handleExport = () => {
     if (attestations.length === 0) {
       alert('Aucune attestation à exporter');
@@ -404,47 +507,59 @@ const AttestationSequences: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+        <div
+          className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white cursor-pointer hover:shadow-xl transition-shadow"
+          onClick={handleExportImprimees}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-blue-100 text-sm font-medium">Attestations Imprimées</p>
               <p className="text-3xl font-bold mt-2">{statistics.imprimees}</p>
-              <p className="text-blue-100 text-xs mt-1">Aujourd'hui</p>
+              <p className="text-blue-100 text-xs mt-1">Aujourd'hui - Cliquer pour télécharger</p>
             </div>
-            <CheckCircle className="w-12 h-12 text-blue-200" />
+            <Download className="w-12 h-12 text-blue-200" />
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-lg p-6 text-white">
+        <div
+          className="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-lg p-6 text-white cursor-pointer hover:shadow-xl transition-shadow"
+          onClick={handleExportRatees}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-red-100 text-sm font-medium">Attestations Ratées</p>
               <p className="text-3xl font-bold mt-2">{statistics.ratees}</p>
-              <p className="text-red-100 text-xs mt-1">Non séquentielles</p>
+              <p className="text-red-100 text-xs mt-1">Non séquentielles - Cliquer pour télécharger</p>
             </div>
-            <AlertCircle className="w-12 h-12 text-red-200" />
+            <Download className="w-12 h-12 text-red-200" />
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
+        <div
+          className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white cursor-pointer hover:shadow-xl transition-shadow"
+          onClick={handleExportCarnets}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-green-100 text-sm font-medium">Total Carnets</p>
               <p className="text-3xl font-bold mt-2">{carnets.length}</p>
-              <p className="text-green-100 text-xs mt-1">Enregistrés</p>
+              <p className="text-green-100 text-xs mt-1">Enregistrés - Cliquer pour télécharger</p>
             </div>
-            <TrendingUp className="w-12 h-12 text-green-200" />
+            <Download className="w-12 h-12 text-green-200" />
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+        <div
+          className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-lg p-6 text-white cursor-pointer hover:shadow-xl transition-shadow"
+          onClick={handleExportCarnetStats}
+        >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-purple-100 text-sm font-medium">Carnets Accomplis</p>
+              <p className="text-orange-100 text-sm font-medium">Carnets Accomplis</p>
               <p className="text-3xl font-bold mt-2">{carnetStats.carnets_accomplis}</p>
-              <p className="text-purple-100 text-xs mt-1">sur {carnetStats.total_carnets} carnets</p>
+              <p className="text-orange-100 text-xs mt-1">sur {carnetStats.total_carnets} carnets - Cliquer pour télécharger</p>
             </div>
-            <CheckCircle className="w-12 h-12 text-purple-200" />
+            <Download className="w-12 h-12 text-orange-200" />
           </div>
         </div>
       </div>

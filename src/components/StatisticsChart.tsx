@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { PieChart, Calendar, TrendingUp } from 'lucide-react';
+import { PieChart, Calendar, TrendingUp, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import * as XLSX from 'xlsx';
 
 interface BrancheStats {
   branche: string;
@@ -167,6 +168,75 @@ export default function StatisticsChart({ username }: StatisticsChartProps) {
     );
   };
 
+  const handleExportStats = () => {
+    if (stats.length === 0) {
+      alert('Aucune donnée à exporter');
+      return;
+    }
+
+    const monthName = months.find(m => m.value === selectedMonth)?.label || '';
+
+    const dataToExport = stats.map(stat => ({
+      'Branche': stat.branche,
+      'Nombre de Contrats': stat.count,
+      'Pourcentage': `${stat.percentage.toFixed(2)}%`,
+      'Total Primes (DT)': stat.totalPrime.toFixed(3)
+    }));
+
+    dataToExport.push({
+      'Branche': 'TOTAL',
+      'Nombre de Contrats': totalContracts,
+      'Pourcentage': '100%',
+      'Total Primes (DT)': totalPrimes.toFixed(3)
+    } as any);
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Statistiques');
+    XLSX.writeFile(wb, `statistiques_${monthName}_${selectedYear}.xlsx`);
+  };
+
+  const handleExportBranche = async (branche: string) => {
+    try {
+      const startDate = new Date(selectedYear, selectedMonth - 1, 1);
+      const endDate = new Date(selectedYear, selectedMonth, 0, 23, 59, 59, 999);
+
+      const { data: contracts, error } = await supabase
+        .from('affaire')
+        .select('*')
+        .eq('branche', branche)
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString());
+
+      if (error) throw error;
+
+      if (!contracts || contracts.length === 0) {
+        alert('Aucun contrat pour cette branche');
+        return;
+      }
+
+      const dataToExport = contracts.map(c => ({
+        'N° Police': c.numero_police || '',
+        'Assuré': c.assure || '',
+        'Branche': c.branche || '',
+        'Prime (DT)': parseFloat(c.prime || 0).toFixed(3),
+        'Durée': c.duree || '',
+        'Échéance': c.echeance || '',
+        'Date Effet': c.date_effet ? new Date(c.date_effet).toLocaleDateString('fr-FR') : '',
+        'Date Création': c.created_at ? new Date(c.created_at).toLocaleString('fr-FR') : ''
+      }));
+
+      const monthName = months.find(m => m.value === selectedMonth)?.label || '';
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, branche);
+      XLSX.writeFile(wb, `${branche}_${monthName}_${selectedYear}.xlsx`);
+    } catch (error) {
+      console.error('Erreur export branche:', error);
+      alert('Erreur lors de l\'export');
+    }
+  };
+
   const showTotals = username === 'Hamza';
 
   return (
@@ -200,6 +270,14 @@ export default function StatisticsChart({ username }: StatisticsChartProps) {
               </option>
             ))}
           </select>
+          <button
+            onClick={handleExportStats}
+            disabled={stats.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Exporter
+          </button>
         </div>
       </div>
 
@@ -240,14 +318,15 @@ export default function StatisticsChart({ username }: StatisticsChartProps) {
 
             <div className="space-y-3">
               {stats.map((stat, index) => (
-                <div key={index} className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:shadow-md transition-shadow">
+                <div key={index} className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:shadow-md transition-shadow cursor-pointer group" onClick={() => handleExportBranche(stat.branche)}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center space-x-3">
                       <div
                         className="w-4 h-4 rounded-full"
                         style={{ backgroundColor: stat.color }}
                       />
-                      <span className="font-semibold text-gray-800">{stat.branche}</span>
+                      <span className="font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">{stat.branche}</span>
+                      <Download className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
                     </div>
                     <span className="text-lg font-bold text-gray-900">
                       {stat.percentage.toFixed(1)}%
@@ -270,6 +349,9 @@ export default function StatisticsChart({ username }: StatisticsChartProps) {
                       }}
                     />
                   </div>
+                  <p className="text-xs text-gray-500 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    Cliquer pour télécharger les détails
+                  </p>
                 </div>
               ))}
             </div>

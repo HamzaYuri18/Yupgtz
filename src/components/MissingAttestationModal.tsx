@@ -13,7 +13,7 @@ interface MissingAttestationModalProps {
 
 interface MissingAttestation {
   numero: string;
-  motif: 'PRG' | 'TRUMAN' | 'Annulé' | '';
+  motif: 'PRG TRUMAN' | 'Annulé' | '';
   scanFile: File | null;
   scanUrl: string;
 }
@@ -70,7 +70,7 @@ export default function MissingAttestationModal({
     return null;
   }
 
-  const handleMotifChange = (motif: 'PRG' | 'TRUMAN' | 'Annulé') => {
+  const handleMotifChange = (motif: 'PRG TRUMAN' | 'Annulé') => {
     const updated = [...attestations];
     updated[currentIndex].motif = motif;
     setAttestations(updated);
@@ -223,8 +223,8 @@ export default function MissingAttestationModal({
               <label className="block text-sm font-semibold text-gray-700 mb-3">
                 Motif <span className="text-red-500">*</span>
               </label>
-              <div className="grid grid-cols-3 gap-3">
-                {(['PRG', 'TRUMAN', 'Annulé'] as const).map((motif) => (
+              <div className="grid grid-cols-2 gap-3">
+                {(['PRG TRUMAN', 'Annulé'] as const).map((motif) => (
                   <button
                     key={motif}
                     type="button"
