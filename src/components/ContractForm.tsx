@@ -7,6 +7,7 @@ import { searchContractInTable, getAvailableMonths, saveAffaireContract, saveCre
 import { supabase } from '../lib/supabase';
 import { getSessionDate } from '../utils/auth';
 import TermeSuspenduModal from './TermeSuspenduModal';
+import MissingAttestationModal from './MissingAttestationModal';
 
 interface ContractFormProps {
   username: string;
@@ -74,6 +75,10 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     joursDepasses: number;
     primeTotale: number;
   } | null>(null);
+  const [showMissingAttestationModal, setShowMissingAttestationModal] = useState(false);
+  const [missingAttestationNumbers, setMissingAttestationNumbers] = useState<string[]>([]);
+  const [carnetTableName, setCarnetTableName] = useState<string>('');
+  const [pendingSubmitData, setPendingSubmitData] = useState<any>(null);
 
   React.useEffect(() => {
     loadAvailableMonths();
@@ -286,6 +291,326 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     return false;
   };
 
+  const handleMissingAttestationComplete = () => {
+    if (pendingSubmitData) {
+      continueSubmitAfterAttestationCheck();
+      setPendingSubmitData(null);
+    }
+  };
+
+  const continueSubmitAfterAttestationCheck = async () => {
+    const cleanedFormData = pendingSubmitData;
+
+    // On passe directement à l'enregistrement car toutes les validations ont déjà été faites
+    await performContractSave(cleanedFormData);
+  };
+
+  const performContractSave = async (cleanedFormData: any) => {
+    console.log('🔍 Vérification avant sauvegarde (CRÉDIT):');
+    console.log('  - Type de paiement:', cleanedFormData.paymentType);
+    console.log('  - Prime saisie:', cleanedFormData.premiumAmount);
+    console.log('  - Crédit saisi:', cleanedFormData.creditAmount);
+    console.log('  - Date paiement:', cleanedFormData.paymentDate);
+
+    setIsLoading(true);
+
+    try {
+      const contract: Contract = {
+        id: generateContractId(),
+        type: cleanedFormData.type,
+        branch: cleanedFormData.branch,
+        contractNumber: cleanedFormData.contractNumber,
+        premiumAmount: parseFloat(cleanedFormData.premiumAmount),
+        insuredName: cleanedFormData.insuredName,
+        paymentMode: cleanedFormData.paymentMode,
+        paymentType: cleanedFormData.paymentType,
+        creditAmount: cleanedFormData.paymentType === 'Crédit' ? parseFloat(cleanedFormData.creditAmount) : undefined,
+        paymentDate: cleanedFormData.paymentDate || undefined,
+        createdBy: username,
+        createdAt: Date.now(),
+        telephone: cleanedFormData.type === 'Affaire' ? cleanedFormData.telephone : undefined,
+        numeroAttestation: cleanedFormData.branch === 'Auto' ? cleanedFormData.numeroAttestation : undefined,
+        xmlData: xmlSearchResult || undefined
+      };
+
+      console.log('📊 Données du contrat avant sauvegarde (CRÉDIT):');
+      console.log('  - contract.premiumAmount:', contract.premiumAmount);
+      console.log('  - contract.creditAmount:', contract.creditAmount);
+      console.log('  - Calcul montant comptant:', contract.premiumAmount - (contract.creditAmount || 0));
+
+      // VÉRIFICATIONS DES DOUBLONS AVANT SAUVEGARDE
+      if (contract.type === 'Terme' && xmlSearchResult) {
+        const existingInTerme = await checkTermeContractExists(
+          contract.contractNumber,
+          xmlSearchResult.maturity
+        );
+
+        if (existingInTerme) {
+          const datePaiement = new Date(existingInTerme.date_paiement).toLocaleDateString('fr-FR');
+          setMessage(`❌ Le terme est déjà payé en date du ${datePaiement}`);
+          setIsLoading(false);
+          resetForm();
+          return;
+        }
+
+        const existingInRapport = await checkTermeInRapport(
+          contract.contractNumber,
+          xmlSearchResult.maturity
+        );
+
+        if (existingInRapport) {
+          const datePaiement = new Date(existingInRapport.created_at).toLocaleDateString('fr-FR');
+          setMessage(`❌ Le terme est déjà payé en date du ${datePaiement}`);
+          setIsLoading(false);
+          resetForm();
+          return;
+        }
+      }
+
+      if (contract.type === 'Affaire') {
+        const sessionDate = getSessionDate();
+
+        const existingInAffaire = await checkAffaireContractExists(
+          contract.contractNumber,
+          sessionDate
+        );
+
+        if (existingInAffaire) {
+          const datePaiement = new Date(existingInAffaire.created_at).toLocaleDateString('fr-FR');
+          setMessage(`❌ Ce contrat est déjà souscrit en date du ${datePaiement}`);
+          setIsLoading(false);
+          resetForm();
+          return;
+        }
+
+        const existingInRapport = await checkAffaireInRapport(
+          contract.contractNumber,
+          sessionDate
+        );
+
+        if (existingInRapport) {
+          const datePaiement = new Date(existingInRapport.created_at).toLocaleDateString('fr-FR');
+          setMessage(`❌ Ce contrat est déjà souscrit en date du ${datePaiement}`);
+          setIsLoading(false);
+          resetForm();
+          return;
+        }
+      }
+
+      if (contract.type === 'Encaissement pour autre code') {
+        const existing = await checkEncaissementAutreCodeExists(
+          contract.contractNumber,
+          cleanedFormData.dateEcheance
+        );
+
+        if (existing) {
+          const datePaiement = new Date(existing.created_at).toLocaleDateString('fr-FR');
+          setMessage(`❌ Ce contrat est déjà payé le ${datePaiement}`);
+          setIsLoading(false);
+          resetForm();
+          return;
+        }
+
+        const autreCodeSuccess = await saveEncaissementAutreCode({
+          contractNumber: contract.contractNumber,
+          insuredName: contract.insuredName,
+          premiumAmount: contract.premiumAmount,
+          dateEcheance: cleanedFormData.dateEcheance,
+          paymentMode: contract.paymentMode,
+          createdBy: username
+        });
+
+        if (!autreCodeSuccess) {
+          setMessage('❌ Erreur lors de la sauvegarde dans Encaissement_autre_code');
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      if (contract.type === 'Avenant changement de véhicule') {
+        const sessionDate = getSessionDate();
+        const existing = await checkAvenantChangementVehiculeExists(
+          contract.contractNumber,
+          sessionDate
+        );
+
+        if (existing) {
+          const dateCreation = new Date(existing.created_at).toLocaleDateString('fr-FR');
+          setMessage(`❌ Cet avenant est déjà effectué le ${dateCreation}`);
+          setIsLoading(false);
+          resetForm();
+          return;
+        }
+
+        const avenantSuccess = await saveAvenantChangementVehicule({
+          contractNumber: contract.contractNumber,
+          insuredName: contract.insuredName,
+          premiumAmount: contract.premiumAmount,
+          branch: contract.branch,
+          paymentMode: contract.paymentMode,
+          createdBy: username
+        });
+
+        if (!avenantSuccess) {
+          setMessage('❌ Erreur lors de la sauvegarde dans Avenant_Changement_véhicule');
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      saveContract(contract);
+
+      try {
+        console.log('💾 Début de la sauvegarde dans la table rapport (CRÉDIT)...');
+        const rapportSuccess = await saveContractToRapport(contract);
+
+        if (rapportSuccess) {
+          let successMessage = '✅ Contrat enregistré avec succès';
+
+          if (contract.paymentType === 'Crédit') {
+            const montantComptant = contract.premiumAmount - (contract.creditAmount || 0);
+            successMessage += ` - Prime: ${contract.premiumAmount} DT, Crédit: ${contract.creditAmount} DT, Comptant: ${montantComptant} DT`;
+          } else {
+            successMessage += ` - Montant: ${contract.premiumAmount} DT`;
+          }
+
+          setMessage(successMessage);
+        } else {
+          setMessage('❌ Erreur lors de la sauvegarde dans la base de données');
+          setIsLoading(false);
+          return;
+        }
+      } catch (rapportError) {
+        console.error('Erreur rapport:', rapportError);
+        setMessage('❌ Erreur critique lors de la sauvegarde');
+        setIsLoading(false);
+        return;
+      }
+
+      if (contract.type === 'Terme' && xmlSearchResult) {
+        try {
+          let retourType: 'Technique' | 'Contentieux' | null = null;
+          let originalPrime: number | undefined = undefined;
+
+          if (isRetourTechniqueMode) {
+            retourType = 'Technique';
+            originalPrime = parseFloat(originalPremiumAmount);
+          } else if (isRetourContentieuxMode) {
+            retourType = 'Contentieux';
+          }
+
+          const termeData = {
+            contractNumber: contract.contractNumber,
+            insuredName: contract.insuredName,
+            paymentMode: contract.paymentMode,
+            maturity: xmlSearchResult.maturity,
+            paymentDate: getSessionDate(),
+            premiumAmount: contract.premiumAmount,
+            creditAmount: contract.creditAmount,
+            branch: contract.branch,
+            createdBy: username,
+            retour: retourType,
+            primeOriginale: originalPrime
+          };
+
+          const termeSuccess = await saveTermeContract(termeData);
+
+          if (!termeSuccess) {
+            setMessage(prev => prev + ' (erreur table terme)');
+          }
+        } catch (termeError) {
+          console.error('❌ Erreur terme:', termeError);
+          setMessage(prev => prev + ' (erreur terme)');
+        }
+      }
+
+      if (contract.type === 'Affaire') {
+        try {
+          const sessionDate = getSessionDate();
+
+          const affaireSuccess = await saveAffaireContract({
+            contractNumber: contract.contractNumber,
+            insuredName: contract.insuredName,
+            premiumAmount: contract.premiumAmount,
+            creditAmount: contract.creditAmount,
+            branch: contract.branch,
+            paymentDate: sessionDate,
+            paymentMode: contract.paymentMode,
+            createdBy: username,
+            telephone: contract.telephone
+          });
+
+          if (!affaireSuccess) {
+            setMessage(prev => prev + ' (erreur table affaire)');
+          }
+        } catch (affaireError) {
+          console.error('❌ Erreur affaire:', affaireError);
+          setMessage(prev => prev + ' (erreur affaire)');
+        }
+      }
+
+      if (contract.paymentType === 'Crédit') {
+        try {
+          const creditSuccess = await saveCreditContract({
+            contractNumber: contract.contractNumber,
+            insuredName: contract.insuredName,
+            premiumAmount: contract.premiumAmount,
+            creditAmount: contract.creditAmount || 0,
+            paymentDate: contract.paymentDate || '',
+            branch: contract.branch,
+            createdBy: username
+          });
+
+          if (!creditSuccess) {
+            setMessage(prev => prev + ' (erreur crédit)');
+          }
+        } catch (creditError) {
+          console.error('❌ Erreur crédit:', creditError);
+          setMessage(prev => prev + ' (erreur crédit)');
+        }
+      }
+
+      if (contract.paymentMode === 'Cheque') {
+        try {
+          const chequeSuccess = await saveCheque({
+            contractNumber: contract.contractNumber,
+            insuredName: contract.insuredName,
+            premiumAmount: contract.premiumAmount,
+            numeroCheque: cleanedFormData.numeroCheque,
+            banque: cleanedFormData.banque,
+            dateEncaissementPrevue: cleanedFormData.dateEncaissementPrevue,
+            createdBy: username
+          });
+
+          if (!chequeSuccess) {
+            setMessage(prev => prev + ' (erreur chèque)');
+          }
+        } catch (chequeError) {
+          console.error('❌ Erreur chèque:', chequeError);
+          setMessage(prev => prev + ' (erreur chèque)');
+        }
+      }
+
+      if (contract.numeroAttestation && contract.branch === 'Auto') {
+        try {
+          await updateAttestationServie(parseInt(contract.numeroAttestation));
+        } catch (attestationError) {
+          console.error('❌ Erreur attestation:', attestationError);
+          setMessage(prev => prev + ' (erreur attestation)');
+        }
+      }
+
+      resetForm();
+
+    } catch (error) {
+      console.error('Erreur générale:', error);
+      setMessage('❌ Erreur générale lors de l\'enregistrement');
+    }
+
+    setIsLoading(false);
+    setTimeout(() => setMessage(''), 6000);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -293,7 +618,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     const cleanedFormData = {
       ...formData,
       contractNumber: trimSpaces(formData.contractNumber)
-      // Le nom de l'assuré garde ses espaces tels quels
     };
 
     // Mettre à jour le state avec les valeurs nettoyées
@@ -359,6 +683,40 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
         }
         setTimeout(() => setMessage(''), 5000);
         return;
+      }
+
+      // Vérifier les attestations manquantes
+      const { data: lastAttestationData, error: lastAttError } = await supabase
+        .rpc('get_last_attestation_number');
+
+      if (lastAttError) {
+        console.error('Erreur lors de la récupération du dernier numéro d\'attestation:', lastAttError);
+      }
+
+      const lastAttestationNumber = lastAttestationData ? parseInt(lastAttestationData) : 0;
+      const currentAttestationNumber = attestationNum;
+
+      if (lastAttestationNumber > 0 && currentAttestationNumber > lastAttestationNumber + 1) {
+        const missingNumbers: string[] = [];
+        for (let i = lastAttestationNumber + 1; i < currentAttestationNumber; i++) {
+          missingNumbers.push(i.toString());
+        }
+
+        // Trouver la table du carnet pour cette attestation
+        const { data: carnetData } = await supabase
+          .from('carnets_attestations')
+          .select('table_name, numero_debut, numero_fin')
+          .lte('numero_debut', currentAttestationNumber)
+          .gte('numero_fin', currentAttestationNumber)
+          .single();
+
+        if (carnetData) {
+          setMissingAttestationNumbers(missingNumbers);
+          setCarnetTableName(carnetData.table_name);
+          setPendingSubmitData(cleanedFormData);
+          setShowMissingAttestationModal(true);
+          return;
+        }
       }
     }
 
@@ -439,345 +797,9 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
         return;
       }
     }
-    
-    console.log('🔍 Vérification avant sauvegarde (CRÉDIT):');
-    console.log('  - Type de paiement:', cleanedFormData.paymentType);
-    console.log('  - Prime saisie:', cleanedFormData.premiumAmount);
-    console.log('  - Crédit saisi:', cleanedFormData.creditAmount);
-    console.log('  - Date paiement:', cleanedFormData.paymentDate);
-    
-    setIsLoading(true);
 
-    try {
-      const contract: Contract = {
-        id: generateContractId(),
-        type: cleanedFormData.type,
-        branch: cleanedFormData.branch,
-        contractNumber: cleanedFormData.contractNumber,
-        premiumAmount: parseFloat(cleanedFormData.premiumAmount),
-        insuredName: cleanedFormData.insuredName,
-        paymentMode: cleanedFormData.paymentMode,
-        paymentType: cleanedFormData.paymentType,
-        creditAmount: cleanedFormData.paymentType === 'Crédit' ? parseFloat(cleanedFormData.creditAmount) : undefined,
-        paymentDate: cleanedFormData.paymentDate || undefined,
-        createdBy: username,
-        createdAt: Date.now(),
-        telephone: cleanedFormData.type === 'Affaire' ? cleanedFormData.telephone : undefined,
-        numeroAttestation: cleanedFormData.branch === 'Auto' ? cleanedFormData.numeroAttestation : undefined,
-        xmlData: xmlSearchResult || undefined
-      };
-
-      console.log('📊 Données du contrat avant sauvegarde (CRÉDIT):');
-      console.log('  - contract.premiumAmount:', contract.premiumAmount);
-      console.log('  - contract.creditAmount:', contract.creditAmount);
-      console.log('  - Calcul montant comptant:', contract.premiumAmount - (contract.creditAmount || 0));
-
-      // VÉRIFICATIONS DES DOUBLONS AVANT SAUVEGARDE
-      if (contract.type === 'Terme' && xmlSearchResult) {
-        // Vérifier dans la table Terme
-        const existingInTerme = await checkTermeContractExists(
-          contract.contractNumber,
-          xmlSearchResult.maturity
-        );
-
-        if (existingInTerme) {
-          const datePaiement = new Date(existingInTerme.date_paiement).toLocaleDateString('fr-FR');
-          setMessage(`❌ Le terme est déjà payé en date du ${datePaiement}`);
-          setIsLoading(false);
-          resetForm();
-          return;
-        }
-
-        // Vérifier dans la table Rapport
-        const existingInRapport = await checkTermeInRapport(
-          contract.contractNumber,
-          xmlSearchResult.maturity
-        );
-
-        if (existingInRapport) {
-          const datePaiement = new Date(existingInRapport.created_at).toLocaleDateString('fr-FR');
-          setMessage(`❌ Le terme est déjà payé en date du ${datePaiement}`);
-          setIsLoading(false);
-          resetForm();
-          return;
-        }
-      }
-
-      if (contract.type === 'Affaire') {
-        // Obtenir la date de session (date de paiement pour Affaire)
-        const sessionDate = getSessionDate();
-
-        // Vérifier dans la table Affaire
-        const existingInAffaire = await checkAffaireContractExists(
-          contract.contractNumber,
-          sessionDate
-        );
-
-        if (existingInAffaire) {
-          const datePaiement = new Date(existingInAffaire.created_at).toLocaleDateString('fr-FR');
-          setMessage(`❌ Ce contrat est déjà souscrit en date du ${datePaiement}`);
-          setIsLoading(false);
-          resetForm();
-          return;
-        }
-
-        // Vérifier dans la table Rapport
-        const existingInRapport = await checkAffaireInRapport(
-          contract.contractNumber,
-          sessionDate
-        );
-
-        if (existingInRapport) {
-          const datePaiement = new Date(existingInRapport.created_at).toLocaleDateString('fr-FR');
-          setMessage(`❌ Ce contrat est déjà souscrit en date du ${datePaiement}`);
-          setIsLoading(false);
-          resetForm();
-          return;
-        }
-      }
-
-      // VÉRIFICATIONS POUR ENCAISSEMENT POUR AUTRE CODE
-      if (contract.type === 'Encaissement pour autre code') {
-        const existing = await checkEncaissementAutreCodeExists(
-          contract.contractNumber,
-          cleanedFormData.dateEcheance
-        );
-
-        if (existing) {
-          const datePaiement = new Date(existing.created_at).toLocaleDateString('fr-FR');
-          setMessage(`❌ Ce contrat est déjà payé le ${datePaiement}`);
-          setIsLoading(false);
-          resetForm();
-          return;
-        }
-
-        // Sauvegarder dans la table Encaissement_autre_code
-        const autreCodeSuccess = await saveEncaissementAutreCode({
-          contractNumber: contract.contractNumber,
-          insuredName: contract.insuredName,
-          premiumAmount: contract.premiumAmount,
-          dateEcheance: cleanedFormData.dateEcheance,
-          paymentMode: contract.paymentMode,
-          createdBy: username
-        });
-
-        if (!autreCodeSuccess) {
-          setMessage('❌ Erreur lors de la sauvegarde dans Encaissement_autre_code');
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // VÉRIFICATIONS POUR AVENANT CHANGEMENT DE VÉHICULE
-      if (contract.type === 'Avenant changement de véhicule') {
-        const sessionDate = getSessionDate();
-        const existing = await checkAvenantChangementVehiculeExists(
-          contract.contractNumber,
-          sessionDate
-        );
-
-        if (existing) {
-          const dateCreation = new Date(existing.created_at).toLocaleDateString('fr-FR');
-          setMessage(`❌ Cet avenant est déjà effectué le ${dateCreation}`);
-          setIsLoading(false);
-          resetForm();
-          return;
-        }
-
-        // Sauvegarder dans la table Avenant_Changement_véhicule
-        const avenantSuccess = await saveAvenantChangementVehicule({
-          contractNumber: contract.contractNumber,
-          insuredName: contract.insuredName,
-          premiumAmount: contract.premiumAmount,
-          branch: contract.branch,
-          paymentMode: contract.paymentMode,
-          createdBy: username
-        });
-
-        if (!avenantSuccess) {
-          setMessage('❌ Erreur lors de la sauvegarde dans Avenant_Changement_véhicule');
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // Sauvegarder localement
-      saveContract(contract);
-
-      // SAUVEGARDE DANS RAPPORT (AVEC LOGIQUE CRÉDIT)
-      try {
-        console.log('💾 Début de la sauvegarde dans la table rapport (CRÉDIT)...');
-        const rapportSuccess = await saveContractToRapport(contract);
-
-        if (rapportSuccess) {
-          let successMessage = '✅ Contrat enregistré avec succès';
-
-          // Ajouter les détails pour crédit
-          if (contract.paymentType === 'Crédit') {
-            const montantComptant = contract.premiumAmount - (contract.creditAmount || 0);
-            successMessage += ` - Prime: ${contract.premiumAmount} DT, Crédit: ${contract.creditAmount} DT, Comptant: ${montantComptant} DT`;
-          } else {
-            successMessage += ` - Montant: ${contract.premiumAmount} DT`;
-          }
-
-          setMessage(successMessage);
-        } else {
-          setMessage('❌ Erreur lors de la sauvegarde dans la base de données');
-          setIsLoading(false);
-          return;
-        }
-      } catch (rapportError) {
-        console.error('Erreur rapport:', rapportError);
-        setMessage('❌ Erreur critique lors de la sauvegarde');
-        setIsLoading(false);
-        return;
-      }
-
-      // SAUVEGARDES SPÉCIFIQUES
-      if (contract.type === 'Terme' && xmlSearchResult) {
-        try {
-          // Déterminer le type de retour
-          let retourType: 'Technique' | 'Contentieux' | null = null;
-          let originalPrime: number | undefined = undefined;
-
-          if (isRetourTechniqueMode) {
-            retourType = 'Technique';
-            originalPrime = parseFloat(originalPremiumAmount);
-          } else if (isRetourContentieuxMode) {
-            retourType = 'Contentieux';
-            originalPrime = parseFloat(originalPremiumAmount);
-          }
-
-          await saveTermeContract(contract, retourType, originalPrime);
-          setMessage(prev => prev + ' + Terme');
-
-          // VÉRIFICATION DU DÉLAI DE 45 JOURS
-          const sessionDate = new Date(getSessionDate());
-          const dateEcheance = new Date(xmlSearchResult.maturity);
-
-          const diffTime = sessionDate.getTime() - dateEcheance.getTime();
-          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-          if (diffDays > 45) {
-            const joursDepasses = diffDays - 45;
-
-            await saveTermeSuspenduPaye({
-              sessionDate: getSessionDate(),
-              numPolice: contract.contractNumber,
-              codeSte: xmlSearchResult.codeCompany || '',
-              numAv: xmlSearchResult.avenantNumber || '0',
-              souscripteur: contract.insuredName,
-              dateEcheance: xmlSearchResult.maturity,
-              joursDepasses: joursDepasses,
-              primeTotale: contract.premiumAmount
-            });
-
-            setTermeSuspenduData({
-              contractNumber: contract.contractNumber,
-              insuredName: contract.insuredName,
-              dateEcheance: xmlSearchResult.maturity,
-              joursDepasses: joursDepasses,
-              primeTotale: contract.premiumAmount
-            });
-
-            setShowTermeSuspenduModal(true);
-          }
-        } catch (termeError) {
-          console.error('Erreur Terme:', termeError);
-          setMessage(prev => prev + ' (erreur Terme)');
-        }
-      }
-
-      if (contract.type === 'Affaire') {
-        try {
-          await saveAffaireContract(contract);
-          setMessage(prev => prev + ' + Affaire');
-        } catch (supabaseError) {
-          console.error('Erreur Affaire:', supabaseError);
-          setMessage(prev => prev + ' (erreur Affaire)');
-        }
-      }
-
-      // SAUVEGARDE CRÉDIT SPÉCIFIQUE
-      if (contract.paymentType === 'Crédit' && contract.creditAmount) {
-        try {
-          await saveCreditContract(contract);
-          setMessage(prev => prev + ' + Crédit enregistré');
-        } catch (creditError) {
-          console.error('Erreur crédit:', creditError);
-          setMessage(prev => prev + ' (erreur crédit)');
-        }
-      }
-
-      // SAUVEGARDE CHÈQUE
-      console.log('🔍 Vérification sauvegarde chèque:');
-      console.log('  - paymentMode:', contract.paymentMode);
-      console.log('  - numeroCheque:', cleanedFormData.numeroCheque);
-      console.log('  - banque:', cleanedFormData.banque);
-      console.log('  - dateEncaissementPrevue:', cleanedFormData.dateEncaissementPrevue);
-
-      if (contract.paymentMode === 'Cheque' && cleanedFormData.numeroCheque && cleanedFormData.banque && cleanedFormData.dateEncaissementPrevue) {
-        console.log('💳 Démarrage de la sauvegarde du chèque...');
-        try {
-          const chequeResult = await saveCheque({
-            numeroContrat: contract.contractNumber,
-            assure: contract.insuredName,
-            numeroCheque: cleanedFormData.numeroCheque,
-            montant: contract.premiumAmount,
-            dateEncaissementPrevue: cleanedFormData.dateEncaissementPrevue,
-            banque: cleanedFormData.banque,
-            creePar: username
-          });
-
-          if (chequeResult) {
-            console.log('✅ Chèque enregistré avec succès');
-            setMessage(prev => prev + ' + Chèque enregistré');
-          } else {
-            console.error('❌ Échec de l\'enregistrement du chèque');
-            setMessage(prev => prev + ' (erreur chèque)');
-          }
-        } catch (chequeError) {
-          console.error('❌ Erreur chèque:', chequeError);
-          setMessage(prev => prev + ' (erreur chèque)');
-        }
-      } else {
-        console.log('⚠️ Conditions non remplies pour enregistrer le chèque');
-      }
-
-      // METTRE À JOUR L'ATTESTATION DANS LE CARNET (pour tous les types Auto)
-      if (contract.branch === 'Auto' && contract.numeroAttestation) {
-        try {
-          const attestationNum = parseInt(contract.numeroAttestation);
-          const updateSuccess = await updateAttestationServie(
-            attestationNum,
-            contract.contractNumber,
-            contract.insuredName,
-            contract.premiumAmount
-          );
-
-          if (updateSuccess) {
-            console.log('✅ Attestation mise à jour dans le carnet');
-            setMessage(prev => prev + ' + Attestation imprimée');
-          } else {
-            console.error('❌ Erreur lors de la mise à jour de l\'attestation');
-            setMessage(prev => prev + ' (erreur mise à jour attestation)');
-          }
-        } catch (attestationError) {
-          console.error('❌ Erreur attestation:', attestationError);
-          setMessage(prev => prev + ' (erreur attestation)');
-        }
-      }
-
-      // Reset form
-      resetForm();
-
-    } catch (error) {
-      console.error('Erreur générale:', error);
-      setMessage('❌ Erreur générale lors de l\'enregistrement');
-    }
-
-    setIsLoading(false);
-    setTimeout(() => setMessage(''), 6000);
+    // Toutes les validations sont passées, procéder à l'enregistrement
+    await performContractSave(cleanedFormData);
   };
 
   return (
@@ -1364,6 +1386,15 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           primeTotale={termeSuspenduData.primeTotale}
         />
       )}
+
+      <MissingAttestationModal
+        isOpen={showMissingAttestationModal}
+        onClose={() => setShowMissingAttestationModal(false)}
+        missingNumbers={missingAttestationNumbers}
+        currentUser={username}
+        carnetTable={carnetTableName}
+        onComplete={handleMissingAttestationComplete}
+      />
     </div>
   );
 };
