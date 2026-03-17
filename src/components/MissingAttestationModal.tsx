@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Upload, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -26,18 +26,26 @@ export default function MissingAttestationModal({
   carnetTable,
   onComplete
 }: MissingAttestationModalProps) {
-  const [attestations, setAttestations] = useState<MissingAttestation[]>(
-    missingNumbers.map(num => ({
-      numero: num,
-      motif: '' as any,
-      scanFile: null,
-      scanUrl: ''
-    }))
-  );
+  const [attestations, setAttestations] = useState<MissingAttestation[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  console.log('Modal opened with:', { missingNumbers, currentUser, carnetTable, attestations });
+  useEffect(() => {
+    if (isOpen && missingNumbers.length > 0) {
+      console.log('Initializing attestations with:', missingNumbers);
+      setAttestations(
+        missingNumbers.map(num => ({
+          numero: num,
+          motif: '' as any,
+          scanFile: null,
+          scanUrl: ''
+        }))
+      );
+      setCurrentIndex(0);
+    }
+  }, [isOpen, missingNumbers]);
+
+  console.log('Modal render:', { isOpen, missingNumbers, attestations });
 
   if (!isOpen) return null;
 
