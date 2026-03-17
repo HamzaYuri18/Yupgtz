@@ -701,11 +701,10 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
         if (!validation.is_valid) {
           // L'attestation n'est pas dans la bonne séquence
-          const dernierNumero = validation.dernier_numero_imprime;
           const numeroAttendu = validation.numero_attendu;
 
-          // Vérifier s'il y a des numéros manquants
-          if (dernierNumero && parseInt(numeroAttendu) < attestationNum) {
+          // Vérifier s'il y a des numéros manquants (le numéro saisi est supérieur au numéro attendu)
+          if (numeroAttendu && parseInt(numeroAttendu) < attestationNum) {
             const missingNumbers: string[] = [];
             for (let i = parseInt(numeroAttendu); i < attestationNum; i++) {
               missingNumbers.push(i.toString());
@@ -717,9 +716,13 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             setShowMissingAttestationModal(true);
             return;
           } else {
-            // Autre type d'erreur de séquence
-            setMessage(`❌ ${validation.message}`);
-            setTimeout(() => setMessage(''), 7000);
+            // Autre type d'erreur de séquence (déjà utilisé ou autre problème)
+            // Message personnalisé avec le numéro attendu
+            const messageDetail = numeroAttendu
+              ? `\nLe numéro attendu est : ${numeroAttendu}`
+              : '';
+            setMessage(`❌ ${validation.message}${messageDetail}`);
+            setTimeout(() => setMessage(''), 8000);
             return;
           }
         }
