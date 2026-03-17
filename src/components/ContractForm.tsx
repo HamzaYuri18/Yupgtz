@@ -685,37 +685,43 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
         return;
       }
 
-      // Vérifier les attestations manquantes
-      const { data: lastAttestationData, error: lastAttError } = await supabase
-        .rpc('get_last_attestation_number');
+      // Vérifier la séquence d'attestation avec la nouvelle fonction
+      const { data: validationData, error: validationError } = await supabase
+        .rpc('validate_attestation_sequence', { attestation_numero: attestationNum });
 
-      if (lastAttError) {
-        console.error('Erreur lors de la récupération du dernier numéro d\'attestation:', lastAttError);
+      if (validationError) {
+        console.error('Erreur lors de la validation de la séquence d\'attestation:', validationError);
+        setMessage('❌ Erreur lors de la validation du numéro d\'attestation');
+        setTimeout(() => setMessage(''), 5000);
+        return;
       }
 
-      const lastAttestationNumber = lastAttestationData ? parseInt(lastAttestationData) : 0;
-      const currentAttestationNumber = attestationNum;
+      if (validationData && validationData.length > 0) {
+        const validation = validationData[0];
 
-      if (lastAttestationNumber > 0 && currentAttestationNumber > lastAttestationNumber + 1) {
-        const missingNumbers: string[] = [];
-        for (let i = lastAttestationNumber + 1; i < currentAttestationNumber; i++) {
-          missingNumbers.push(i.toString());
-        }
+        if (!validation.is_valid) {
+          // L'attestation n'est pas dans la bonne séquence
+          const dernierNumero = validation.dernier_numero_imprime;
+          const numeroAttendu = validation.numero_attendu;
 
-        // Trouver la table du carnet pour cette attestation
-        const { data: carnetData } = await supabase
-          .from('carnets_attestations')
-          .select('table_name, numero_debut, numero_fin')
-          .lte('numero_debut', currentAttestationNumber)
-          .gte('numero_fin', currentAttestationNumber)
-          .single();
+          // Vérifier s'il y a des numéros manquants
+          if (dernierNumero && parseInt(numeroAttendu) < attestationNum) {
+            const missingNumbers: string[] = [];
+            for (let i = parseInt(numeroAttendu); i < attestationNum; i++) {
+              missingNumbers.push(i.toString());
+            }
 
-        if (carnetData) {
-          setMissingAttestationNumbers(missingNumbers);
-          setCarnetTableName(carnetData.table_name);
-          setPendingSubmitData(cleanedFormData);
-          setShowMissingAttestationModal(true);
-          return;
+            setMissingAttestationNumbers(missingNumbers);
+            setCarnetTableName(validation.carnet_table || '');
+            setPendingSubmitData(cleanedFormData);
+            setShowMissingAttestationModal(true);
+            return;
+          } else {
+            // Autre type d'erreur de séquence
+            setMessage(`❌ ${validation.message}`);
+            setTimeout(() => setMessage(''), 7000);
+            return;
+          }
         }
       }
     }
