@@ -181,8 +181,18 @@ const AttestationSequences: React.FC = () => {
             const current = parseInt(printedData[i].numero_attestation);
             const previous = parseInt(printedData[i - 1].numero_attestation);
             const gap = current - previous - 1;
+
             if (gap > 0) {
-              totalRatees += gap;
+              for (let missingNum = previous + 1; missingNum < current; missingNum++) {
+                const missingAttestation = allData.find(
+                  a => parseInt(a.numero_attestation) === missingNum
+                );
+
+                const statut = missingAttestation?.statut?.toLowerCase();
+                if (!statut || (statut !== 'autre' && statut !== 'imprime' && statut !== 'imprimee')) {
+                  totalRatees += 1;
+                }
+              }
             }
           }
         }
@@ -404,19 +414,45 @@ const AttestationSequences: React.FC = () => {
 
       let allRatees: any[] = [];
       for (const carnet of carnetsData) {
-        const { data: attestationsManquantes } = await supabase
-          .from('attestations_manquantes')
-          .select('*')
-          .eq('carnet_table', carnet.table_name);
+        const { data: allData } = await supabase
+          .from(carnet.table_name)
+          .select('numero_attestation, date_impression, statut')
+          .order('numero_attestation', { ascending: true });
 
-        if (attestationsManquantes) allRatees = allRatees.concat(attestationsManquantes);
+        if (!allData) continue;
+
+        const printedData = allData.filter(a => a.date_impression !== null);
+        if (printedData.length > 0) {
+          printedData.sort((a, b) =>
+            parseInt(a.numero_attestation) - parseInt(b.numero_attestation)
+          );
+
+          for (let i = 1; i < printedData.length; i++) {
+            const current = parseInt(printedData[i].numero_attestation);
+            const previous = parseInt(printedData[i - 1].numero_attestation);
+
+            for (let missingNum = previous + 1; missingNum < current; missingNum++) {
+              const missingAttestation = allData.find(
+                a => parseInt(a.numero_attestation) === missingNum
+              );
+
+              const statut = missingAttestation?.statut?.toLowerCase();
+              if (!statut || (statut !== 'autre' && statut !== 'imprime' && statut !== 'imprimee')) {
+                allRatees.push({
+                  numero_attestation: missingNum.toString(),
+                  carnet: carnet.table_name,
+                  statut: missingAttestation?.statut || 'Non défini'
+                });
+              }
+            }
+          }
+        }
       }
 
       const dataToExport = allRatees.map(a => ({
         'N° Attestation': a.numero_attestation,
-        'Motif': a.motif,
-        'Date Enregistrement': a.created_at ? new Date(a.created_at).toLocaleString('fr-FR') : '',
-        'Utilisateur': a.user || ''
+        'Carnet': a.carnet,
+        'Statut': a.statut
       }));
 
       const ws = XLSX.utils.json_to_sheet(dataToExport);
