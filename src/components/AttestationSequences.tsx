@@ -158,7 +158,7 @@ const AttestationSequences: React.FC = () => {
       for (const carnet of carnetsData) {
         const { data: allData } = await supabase
           .from(carnet.table_name)
-          .select('numero_attestation, date_impression')
+          .select('numero_attestation, date_impression, statut')
           .order('numero_attestation', { ascending: true });
 
         if (!allData) continue;
@@ -188,8 +188,7 @@ const AttestationSequences: React.FC = () => {
                   a => parseInt(a.numero_attestation) === missingNum
                 );
 
-                const statut = missingAttestation?.statut?.toLowerCase();
-                if (!statut || (statut !== 'autre' && statut !== 'imprime' && statut !== 'imprimee')) {
+                if (missingAttestation?.statut === null) {
                   totalRatees += 1;
                 }
               }
@@ -436,12 +435,11 @@ const AttestationSequences: React.FC = () => {
                 a => parseInt(a.numero_attestation) === missingNum
               );
 
-              const statut = missingAttestation?.statut?.toLowerCase();
-              if (!statut || (statut !== 'autre' && statut !== 'imprime' && statut !== 'imprimee')) {
+              if (missingAttestation?.statut === null) {
                 allRatees.push({
                   numero_attestation: missingNum.toString(),
                   carnet: carnet.table_name,
-                  statut: missingAttestation?.statut || 'Non défini'
+                  statut: 'Ratée'
                 });
               }
             }
