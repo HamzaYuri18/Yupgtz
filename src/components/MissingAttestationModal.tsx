@@ -39,7 +39,17 @@ export default function MissingAttestationModal({
 
   if (!isOpen) return null;
 
+  // Vérification de sécurité
+  if (attestations.length === 0) {
+    return null;
+  }
+
   const currentAttestation = attestations[currentIndex];
+
+  // Double vérification
+  if (!currentAttestation) {
+    return null;
+  }
 
   const handleMotifChange = (motif: 'PRG' | 'TRUMAN' | 'Annulé') => {
     const updated = [...attestations];
