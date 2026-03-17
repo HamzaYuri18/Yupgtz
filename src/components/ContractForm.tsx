@@ -460,31 +460,37 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
       saveContract(contract);
 
-      try {
-        console.log('💾 Début de la sauvegarde dans la table rapport (CRÉDIT)...');
-        const rapportSuccess = await saveContractToRapport(contract);
+      // Pour les types Terme et Affaire, saveTermeContract et saveAffaireContract
+      // enregistrent automatiquement dans rapport, donc on ne doit pas appeler saveContractToRapport
+      const shouldSaveToRapportDirectly = contract.type !== 'Terme' && contract.type !== 'Affaire';
 
-        if (rapportSuccess) {
-          let successMessage = '✅ Contrat enregistré avec succès';
+      if (shouldSaveToRapportDirectly) {
+        try {
+          console.log('💾 Début de la sauvegarde dans la table rapport...');
+          const rapportSuccess = await saveContractToRapport(contract);
 
-          if (contract.paymentType === 'Crédit') {
-            const montantComptant = contract.premiumAmount - (contract.creditAmount || 0);
-            successMessage += ` - Prime: ${contract.premiumAmount} DT, Crédit: ${contract.creditAmount} DT, Comptant: ${montantComptant} DT`;
+          if (rapportSuccess) {
+            let successMessage = '✅ Contrat enregistré avec succès';
+
+            if (contract.paymentType === 'Crédit') {
+              const montantComptant = contract.premiumAmount - (contract.creditAmount || 0);
+              successMessage += ` - Prime: ${contract.premiumAmount} DT, Crédit: ${contract.creditAmount} DT, Comptant: ${montantComptant} DT`;
+            } else {
+              successMessage += ` - Montant: ${contract.premiumAmount} DT`;
+            }
+
+            setMessage(successMessage);
           } else {
-            successMessage += ` - Montant: ${contract.premiumAmount} DT`;
+            setMessage('❌ Erreur lors de la sauvegarde dans la base de données');
+            setIsLoading(false);
+            return;
           }
-
-          setMessage(successMessage);
-        } else {
-          setMessage('❌ Erreur lors de la sauvegarde dans la base de données');
+        } catch (rapportError) {
+          console.error('Erreur rapport:', rapportError);
+          setMessage('❌ Erreur critique lors de la sauvegarde');
           setIsLoading(false);
           return;
         }
-      } catch (rapportError) {
-        console.error('Erreur rapport:', rapportError);
-        setMessage('❌ Erreur critique lors de la sauvegarde');
-        setIsLoading(false);
-        return;
       }
 
       if (contract.type === 'Terme' && xmlSearchResult) {
@@ -509,18 +515,32 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             creditAmount: contract.creditAmount,
             branch: contract.branch,
             createdBy: username,
+            paymentType: contract.paymentType,
             retour: retourType,
             primeOriginale: originalPrime
           };
 
           const termeSuccess = await saveTermeContract(termeData);
 
-          if (!termeSuccess) {
-            setMessage(prev => prev + ' (erreur table terme)');
+          if (termeSuccess) {
+            let successMessage = '✅ Contrat Terme enregistré avec succès';
+            if (contract.paymentType === 'Crédit') {
+              const montantComptant = contract.premiumAmount - (contract.creditAmount || 0);
+              successMessage += ` - Prime: ${contract.premiumAmount} DT, Crédit: ${contract.creditAmount} DT, Comptant: ${montantComptant} DT`;
+            } else {
+              successMessage += ` - Montant: ${contract.premiumAmount} DT`;
+            }
+            setMessage(successMessage);
+          } else {
+            setMessage('❌ Erreur lors de la sauvegarde du contrat Terme');
+            setIsLoading(false);
+            return;
           }
         } catch (termeError) {
           console.error('❌ Erreur terme:', termeError);
-          setMessage(prev => prev + ' (erreur terme)');
+          setMessage('❌ Erreur lors de la sauvegarde du contrat Terme');
+          setIsLoading(false);
+          return;
         }
       }
 
@@ -536,16 +556,30 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             branch: contract.branch,
             paymentDate: sessionDate,
             paymentMode: contract.paymentMode,
+            paymentType: contract.paymentType,
             createdBy: username,
             telephone: contract.telephone
           });
 
-          if (!affaireSuccess) {
-            setMessage(prev => prev + ' (erreur table affaire)');
+          if (affaireSuccess) {
+            let successMessage = '✅ Contrat Affaire enregistré avec succès';
+            if (contract.paymentType === 'Crédit') {
+              const montantComptant = contract.premiumAmount - (contract.creditAmount || 0);
+              successMessage += ` - Prime: ${contract.premiumAmount} DT, Crédit: ${contract.creditAmount} DT, Comptant: ${montantComptant} DT`;
+            } else {
+              successMessage += ` - Montant: ${contract.premiumAmount} DT`;
+            }
+            setMessage(successMessage);
+          } else {
+            setMessage('❌ Erreur lors de la sauvegarde du contrat Affaire');
+            setIsLoading(false);
+            return;
           }
         } catch (affaireError) {
           console.error('❌ Erreur affaire:', affaireError);
-          setMessage(prev => prev + ' (erreur affaire)');
+          setMessage('❌ Erreur lors de la sauvegarde du contrat Affaire');
+          setIsLoading(false);
+          return;
         }
       }
 
