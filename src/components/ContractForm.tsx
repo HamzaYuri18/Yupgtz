@@ -517,7 +517,8 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             createdBy: username,
             paymentType: contract.paymentType,
             retour: retourType,
-            primeOriginale: originalPrime
+            primeOriginale: originalPrime,
+            numeroAttestation: contract.numeroAttestation
           };
 
           const termeSuccess = await saveTermeContract(termeData);
@@ -558,7 +559,8 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             paymentMode: contract.paymentMode,
             paymentType: contract.paymentType,
             createdBy: username,
-            telephone: contract.telephone
+            telephone: contract.telephone,
+            numeroAttestation: contract.numeroAttestation
           });
 
           if (affaireSuccess) {
@@ -627,7 +629,18 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
       if (contract.numeroAttestation && contract.branch === 'Auto') {
         try {
-          await updateAttestationServie(parseInt(contract.numeroAttestation));
+          const attestationSuccess = await updateAttestationServie(
+            parseInt(contract.numeroAttestation),
+            contract.contractNumber,
+            contract.insuredName,
+            contract.premiumAmount
+          );
+
+          if (attestationSuccess) {
+            console.log(`✅ Attestation ${contract.numeroAttestation} marquée comme imprimée`);
+          } else {
+            console.warn(`⚠️ Impossible de marquer l'attestation ${contract.numeroAttestation} comme imprimée`);
+          }
         } catch (attestationError) {
           console.error('❌ Erreur attestation:', attestationError);
           setMessage(prev => prev + ' (erreur attestation)');

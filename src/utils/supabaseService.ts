@@ -756,20 +756,27 @@ export const saveAffaireContract = async (contractData: ContractData): Promise<b
       }
     }
 
+    const insertData: any = {
+      numero_contrat: contractData.contractNumber || '',
+      prime: primeValue,
+      assure: contractData.insuredName,
+      branche: contractData.branch,
+      mode_paiement: contractData.paymentMode,
+      type_paiement: contractData.paymentType,
+      montant_credit: montantCreditValue,
+      date_paiement: contractData.paymentType === 'Crédit' ? contractData.paymentDate : null,
+      cree_par: contractData.createdBy,
+      telephone: contractData.telephone || ''
+    };
+
+    // Ajouter NumATT si branche Auto et numéro fourni
+    if (contractData.branch === 'Auto' && contractData.numeroAttestation) {
+      insertData.numatt = parseInt(contractData.numeroAttestation);
+    }
+
     const { data, error } = await supabase
       .from('affaire')
-      .insert([{
-        numero_contrat: contractData.contractNumber || '',
-        prime: primeValue,
-        assure: contractData.insuredName,
-        branche: contractData.branch,
-        mode_paiement: contractData.paymentMode,
-        type_paiement: contractData.paymentType,
-        montant_credit: montantCreditValue,
-        date_paiement: contractData.paymentType === 'Crédit' ? contractData.paymentDate : null,
-        cree_par: contractData.createdBy,
-        telephone: contractData.telephone || ''
-      }]);
+      .insert([insertData]);
 
     if (error) {
       console.error('❌ Erreur lors de la sauvegarde Affaire:', error);
@@ -777,6 +784,46 @@ export const saveAffaireContract = async (contractData: ContractData): Promise<b
     }
 
     console.log('✅ Contrat Affaire sauvegardé avec succès');
+
+    // AUSSI enregistrer dans la table rapport
+    try {
+      console.log('📊 Enregistrement du contrat Affaire dans la table rapport...');
+
+      const montantRecu = montantCreditValue ? primeValue - montantCreditValue : primeValue;
+
+      const rapportData: any = {
+        type: 'Affaire',
+        branche: contractData.branch || '',
+        numero_contrat: contractData.contractNumber || '',
+        prime: primeValue,
+        montant: primeValue,
+        montant_recu: montantRecu,
+        date_operation: new Date().toISOString().split('T')[0],
+        assure: contractData.insuredName || '',
+        mode_paiement: contractData.paymentMode || '',
+        type_paiement: contractData.paymentType || 'Au comptant',
+        cree_par: contractData.createdBy || 'Système',
+        montant_credit: montantCreditValue
+      };
+
+      // Ajouter numatt si disponible
+      if (contractData.branch === 'Auto' && contractData.numeroAttestation) {
+        rapportData.numatt = parseInt(contractData.numeroAttestation);
+      }
+
+      const { error: rapportError } = await supabase
+        .from('rapport')
+        .insert([rapportData]);
+
+      if (rapportError) {
+        console.error('❌ Erreur lors de l\'enregistrement dans rapport:', rapportError);
+      } else {
+        console.log('✅ Contrat Affaire enregistré dans rapport');
+      }
+    } catch (rapportErr) {
+      console.error('❌ Erreur lors de l\'enregistrement dans rapport:', rapportErr);
+    }
+
     return true;
   } catch (error) {
     console.error('❌ Erreur générale lors de la sauvegarde Affaire:', error);
@@ -906,6 +953,49 @@ export const saveTermeContract = async (
     }
 
     console.log('✅ Contrat Terme sauvegardé avec succès');
+
+    // AUSSI enregistrer dans la table rapport
+    try {
+      console.log('📊 Enregistrement du contrat Terme dans la table rapport...');
+
+      const montantCreditValue = contractData.paymentType === 'Crédit' && contractData.creditAmount
+        ? Number(contractData.creditAmount)
+        : null;
+      const montantRecu = montantCreditValue ? primeValue - montantCreditValue : primeValue;
+
+      const rapportData: any = {
+        type: 'Terme',
+        branche: contractData.branch || '',
+        numero_contrat: contractData.contractNumber || '',
+        prime: primeValue,
+        montant: primeValue,
+        montant_recu: montantRecu,
+        date_operation: new Date().toISOString().split('T')[0],
+        assure: contractData.insuredName || '',
+        mode_paiement: contractData.paymentMode || '',
+        type_paiement: contractData.paymentType || 'Au comptant',
+        cree_par: contractData.createdBy || 'Système',
+        montant_credit: montantCreditValue,
+        echeance: echeanceISO
+      };
+
+      // Ajouter numatt si disponible
+      if (contractData.branch === 'Auto' && contractData.numeroAttestation) {
+        rapportData.numatt = parseInt(contractData.numeroAttestation);
+      }
+
+      const { error: rapportError } = await supabase
+        .from('rapport')
+        .insert([rapportData]);
+
+      if (rapportError) {
+        console.error('❌ Erreur lors de l\'enregistrement dans rapport:', rapportError);
+      } else {
+        console.log('✅ Contrat Terme enregistré dans rapport');
+      }
+    } catch (rapportErr) {
+      console.error('❌ Erreur lors de l\'enregistrement dans rapport:', rapportErr);
+    }
 
     if (contractData.xmlData?.maturity) {
       const maturityDate = contractData.xmlData.maturity;
