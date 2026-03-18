@@ -752,16 +752,42 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
           // Vérifier s'il y a des numéros manquants (le numéro saisi est supérieur au numéro attendu)
           if (numeroAttendu && parseInt(numeroAttendu) < attestationNum) {
-            const missingNumbers: string[] = [];
+            // Générer tous les numéros manquants potentiels
+            const potentialMissingNumbers: string[] = [];
             for (let i = parseInt(numeroAttendu); i < attestationNum; i++) {
-              missingNumbers.push(i.toString());
+              potentialMissingNumbers.push(i.toString());
             }
 
-            setMissingAttestationNumbers(missingNumbers);
-            setCarnetTableName(validation.carnet_table || '');
-            setPendingSubmitData(cleanedFormData);
-            setShowMissingAttestationModal(true);
-            return;
+            // Interroger la table du carnet pour vérifier le statut de chaque attestation
+            const { data: carnetAttestations, error: carnetError } = await supabase
+              .from(validation.carnet_table || '')
+              .select('numero_attestation, statut')
+              .in('numero_attestation', potentialMissingNumbers);
+
+            if (carnetError) {
+              console.error('Erreur lors de la vérification des attestations manquantes:', carnetError);
+              setMessage('❌ Erreur lors de la vérification des attestations manquantes');
+              setTimeout(() => setMessage(''), 5000);
+              return;
+            }
+
+            // Filtrer seulement les attestations avec statut === null (vraiment manquantes)
+            const missingNumbers = potentialMissingNumbers.filter(num => {
+              const attestation = carnetAttestations?.find(a => a.numero_attestation === num);
+              return attestation?.statut === null;
+            });
+
+            // Si toutes les attestations ont un statut (annulée ou servie), ne pas afficher le modal
+            if (missingNumbers.length === 0) {
+              // Continuer avec la soumission normale
+              // Pas d'attestations réellement manquantes
+            } else {
+              setMissingAttestationNumbers(missingNumbers);
+              setCarnetTableName(validation.carnet_table || '');
+              setPendingSubmitData(cleanedFormData);
+              setShowMissingAttestationModal(true);
+              return;
+            }
           } else {
             // Autre type d'erreur de séquence (déjà utilisé ou autre problème)
             // Message personnalisé avec le numéro attendu
