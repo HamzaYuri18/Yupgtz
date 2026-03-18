@@ -1131,7 +1131,12 @@ export const getCredits = async (): Promise<CreditData[]> => {
 };
 
 // Fonction utilitaire pour convertir les dates Excel
-const convertExcelDateToISO = (excelDate: string | number): string => {
+const convertExcelDateToISO = (excelDate: string | number | undefined | null): string => {
+  // Si la date est undefined ou null, retourner la date actuelle
+  if (excelDate === undefined || excelDate === null || excelDate === '') {
+    return new Date().toISOString().split('T')[0];
+  }
+
   if (typeof excelDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(excelDate)) {
     return excelDate.split('T')[0];
   }
