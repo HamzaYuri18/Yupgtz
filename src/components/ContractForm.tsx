@@ -688,6 +688,8 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
     // VALIDATION POUR NUMERO D'ATTESTATION (obligatoire pour branche Auto sauf Terme avec Retour Contentieux)
     const isRetourContentieuxTerme = cleanedFormData.type === 'Terme' && isRetourContentieuxMode;
+    const isHamza = username.toLowerCase() === 'hamza';
+
     if (cleanedFormData.branch === 'Auto' && !isRetourContentieuxTerme) {
       if (!cleanedFormData.numeroAttestation || cleanedFormData.numeroAttestation.trim() === '') {
         setMessage('❌ Le numéro d\'attestation est obligatoire pour les contrats Auto');
@@ -702,61 +704,63 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
         return;
       }
 
-      // Vérifier si l'attestation existe et est disponible
-      const { data: attestationCheck, error: attestationError } = await supabase
-        .rpc('check_attestation_disponible', { attestation_numero: attestationNum });
+      // Si l'utilisateur est Hamza, bypass toutes les validations d'attestation
+      if (!isHamza) {
+        // Vérifier si l'attestation existe et est disponible
+        const { data: attestationCheck, error: attestationError } = await supabase
+          .rpc('check_attestation_disponible', { attestation_numero: attestationNum });
 
-      if (attestationError) {
-        console.error('Erreur lors de la vérification de l\'attestation:', attestationError);
-        setMessage('❌ Erreur lors de la vérification du numéro d\'attestation');
-        setTimeout(() => setMessage(''), 5000);
-        return;
-      }
-
-      if (!attestationCheck || attestationCheck.length === 0 || !attestationCheck[0].existe) {
-        setMessage('❌ Le numéro d\'attestation n\'existe pas dans le système');
-        setTimeout(() => setMessage(''), 5000);
-        return;
-      }
-
-      if (!attestationCheck[0].disponible) {
-        const statut = attestationCheck[0].statut_actuel;
-        if (statut === 'servie') {
-          setMessage('❌ Cette attestation a déjà été servie');
-        } else if (statut === 'annulee') {
-          setMessage('❌ Cette attestation a été annulée');
-        } else {
-          setMessage('❌ Cette attestation n\'est pas disponible');
+        if (attestationError) {
+          console.error('Erreur lors de la vérification de l\'attestation:', attestationError);
+          setMessage('❌ Erreur lors de la vérification du numéro d\'attestation');
+          setTimeout(() => setMessage(''), 5000);
+          return;
         }
-        setTimeout(() => setMessage(''), 5000);
-        return;
-      }
 
-      // Vérifier la séquence d'attestation avec la nouvelle fonction
-      const { data: validationData, error: validationError } = await supabase
-        .rpc('validate_attestation_sequence', { attestation_numero: attestationNum });
+        if (!attestationCheck || attestationCheck.length === 0 || !attestationCheck[0].existe) {
+          setMessage('❌ Le numéro d\'attestation n\'existe pas dans le système');
+          setTimeout(() => setMessage(''), 5000);
+          return;
+        }
 
-      if (validationError) {
-        console.error('Erreur lors de la validation de la séquence d\'attestation:', validationError);
-        setMessage('❌ Erreur lors de la validation du numéro d\'attestation');
-        setTimeout(() => setMessage(''), 5000);
-        return;
-      }
+        if (!attestationCheck[0].disponible) {
+          const statut = attestationCheck[0].statut_actuel;
+          if (statut === 'servie') {
+            setMessage('❌ Cette attestation a déjà été servie');
+          } else if (statut === 'annulee') {
+            setMessage('❌ Cette attestation a été annulée');
+          } else {
+            setMessage('❌ Cette attestation n\'est pas disponible');
+          }
+          setTimeout(() => setMessage(''), 5000);
+          return;
+        }
 
-      if (validationData && validationData.length > 0) {
-        const validation = validationData[0];
+        // Vérifier la séquence d'attestation avec la nouvelle fonction
+        const { data: validationData, error: validationError } = await supabase
+          .rpc('validate_attestation_sequence', { attestation_numero: attestationNum });
 
-        if (!validation.is_valid) {
-          // L'attestation n'est pas dans la bonne séquence
-          const numeroAttendu = validation.numero_attendu;
+        if (validationError) {
+          console.error('Erreur lors de la validation de la séquence d\'attestation:', validationError);
+          setMessage('❌ Erreur lors de la validation du numéro d\'attestation');
+          setTimeout(() => setMessage(''), 5000);
+          return;
+        }
 
-          // Vérifier s'il y a des numéros manquants (le numéro saisi est supérieur au numéro attendu)
-          if (numeroAttendu && parseInt(numeroAttendu) < attestationNum) {
-            // Vérifier que carnet_table existe
-            if (!validation.carnet_table) {
-              console.error('Nom de table du carnet manquant');
-              setMessage('❌ Erreur: Table du carnet non trouvée');
-              setTimeout(() => setMessage(''), 5000);
+        if (validationData && validationData.length > 0) {
+          const validation = validationData[0];
+
+          if (!validation.is_valid) {
+            // L'attestation n'est pas dans la bonne séquence
+            const numeroAttendu = validation.numero_attendu;
+
+            // Vérifier s'il y a des numéros manquants (le numéro saisi est supérieur au numéro attendu)
+            if (numeroAttendu && parseInt(numeroAttendu) < attestationNum) {
+              // Vérifier que carnet_table existe
+              if (!validation.carnet_table) {
+                console.error('Nom de table du carnet manquant');
+                setMessage('❌ Erreur: Table du carnet non trouvée');
+                setTimeout(() => setMessage(''), 5000);
               return;
             }
 
@@ -807,6 +811,9 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             return;
           }
         }
+        }
+      } else {
+        console.log('✅ Utilisateur Hamza détecté - Validation d\'attestation bypassed');
       }
     }
 
@@ -1217,6 +1224,9 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 <FileText className="w-4 h-4 mr-2" />
                 Numéro d'attestation *
                 <span className="text-xs text-blue-600 ml-2">(Obligatoire pour Auto)</span>
+                {username.toLowerCase() === 'hamza' && (
+                  <span className="text-xs text-green-600 ml-2 font-semibold">✓ Saisie libre autorisée</span>
+                )}
               </label>
               <input
                 type="number"
@@ -1228,7 +1238,9 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 required
               />
               <p className="text-xs text-gray-500 mt-1">
-                Saisir le numéro d'attestation Auto
+                {username.toLowerCase() === 'hamza'
+                  ? 'Vous pouvez saisir n\'importe quel numéro d\'attestation sans restriction'
+                  : 'Saisir le numéro d\'attestation Auto'}
               </p>
             </div>
           )}
