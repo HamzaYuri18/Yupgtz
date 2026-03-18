@@ -752,6 +752,14 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
           // Vérifier s'il y a des numéros manquants (le numéro saisi est supérieur au numéro attendu)
           if (numeroAttendu && parseInt(numeroAttendu) < attestationNum) {
+            // Vérifier que carnet_table existe
+            if (!validation.carnet_table) {
+              console.error('Nom de table du carnet manquant');
+              setMessage('❌ Erreur: Table du carnet non trouvée');
+              setTimeout(() => setMessage(''), 5000);
+              return;
+            }
+
             // Générer tous les numéros manquants potentiels
             const potentialMissingNumbers: string[] = [];
             for (let i = parseInt(numeroAttendu); i < attestationNum; i++) {
@@ -760,7 +768,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
             // Interroger la table du carnet pour vérifier le statut de chaque attestation
             const { data: carnetAttestations, error: carnetError } = await supabase
-              .from(validation.carnet_table || '')
+              .from(validation.carnet_table)
               .select('numero_attestation, statut')
               .in('numero_attestation', potentialMissingNumbers);
 
@@ -783,7 +791,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               // Pas d'attestations réellement manquantes
             } else {
               setMissingAttestationNumbers(missingNumbers);
-              setCarnetTableName(validation.carnet_table || '');
+              setCarnetTableName(validation.carnet_table);
               setPendingSubmitData(cleanedFormData);
               setShowMissingAttestationModal(true);
               return;
