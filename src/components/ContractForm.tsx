@@ -510,7 +510,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             insuredName: contract.insuredName,
             paymentMode: contract.paymentMode,
             maturity: xmlSearchResult.maturity,
-            paymentDate: getSessionDate(),
+            paymentDate: xmlSearchResult.maturity,
             premiumAmount: contract.premiumAmount,
             creditAmount: contract.creditAmount,
             branch: contract.branch,
