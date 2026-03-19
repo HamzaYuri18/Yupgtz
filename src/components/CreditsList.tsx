@@ -59,7 +59,8 @@ const CreditsList: React.FC = () => {
         cree_par: credit.cree_par || 'Utilisateur',
         date_credit: credit.created_at,
         created_at: credit.created_at,
-        updated_at: credit.updated_at
+        updated_at: credit.updated_at,
+        telephone: (credit as any).telephone || ''
       }));
       setCredits(formattedData);
     } catch (error) {
@@ -1006,6 +1007,13 @@ const CreditsList: React.FC = () => {
                   <p className="text-gray-500 font-medium">Assuré</p>
                   <p className="font-semibold text-gray-900">{hoveredCredit.assure}</p>
                 </div>
+
+                {hoveredCredit.telephone && (
+                  <div className="col-span-2">
+                    <p className="text-gray-500 font-medium">Téléphone</p>
+                    <p className="font-semibold text-blue-600">{hoveredCredit.telephone}</p>
+                  </div>
+                )}
 
                 <div>
                   <p className="text-gray-500 font-medium">Prime</p>
