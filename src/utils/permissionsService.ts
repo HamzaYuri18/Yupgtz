@@ -12,6 +12,11 @@ export interface UserPermissions {
   transactions: boolean;
   encaissement: boolean;
   reporting: boolean;
+  cheques: boolean;
+  versement: boolean;
+  commissions: boolean;
+  salaires: boolean;
+  attestations: boolean;
 }
 
 export const DEFAULT_PERMISSIONS: UserPermissions = {
@@ -26,6 +31,11 @@ export const DEFAULT_PERMISSIONS: UserPermissions = {
   transactions: true,
   encaissement: true,
   reporting: true,
+  cheques: false,
+  versement: false,
+  commissions: false,
+  salaires: false,
+  attestations: false,
 };
 
 export const TAB_LABELS: Record<keyof UserPermissions, string> = {
@@ -40,11 +50,20 @@ export const TAB_LABELS: Record<keyof UserPermissions, string> = {
   transactions: 'Rapport Transactions',
   encaissement: 'Encaissement',
   reporting: 'Reporting',
+  cheques: 'Cheques',
+  versement: 'Versement Bancaire',
+  commissions: 'Etat des Commissions',
+  salaires: 'Salaires et Loyer',
+  attestations: 'Sequences Attestation',
 };
+
+export const HAMZA_ONLY_TABS: Array<keyof UserPermissions> = [
+  'cheques', 'versement', 'commissions', 'salaires', 'attestations',
+];
 
 export async function getUserPermissions(username: string): Promise<UserPermissions> {
   if (username.toLowerCase() === 'hamza') {
-    return { ...DEFAULT_PERMISSIONS };
+    return { ...DEFAULT_PERMISSIONS, cheques: true, versement: true, commissions: true, salaires: true, attestations: true };
   }
 
   const { data, error } = await supabase

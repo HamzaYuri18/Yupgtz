@@ -177,17 +177,15 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
 
             {canAccess('encaissement') && navBtn('encaissement', 'Encaissement', <DollarSign className="w-4 h-4" />)}
 
-            {/* Section reservee a Hamza */}
-            {isHamza && (
-              <>
-                {navBtn('cheques', 'Cheques', <Receipt className="w-4 h-4" />)}
-                {navBtn('versement', 'Versement Bancaire', <Building2 className="w-4 h-4" />)}
-                {navBtn('commissions', 'Etat des Commissions', <TrendingUp className="w-4 h-4" />)}
-                {navBtn('salaires', 'Salaires et Loyer', <Briefcase className="w-4 h-4" />)}
-                {navBtn('attestations', 'Sequences Attestation', <Award className="w-4 h-4" />)}
-                {navBtn('gestion_acces', 'Gestion Acces', <Shield className="w-4 h-4" />)}
-              </>
-            )}
+            {/* Rubriques Hamza ou si permission accordee */}
+            {(isHamza || canAccess('cheques')) && navBtn('cheques', 'Cheques', <Receipt className="w-4 h-4" />)}
+            {(isHamza || canAccess('versement')) && navBtn('versement', 'Versement Bancaire', <Building2 className="w-4 h-4" />)}
+            {(isHamza || canAccess('commissions')) && navBtn('commissions', 'Etat des Commissions', <TrendingUp className="w-4 h-4" />)}
+            {(isHamza || canAccess('salaires')) && navBtn('salaires', 'Salaires et Loyer', <Briefcase className="w-4 h-4" />)}
+            {(isHamza || canAccess('attestations')) && navBtn('attestations', 'Sequences Attestation', <Award className="w-4 h-4" />)}
+
+            {/* Gestion Acces - Hamza uniquement */}
+            {isHamza && navBtn('gestion_acces', 'Gestion Acces', <Shield className="w-4 h-4" />)}
           </div>
         </div>
       </nav>
@@ -206,11 +204,11 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
         {activeTab === 'transactions' && canAccess('transactions') && <TransactionReport />}
         {activeTab === 'reporting' && canAccess('reporting') && <ReportingSuppression />}
         {activeTab === 'encaissement' && canAccess('encaissement') && <Encaissement username={username} />}
-        {activeTab === 'cheques' && isHamza && <ChequesManagement />}
-        {activeTab === 'versement' && isHamza && <VersementBancaire username={username} />}
-        {activeTab === 'commissions' && isHamza && <EtatCommissions />}
-        {activeTab === 'salaires' && isHamza && <SalairesLoyer />}
-        {activeTab === 'attestations' && isHamza && <AttestationSequences />}
+        {activeTab === 'cheques' && (isHamza || canAccess('cheques')) && <ChequesManagement />}
+        {activeTab === 'versement' && (isHamza || canAccess('versement')) && <VersementBancaire username={username} />}
+        {activeTab === 'commissions' && (isHamza || canAccess('commissions')) && <EtatCommissions />}
+        {activeTab === 'salaires' && (isHamza || canAccess('salaires')) && <SalairesLoyer />}
+        {activeTab === 'attestations' && (isHamza || canAccess('attestations')) && <AttestationSequences />}
         {activeTab === 'gestion_acces' && isHamza && <GestionAcces currentUser={username} />}
       </main>
 

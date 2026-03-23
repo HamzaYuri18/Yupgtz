@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Save, RefreshCw, CheckCircle, XCircle, User, AlertCircle } from 'lucide-react';
+import { Shield, Save, RefreshCw, CheckCircle, XCircle, User, AlertCircle, Lock } from 'lucide-react';
 import {
   getUserPermissions,
   saveUserPermissions,
   getAllUsersPermissions,
   DEFAULT_PERMISSIONS,
   TAB_LABELS,
+  HAMZA_ONLY_TABS,
   UserPermissions,
 } from '../utils/permissionsService';
 import { users } from '../utils/auth';
@@ -15,6 +16,10 @@ interface GestionAccesProps {
 }
 
 const NON_ADMIN_USERS = users.filter(u => u.username.toLowerCase() !== 'hamza').map(u => u.username);
+
+const STANDARD_TABS = (Object.keys(DEFAULT_PERMISSIONS) as Array<keyof UserPermissions>).filter(
+  k => !HAMZA_ONLY_TABS.includes(k)
+);
 
 const GestionAcces: React.FC<GestionAccesProps> = ({ currentUser }) => {
   const [allPermissions, setAllPermissions] = useState<Record<string, UserPermissions>>({});
@@ -47,9 +52,9 @@ const GestionAcces: React.FC<GestionAccesProps> = ({ currentUser }) => {
     }));
   };
 
-  const toggleAllForUser = (username: string, value: boolean) => {
-    const updated: UserPermissions = {} as UserPermissions;
-    for (const key of Object.keys(DEFAULT_PERMISSIONS) as Array<keyof UserPermissions>) {
+  const toggleGroup = (username: string, tabs: Array<keyof UserPermissions>, value: boolean) => {
+    const updated = { ...allPermissions[username] };
+    for (const key of tabs) {
       updated[key] = value;
     }
     setAllPermissions(prev => ({ ...prev, [username]: updated }));
@@ -63,8 +68,6 @@ const GestionAcces: React.FC<GestionAccesProps> = ({ currentUser }) => {
     setTimeout(() => setSavedStatus(prev => { const n = { ...prev }; delete n[username]; return n; }), 3000);
   };
 
-  const tabKeys = Object.keys(DEFAULT_PERMISSIONS) as Array<keyof UserPermissions>;
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -75,6 +78,45 @@ const GestionAcces: React.FC<GestionAccesProps> = ({ currentUser }) => {
       </div>
     );
   }
+
+  const renderTabGrid = (
+    username: string,
+    tabs: Array<keyof UserPermissions>,
+    perms: UserPermissions,
+    isRestricted: boolean
+  ) => (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      {tabs.map(tab => {
+        const enabled = perms[tab];
+        return (
+          <button
+            key={tab}
+            onClick={() => togglePermission(username, tab)}
+            className={`flex items-center justify-between px-4 py-3 rounded-lg border-2 transition-all duration-200 text-left group ${
+              enabled
+                ? isRestricted
+                  ? 'border-amber-400 bg-amber-50 text-amber-800'
+                  : 'border-emerald-400 bg-emerald-50 text-emerald-800'
+                : 'border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300'
+            }`}
+          >
+            <span className="text-xs font-medium leading-tight">{TAB_LABELS[tab]}</span>
+            <div className={`ml-2 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
+              enabled
+                ? isRestricted ? 'bg-amber-500' : 'bg-emerald-500'
+                : 'bg-gray-300 group-hover:bg-gray-400'
+            }`}>
+              {enabled ? (
+                <CheckCircle className="w-3.5 h-3.5 text-white" />
+              ) : (
+                <XCircle className="w-3.5 h-3.5 text-white" />
+              )}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -92,16 +134,16 @@ const GestionAcces: React.FC<GestionAccesProps> = ({ currentUser }) => {
         <div className="mt-4 flex items-start space-x-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
           <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
           <p className="text-xs text-amber-700">
-            Les modifications prennent effet a la prochaine connexion de l'utilisateur. Les rubriques exclusives a Hamza ne sont pas incluses ici.
+            Les modifications prennent effet a la prochaine connexion de l'utilisateur.
+            Les rubriques en orange sont des acces privilegies normalement reserves a Hamza.
           </p>
         </div>
       </div>
 
       {NON_ADMIN_USERS.map(username => {
         const perms = allPermissions[username] ?? { ...DEFAULT_PERMISSIONS };
-        const activeCount = tabKeys.filter(k => perms[k]).length;
-        const allOn = activeCount === tabKeys.length;
-        const allOff = activeCount === 0;
+        const stdActive = STANDARD_TABS.filter(k => perms[k]).length;
+        const hamzaActive = HAMZA_ONLY_TABS.filter(k => perms[k]).length;
 
         return (
           <div key={username} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -113,25 +155,16 @@ const GestionAcces: React.FC<GestionAccesProps> = ({ currentUser }) => {
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900">{username}</h3>
-                    <p className="text-xs text-gray-500">{activeCount} / {tabKeys.length} rubriques actives</p>
+                    <p className="text-xs text-gray-500">
+                      {stdActive}/{STANDARD_TABS.length} rubriques standard
+                      {hamzaActive > 0 && (
+                        <span className="ml-2 text-amber-600 font-medium">· {hamzaActive} acces privilege{hamzaActive > 1 ? 's' : ''}</span>
+                      )}
+                    </p>
                   </div>
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => toggleAllForUser(username, true)}
-                    disabled={allOn}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-medium"
-                  >
-                    Tout activer
-                  </button>
-                  <button
-                    onClick={() => toggleAllForUser(username, false)}
-                    disabled={allOff}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-medium"
-                  >
-                    Tout desactiver
-                  </button>
                   <button
                     onClick={() => handleSave(username)}
                     disabled={saving === username}
@@ -161,33 +194,52 @@ const GestionAcces: React.FC<GestionAccesProps> = ({ currentUser }) => {
               </div>
             </div>
 
-            <div className="p-6">
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {tabKeys.map(tab => {
-                  const enabled = perms[tab];
-                  return (
+            <div className="p-6 space-y-6">
+              {/* Rubriques standard */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Rubriques standard</h4>
+                  <div className="flex items-center space-x-2">
                     <button
-                      key={tab}
-                      onClick={() => togglePermission(username, tab)}
-                      className={`flex items-center justify-between px-4 py-3 rounded-lg border-2 transition-all duration-200 text-left group ${
-                        enabled
-                          ? 'border-emerald-400 bg-emerald-50 text-emerald-800'
-                          : 'border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300'
-                      }`}
+                      onClick={() => toggleGroup(username, STANDARD_TABS, true)}
+                      className="text-xs px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors font-medium"
                     >
-                      <span className="text-xs font-medium leading-tight">{TAB_LABELS[tab]}</span>
-                      <div className={`ml-2 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
-                        enabled ? 'bg-emerald-500' : 'bg-gray-300 group-hover:bg-gray-400'
-                      }`}>
-                        {enabled ? (
-                          <CheckCircle className="w-3.5 h-3.5 text-white" />
-                        ) : (
-                          <XCircle className="w-3.5 h-3.5 text-white" />
-                        )}
-                      </div>
+                      Tout activer
                     </button>
-                  );
-                })}
+                    <button
+                      onClick={() => toggleGroup(username, STANDARD_TABS, false)}
+                      className="text-xs px-2.5 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100 transition-colors font-medium"
+                    >
+                      Tout desactiver
+                    </button>
+                  </div>
+                </div>
+                {renderTabGrid(username, STANDARD_TABS, perms, false)}
+              </div>
+
+              {/* Rubriques privilégiées */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-2">
+                    <Lock className="w-3.5 h-3.5 text-amber-600" />
+                    <h4 className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Acces privilegies (reserves a Hamza)</h4>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => toggleGroup(username, HAMZA_ONLY_TABS, true)}
+                      className="text-xs px-2.5 py-1 rounded-md bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors font-medium"
+                    >
+                      Tout activer
+                    </button>
+                    <button
+                      onClick={() => toggleGroup(username, HAMZA_ONLY_TABS, false)}
+                      className="text-xs px-2.5 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100 transition-colors font-medium"
+                    >
+                      Tout desactiver
+                    </button>
+                  </div>
+                </div>
+                {renderTabGrid(username, HAMZA_ONLY_TABS, perms, true)}
               </div>
             </div>
           </div>
