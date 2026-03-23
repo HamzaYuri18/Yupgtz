@@ -337,7 +337,7 @@ const TransactionReport: React.FC = () => {
     }
   };
 
-  const saveToReportingSuppression = async (transaction: Transaction, motif: string) => {
+  const saveToReportingSuppression = async (transaction: Transaction, motif: string): Promise<boolean> => {
     const session = getSession();
     const currentUser = session?.username || 'inconnu';
     const sessionDate = getSessionDate();
@@ -347,17 +347,17 @@ const TransactionReport: React.FC = () => {
       .insert({
         rapport_id: transaction.id,
         type: transaction.type,
-        branche: transaction.branche,
-        numero_contrat: transaction.numero_contrat,
-        prime: transaction.prime,
-        assure: transaction.assure,
-        mode_paiement: transaction.mode_paiement,
-        type_paiement: transaction.type_paiement,
-        montant_credit: transaction.montant_credit,
-        montant: transaction.montant,
+        branche: transaction.branche || null,
+        numero_contrat: transaction.numero_contrat || null,
+        prime: transaction.prime ?? 0,
+        assure: transaction.assure || null,
+        mode_paiement: transaction.mode_paiement || null,
+        type_paiement: transaction.type_paiement || null,
+        montant_credit: transaction.montant_credit ?? null,
+        montant: transaction.montant ?? 0,
         echeance: transaction.echeance || null,
         date_paiement_prevue: transaction.date_paiement_prevue || null,
-        cree_par: transaction.cree_par,
+        cree_par: transaction.cree_par || null,
         created_at_original: transaction.created_at,
         motif_suppression: motif,
         supprime_par: currentUser,
@@ -367,13 +367,18 @@ const TransactionReport: React.FC = () => {
       });
 
     if (error) {
-      console.error('Erreur lors de la sauvegarde dans reporting_suppression:', error);
+      console.error('Erreur reporting_suppression insert:', error.message, error.details, error.hint);
+      return false;
     }
+    return true;
   };
 
   const performDelete = async (transaction: Transaction, motif: string) => {
     try {
-      await saveToReportingSuppression(transaction, motif);
+      const saved = await saveToReportingSuppression(transaction, motif);
+      if (!saved) {
+        console.warn('Archivage reporting_suppression échoué, suppression continue quand même');
+      }
 
       let sourceDeleteSuccess = false;
 
@@ -575,8 +580,8 @@ const TransactionReport: React.FC = () => {
         .eq('id', transaction.id);
 
       if (rapportError) {
-        console.error('Erreur suppression rapport:', rapportError);
-        setError('Erreur lors de la suppression de la transaction');
+        console.error('Erreur suppression rapport:', rapportError.message, rapportError.details, rapportError.hint, rapportError.code);
+        setError(`Erreur suppression: ${rapportError.message}`);
         return;
       }
 
@@ -585,7 +590,7 @@ const TransactionReport: React.FC = () => {
       handleSearch();
     } catch (err) {
       console.error('Erreur lors de la suppression:', err);
-      setError('Erreur lors de la suppression de la transaction');
+      setError(`Erreur: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 

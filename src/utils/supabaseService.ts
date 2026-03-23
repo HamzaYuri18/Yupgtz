@@ -1446,30 +1446,34 @@ export const deleteRapportContract = async (
       .eq('id', id)
       .maybeSingle();
 
-    if (fetchError || !contract) return false;
+    if (fetchError) { console.error('Erreur fetch rapport:', fetchError.message); return false; }
+    if (!contract) { console.error('Rapport introuvable id:', id); return false; }
 
-    await saveSuppressionRecord(contract, motif, suppressPar, contract.numatt);
+    await saveSuppressionRecord(contract, motif, suppressPar, contract.numatt ?? null);
 
     let numeroAttestation: string | null = contract.numatt ?? null;
 
     if (contract.type === 'Terme') {
       const { data: termeRow } = await supabase
         .from('terme')
-        .select('"Numero Attestation"')
+        .select('numatt')
         .eq('numero_contrat', contract.numero_contrat)
+        .eq('echeance', contract.echeance)
         .maybeSingle();
 
-      if (termeRow?.['Numero Attestation']) numeroAttestation = String(termeRow['Numero Attestation']);
+      if (termeRow?.numatt) numeroAttestation = String(termeRow.numatt);
 
-      await supabase.from('terme').delete().eq('numero_contrat', contract.numero_contrat);
+      await supabase.from('terme').delete()
+        .eq('numero_contrat', contract.numero_contrat)
+        .eq('echeance', contract.echeance);
     } else if (contract.type === 'Affaire') {
       const { data: affaireRow } = await supabase
         .from('affaire')
-        .select('"Numero Attestation"')
+        .select('numatt')
         .eq('numero_contrat', contract.numero_contrat)
         .maybeSingle();
 
-      if (affaireRow?.['Numero Attestation']) numeroAttestation = String(affaireRow['Numero Attestation']);
+      if (affaireRow?.numatt) numeroAttestation = String(affaireRow.numatt);
 
       await supabase.from('affaire').delete().eq('numero_contrat', contract.numero_contrat);
     } else if (contract.type === 'Avenant') {
@@ -1483,13 +1487,10 @@ export const deleteRapportContract = async (
     }
 
     const { error: rapportError } = await supabase.from('rapport').delete().eq('id', id);
-    if (rapportError) return false;
+    if (rapportError) { console.error('Erreur delete rapport:', rapportError.message); return false; }
 
     await supabase.from('liste_credits').delete().eq('numero_contrat', contract.numero_contrat);
     await supabase.from('Cheques').delete().eq('Numero_Contrat', contract.numero_contrat);
-    await supabase.from('depenses').delete().eq('Numero_Contrat', contract.numero_contrat);
-    await supabase.from('recettes_exceptionnelles').delete().eq('Numero_Contrat', contract.numero_contrat);
-    await supabase.from('ristournes').delete().eq('numero_contrat', contract.numero_contrat);
 
     return true;
   } catch (error) {
@@ -1503,27 +1504,28 @@ export const deleteAffaireContract = async (id: number, motif: string, suppressP
   try {
     const { data: contract, error: fetchError } = await supabase
       .from('affaire')
-      .select('*, "Numero Attestation"')
+      .select('*')
       .eq('id', id)
       .maybeSingle();
 
-    if (fetchError || !contract) return false;
+    if (fetchError) { console.error('Erreur fetch affaire:', fetchError.message); return false; }
+    if (!contract) { console.error('Affaire introuvable id:', id); return false; }
 
-    const { data: rapportRow } = await supabase
+    const numeroAttestation: string | null = contract.numatt ? String(contract.numatt) : null;
+
+    const { data: rapportRows } = await supabase
       .from('rapport')
       .select('*')
       .eq('numero_contrat', contract.numero_contrat)
       .eq('type', 'Affaire')
-      .maybeSingle();
+      .limit(1);
 
-    if (rapportRow) {
-      await saveSuppressionRecord(rapportRow, motif, suppressPar, contract['Numero Attestation']);
+    if (rapportRows && rapportRows.length > 0) {
+      await saveSuppressionRecord(rapportRows[0], motif, suppressPar, numeroAttestation);
     }
 
-    const numeroAttestation: string | null = contract['Numero Attestation'] ? String(contract['Numero Attestation']) : null;
-
     const { error: affaireError } = await supabase.from('affaire').delete().eq('id', id);
-    if (affaireError) return false;
+    if (affaireError) { console.error('Erreur delete affaire:', affaireError.message); return false; }
 
     await supabase.from('rapport').delete().eq('numero_contrat', contract.numero_contrat).eq('type', 'Affaire');
 
@@ -1533,9 +1535,6 @@ export const deleteAffaireContract = async (id: number, motif: string, suppressP
 
     await supabase.from('liste_credits').delete().eq('numero_contrat', contract.numero_contrat);
     await supabase.from('Cheques').delete().eq('Numero_Contrat', contract.numero_contrat);
-    await supabase.from('depenses').delete().eq('Numero_Contrat', contract.numero_contrat);
-    await supabase.from('recettes_exceptionnelles').delete().eq('Numero_Contrat', contract.numero_contrat);
-    await supabase.from('ristournes').delete().eq('numero_contrat', contract.numero_contrat);
 
     return true;
   } catch (error) {
@@ -1549,29 +1548,34 @@ export const deleteTermeContract = async (id: number, motif: string, suppressPar
   try {
     const { data: contract, error: fetchError } = await supabase
       .from('terme')
-      .select('*, "Numero Attestation"')
+      .select('*')
       .eq('id', id)
       .maybeSingle();
 
-    if (fetchError || !contract) return false;
+    if (fetchError) { console.error('Erreur fetch terme:', fetchError.message); return false; }
+    if (!contract) { console.error('Terme introuvable id:', id); return false; }
 
-    const { data: rapportRow } = await supabase
+    const numeroAttestation: string | null = contract.numatt ? String(contract.numatt) : null;
+
+    const { data: rapportRows } = await supabase
       .from('rapport')
       .select('*')
       .eq('numero_contrat', contract.numero_contrat)
       .eq('type', 'Terme')
-      .maybeSingle();
+      .eq('echeance', contract.echeance)
+      .limit(1);
 
-    if (rapportRow) {
-      await saveSuppressionRecord(rapportRow, motif, suppressPar, contract['Numero Attestation']);
+    if (rapportRows && rapportRows.length > 0) {
+      await saveSuppressionRecord(rapportRows[0], motif, suppressPar, numeroAttestation);
     }
 
-    const numeroAttestation: string | null = contract['Numero Attestation'] ? String(contract['Numero Attestation']) : null;
-
     const { error: termeError } = await supabase.from('terme').delete().eq('id', id);
-    if (termeError) return false;
+    if (termeError) { console.error('Erreur delete terme:', termeError.message); return false; }
 
-    await supabase.from('rapport').delete().eq('numero_contrat', contract.numero_contrat).eq('type', 'Terme');
+    await supabase.from('rapport').delete()
+      .eq('numero_contrat', contract.numero_contrat)
+      .eq('type', 'Terme')
+      .eq('echeance', contract.echeance);
 
     if (numeroAttestation) {
       await resetAttestationStatutInCarnet(numeroAttestation);
@@ -1579,9 +1583,6 @@ export const deleteTermeContract = async (id: number, motif: string, suppressPar
 
     await supabase.from('liste_credits').delete().eq('numero_contrat', contract.numero_contrat);
     await supabase.from('Cheques').delete().eq('Numero_Contrat', contract.numero_contrat);
-    await supabase.from('depenses').delete().eq('Numero_Contrat', contract.numero_contrat);
-    await supabase.from('recettes_exceptionnelles').delete().eq('Numero_Contrat', contract.numero_contrat);
-    await supabase.from('ristournes').delete().eq('numero_contrat', contract.numero_contrat);
 
     return true;
   } catch (error) {
