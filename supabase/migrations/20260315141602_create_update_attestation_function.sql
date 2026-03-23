@@ -52,7 +52,7 @@ BEGIN
         assure = $2,
         montant = $3,
         date_impression = $4,
-        statut = ''servie'',
+        statut = ''imprimee'',
         updated_at = NOW()
       WHERE numero_attestation = $5
         AND (statut IS NULL OR statut = ''en_stock'')
