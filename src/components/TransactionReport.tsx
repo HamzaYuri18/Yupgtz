@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Calendar, Download, TrendingUp, DollarSign, FileText, CreditCard, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getSession, getSessionDate } from '../utils/auth';
 import * as XLSX from 'xlsx';
+import DeleteMotifModal from './DeleteMotifModal';
 
 interface Transaction {
   id: number;
@@ -25,6 +27,7 @@ interface Transaction {
   date_ristourne?: string | null;
   date_sinistre?: string | null;
   numero_sinistre?: string | null;
+  numero_attestation?: string | null;
 }
 
 interface Statistics {
@@ -62,6 +65,9 @@ const TransactionReport: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [pendingDeleteTransaction, setPendingDeleteTransaction] = useState<Transaction | null>(null);
+
   const calculateStatistics = (data: Transaction[]): Statistics => {
     const stats: Statistics = {
       totalTransactions: data.length,
@@ -94,12 +100,10 @@ const TransactionReport: React.FC = () => {
       const prime = transaction.prime || 0;
       const montant = transaction.montant || 0;
 
-      // Calculer Total Prime (primes positives uniquement)
       if (prime > 0) {
         stats.totalPrime += prime;
       }
 
-      // Calculer Total Montant (uniquement les opérations en Espèce)
       if (transaction.mode_paiement === 'Espece') {
         stats.totalMontant += montant;
       }
@@ -109,74 +113,62 @@ const TransactionReport: React.FC = () => {
         stats.countCredits++;
       }
 
-      // Calculer Total Espèces Net (somme des montants en Espèce positifs uniquement)
       if (transaction.mode_paiement === 'Espece' && montant > 0) {
         stats.countEspeces++;
         stats.totalEspecesNet += montant;
       }
 
-      // Calculer Total Chèque (montants positifs uniquement)
       if (transaction.mode_paiement === 'Cheque' && montant > 0) {
         stats.totalCheque += montant;
         stats.countCheque++;
       }
 
-      // Calculer Total Dépenses
       if (transaction.type === 'Dépense') {
         stats.totalDepenses += montant;
         stats.countDepenses++;
       }
 
-      // Calculer Total Paiement Crédits
       if (transaction.type === 'Paiement Crédit') {
         stats.totalPaiementCredits += montant;
         stats.countPaiementCredits++;
       }
 
-      // Calculer Total Ristournes
       if (transaction.type === 'Ristourne') {
         stats.totalRistournes += montant;
         stats.countRistournes++;
       }
 
-      // Calculer Total Sinistres
       if (transaction.type === 'Sinistre') {
         stats.totalSinistres += montant;
         stats.countSinistres++;
       }
 
-      // Calculer Total Recettes Exceptionnelles
       if (transaction.type === 'Recette') {
         stats.totalRecettes += montant;
         stats.countRecettes++;
       }
 
-      // Par Branche
       if (!stats.byBranche[transaction.branche]) {
         stats.byBranche[transaction.branche] = { montant: 0, count: 0 };
       }
       stats.byBranche[transaction.branche].montant += prime;
       stats.byBranche[transaction.branche].count++;
 
-      // Par Mode de Paiement
       if (!stats.byModePaiement[transaction.mode_paiement]) {
         stats.byModePaiement[transaction.mode_paiement] = { montant: 0, count: 0 };
       }
       stats.byModePaiement[transaction.mode_paiement].montant += prime;
       stats.byModePaiement[transaction.mode_paiement].count++;
 
-      // Par Type de Paiement
       if (!stats.byTypePaiement[transaction.type_paiement]) {
         stats.byTypePaiement[transaction.type_paiement] = { montant: 0, count: 0 };
       }
       if (transaction.type_paiement === 'Au comptant') {
-        // Pour "Au comptant", afficher le total des montants positifs
         if (montant > 0) {
           stats.byTypePaiement[transaction.type_paiement].montant += montant;
           stats.byTypePaiement[transaction.type_paiement].count++;
         }
       } else if (transaction.type_paiement === 'Crédit') {
-        // Pour "Crédit", afficher (total primes - total montants)
         stats.byTypePaiement[transaction.type_paiement].montant += (prime - montant);
         stats.byTypePaiement[transaction.type_paiement].count++;
       } else {
@@ -184,14 +176,12 @@ const TransactionReport: React.FC = () => {
         stats.byTypePaiement[transaction.type_paiement].count++;
       }
 
-      // Par Type
       if (!stats.byType[transaction.type]) {
         stats.byType[transaction.type] = { montant: 0, count: 0 };
       }
       stats.byType[transaction.type].montant += prime;
       stats.byType[transaction.type].count++;
 
-      // Par Banque (si Chèque)
       if (transaction.mode_paiement === 'Cheque' && transaction.type_paiement) {
         const banque = transaction.type_paiement || 'Non spécifié';
         if (!stats.byBanque[banque]) {
@@ -227,28 +217,21 @@ const TransactionReport: React.FC = () => {
 
       if (fetchError) throw fetchError;
 
-      // Filtrer par date (conversion timestamp vers date simple YYYY-MM-DD)
       const filteredData = (data || []).filter(transaction => {
-        // Extraire la partie date de created_at (format YYYY-MM-DD)
         const transactionDateStr = transaction.created_at.split('T')[0];
-
-        // Comparer les dates au format YYYY-MM-DD
         return transactionDateStr >= dateFrom && transactionDateStr <= dateTo;
       });
 
-      // Enrichir les transactions de type "Terme" avec les informations de retour
       const enrichedData = await Promise.all(
         filteredData.map(async (transaction) => {
           if (transaction.type === 'Terme' && transaction.numero_contrat && transaction.echeance) {
             try {
-              // Normaliser la date d'échéance (format YYYY-MM-DD)
               const echeanceDate = new Date(transaction.echeance);
               const echeanceISO = echeanceDate.toISOString().split('T')[0];
 
-              // Chercher dans la table terme pour obtenir les infos de retour
               const { data: termeData, error: termeError } = await supabase
                 .from('terme')
-                .select('"Retour", "Prime avant retour"')
+                .select('"Retour", "Prime avant retour", "Numero Attestation"')
                 .eq('numero_contrat', transaction.numero_contrat)
                 .eq('echeance', echeanceISO)
                 .maybeSingle();
@@ -257,24 +240,46 @@ const TransactionReport: React.FC = () => {
                 console.error('Erreur lors de la récupération des infos de retour:', termeError);
               }
 
-              if (termeData && termeData.Retour) {
-                console.log(`✅ Retour trouvé pour ${transaction.numero_contrat}:`, termeData);
+              if (termeData) {
                 return {
                   ...transaction,
-                  retour_type: termeData.Retour,
-                  prime_avant_retour: termeData['Prime avant retour']
+                  retour_type: termeData.Retour || null,
+                  prime_avant_retour: termeData['Prime avant retour'] || null,
+                  numero_attestation: termeData['Numero Attestation'] || null
                 };
               }
             } catch (error) {
               console.error('Erreur lors du traitement du retour:', error);
             }
           }
+
+          if (transaction.type === 'Affaire' && transaction.numero_contrat) {
+            try {
+              const createdDate = new Date(transaction.created_at);
+              const createdISO = createdDate.toISOString().split('T')[0];
+
+              const { data: affaireData } = await supabase
+                .from('affaire')
+                .select('"Numero Attestation"')
+                .eq('numero_contrat', transaction.numero_contrat)
+                .gte('created_at', `${createdISO}T00:00:00`)
+                .lt('created_at', `${createdISO}T23:59:59`)
+                .maybeSingle();
+
+              if (affaireData) {
+                return {
+                  ...transaction,
+                  numero_attestation: affaireData['Numero Attestation'] || null
+                };
+              }
+            } catch (error) {
+              console.error('Erreur lors de la récupération du numéro d\'attestation affaire:', error);
+            }
+          }
+
           return transaction;
         })
       );
-
-      const transactionsAvecRetour = enrichedData.filter(t => t.retour_type);
-      console.log(`📊 ${transactionsAvecRetour.length} transaction(s) avec retour:`, transactionsAvecRetour);
 
       setTransactions(enrichedData);
       setStatistics(calculateStatistics(enrichedData));
@@ -283,6 +288,304 @@ const TransactionReport: React.FC = () => {
       setError('Erreur lors de la recherche des transactions');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const initiateDelete = (transaction: Transaction) => {
+    setPendingDeleteTransaction(transaction);
+    setDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirmed = async (motif: string) => {
+    setDeleteModalOpen(false);
+    if (!pendingDeleteTransaction) return;
+
+    const transaction = pendingDeleteTransaction;
+    setPendingDeleteTransaction(null);
+
+    await performDelete(transaction, motif);
+  };
+
+  const handleDeleteCancelled = () => {
+    setDeleteModalOpen(false);
+    setPendingDeleteTransaction(null);
+  };
+
+  const resetAttestationStatut = async (numeroAttestation: string | null | undefined) => {
+    if (!numeroAttestation) return;
+
+    const attestationNum = parseInt(numeroAttestation);
+    if (isNaN(attestationNum)) return;
+
+    try {
+      const { data: carnetTables, error: carnetError } = await supabase
+        .rpc('check_attestation_disponible', { attestation_numero: attestationNum });
+
+      if (carnetError || !carnetTables || carnetTables.length === 0) return;
+
+      const carnetTable = carnetTables[0]?.carnet_table;
+      if (!carnetTable) return;
+
+      await supabase
+        .from(carnetTable)
+        .update({ statut: null })
+        .eq('numero_attestation', numeroAttestation.toString());
+
+      console.log(`✅ Attestation ${numeroAttestation} remise à null dans ${carnetTable}`);
+    } catch (err) {
+      console.error('Erreur lors de la remise à null de l\'attestation:', err);
+    }
+  };
+
+  const saveToReportingSuppression = async (transaction: Transaction, motif: string) => {
+    const session = getSession();
+    const currentUser = session?.username || 'inconnu';
+    const sessionDate = getSessionDate();
+
+    const { error } = await supabase
+      .from('reporting_suppression')
+      .insert({
+        rapport_id: transaction.id,
+        type: transaction.type,
+        branche: transaction.branche,
+        numero_contrat: transaction.numero_contrat,
+        prime: transaction.prime,
+        assure: transaction.assure,
+        mode_paiement: transaction.mode_paiement,
+        type_paiement: transaction.type_paiement,
+        montant_credit: transaction.montant_credit,
+        montant: transaction.montant,
+        echeance: transaction.echeance || null,
+        date_paiement_prevue: transaction.date_paiement_prevue || null,
+        cree_par: transaction.cree_par,
+        created_at_original: transaction.created_at,
+        motif_suppression: motif,
+        supprime_par: currentUser,
+        supprime_le: new Date().toISOString(),
+        numero_attestation: transaction.numero_attestation || null,
+        session_date: sessionDate
+      });
+
+    if (error) {
+      console.error('Erreur lors de la sauvegarde dans reporting_suppression:', error);
+    }
+  };
+
+  const performDelete = async (transaction: Transaction, motif: string) => {
+    try {
+      await saveToReportingSuppression(transaction, motif);
+
+      let sourceDeleteSuccess = false;
+
+      switch (transaction.type) {
+        case 'Terme':
+          if (transaction.numero_contrat && transaction.echeance) {
+            const echeanceDate = new Date(transaction.echeance);
+            const echeanceISO = echeanceDate.toISOString().split('T')[0];
+
+            const { data: termeRow } = await supabase
+              .from('terme')
+              .select('"Numero Attestation"')
+              .eq('numero_contrat', transaction.numero_contrat)
+              .eq('echeance', echeanceISO)
+              .maybeSingle();
+
+            const { error: termeError } = await supabase
+              .from('terme')
+              .delete()
+              .eq('numero_contrat', transaction.numero_contrat)
+              .eq('echeance', echeanceISO);
+
+            sourceDeleteSuccess = !termeError;
+            if (termeError) console.error('Erreur suppression terme:', termeError);
+
+            if (sourceDeleteSuccess) {
+              const attestationNum = termeRow?.['Numero Attestation'] || transaction.numero_attestation;
+              await resetAttestationStatut(attestationNum);
+            }
+          }
+          break;
+
+        case 'Affaire':
+          if (transaction.numero_contrat) {
+            const createdDate = new Date(transaction.created_at);
+            const createdISO = createdDate.toISOString().split('T')[0];
+
+            const { data: affaireRow } = await supabase
+              .from('affaire')
+              .select('"Numero Attestation"')
+              .eq('numero_contrat', transaction.numero_contrat)
+              .gte('created_at', `${createdISO}T00:00:00`)
+              .lt('created_at', `${createdISO}T23:59:59`)
+              .maybeSingle();
+
+            const { error: affaireError } = await supabase
+              .from('affaire')
+              .delete()
+              .eq('numero_contrat', transaction.numero_contrat)
+              .gte('created_at', `${createdISO}T00:00:00`)
+              .lt('created_at', `${createdISO}T23:59:59`);
+
+            sourceDeleteSuccess = !affaireError;
+            if (affaireError) console.error('Erreur suppression affaire:', affaireError);
+
+            if (sourceDeleteSuccess) {
+              const attestationNum = affaireRow?.['Numero Attestation'] || transaction.numero_attestation;
+              await resetAttestationStatut(attestationNum);
+            }
+          }
+          break;
+
+        case 'Dépense':
+          if (transaction.date_depense && transaction.montant) {
+            const { data: matchingDepenses, error: findError } = await supabase
+              .from('depenses')
+              .select('*')
+              .eq('date_depense', transaction.date_depense)
+              .eq('montant', Math.abs(transaction.montant))
+              .limit(1);
+
+            if (!findError && matchingDepenses && matchingDepenses.length > 0) {
+              const { error: depenseError } = await supabase
+                .from('depenses')
+                .delete()
+                .eq('id', matchingDepenses[0].id);
+
+              sourceDeleteSuccess = !depenseError;
+              if (depenseError) console.error('Erreur suppression dépense:', depenseError);
+            }
+          }
+          break;
+
+        case 'Recette Exceptionnelle':
+        case 'Recette':
+          if (transaction.date_recette && transaction.montant) {
+            const { data: matchingRecettes, error: findError } = await supabase
+              .from('recettes_exceptionnelles')
+              .select('*')
+              .eq('date_recette', transaction.date_recette)
+              .eq('montant', transaction.montant)
+              .limit(1);
+
+            if (!findError && matchingRecettes && matchingRecettes.length > 0) {
+              const { error: recetteError } = await supabase
+                .from('recettes_exceptionnelles')
+                .delete()
+                .eq('id', matchingRecettes[0].id);
+
+              sourceDeleteSuccess = !recetteError;
+              if (recetteError) console.error('Erreur suppression recette:', recetteError);
+            }
+          }
+          break;
+
+        case 'Ristourne':
+          if (transaction.numero_contrat && transaction.date_ristourne) {
+            const { data: matchingRistournes, error: findError } = await supabase
+              .from('ristournes')
+              .select('*')
+              .eq('date_ristourne', transaction.date_ristourne);
+
+            if (!findError && matchingRistournes && matchingRistournes.length > 0) {
+              const ristourneToDelete = matchingRistournes.find(r =>
+                r.numero_contrat?.trim() === transaction.numero_contrat?.trim() ||
+                parseFloat(r.montant_ristourne) === Math.abs(transaction.montant)
+              );
+
+              if (ristourneToDelete) {
+                const { error: ristourneError } = await supabase
+                  .from('ristournes')
+                  .delete()
+                  .eq('id', ristourneToDelete.id);
+
+                sourceDeleteSuccess = !ristourneError;
+                if (ristourneError) console.error('Erreur suppression ristourne:', ristourneError);
+              }
+            }
+          }
+          break;
+
+        case 'Sinistre':
+          if (transaction.numero_sinistre && transaction.date_sinistre) {
+            const { data: matchingSinistres, error: findError } = await supabase
+              .from('sinistres')
+              .select('*')
+              .eq('date_sinistre', transaction.date_sinistre);
+
+            if (!findError && matchingSinistres && matchingSinistres.length > 0) {
+              const sinistreToDelete = matchingSinistres.find(s =>
+                s.numero_sinistre?.trim() === transaction.numero_sinistre?.trim() ||
+                Math.abs(parseFloat(s.montant)) === Math.abs(transaction.montant)
+              );
+
+              if (sinistreToDelete) {
+                const { error: sinistreError } = await supabase
+                  .from('sinistres')
+                  .delete()
+                  .eq('id', sinistreToDelete.id);
+
+                sourceDeleteSuccess = !sinistreError;
+                if (sinistreError) console.error('Erreur suppression sinistre:', sinistreError);
+              }
+            }
+          }
+          break;
+
+        case 'Paiement Crédit':
+          sourceDeleteSuccess = true;
+          break;
+
+        case 'Encaissement pour autre code':
+          if (transaction.numero_contrat && transaction.echeance) {
+            const { error: encaissementError } = await supabase
+              .from('encaissement_autre_code')
+              .delete()
+              .eq('numero_contrat', transaction.numero_contrat)
+              .eq('echeance', transaction.echeance);
+
+            sourceDeleteSuccess = !encaissementError;
+            if (encaissementError) console.error('Erreur suppression encaissement:', encaissementError);
+          }
+          break;
+
+        case 'Avenant':
+          if (transaction.numero_contrat) {
+            const createdDate = new Date(transaction.created_at);
+            const createdISO = createdDate.toISOString().split('T')[0];
+
+            const { error: avenantError } = await supabase
+              .from('Avenant_Changement_véhicule')
+              .delete()
+              .eq('numero_contrat', transaction.numero_contrat)
+              .gte('created_at', `${createdISO}T00:00:00`)
+              .lt('created_at', `${createdISO}T23:59:59`);
+
+            sourceDeleteSuccess = !avenantError;
+            if (avenantError) console.error('Erreur suppression avenant:', avenantError);
+          }
+          break;
+
+        default:
+          sourceDeleteSuccess = true;
+      }
+
+      const { error: rapportError } = await supabase
+        .from('rapport')
+        .delete()
+        .eq('id', transaction.id);
+
+      if (rapportError) {
+        console.error('Erreur suppression rapport:', rapportError);
+        setError('Erreur lors de la suppression de la transaction');
+        return;
+      }
+
+      setError('');
+      void sourceDeleteSuccess;
+      handleSearch();
+    } catch (err) {
+      console.error('Erreur lors de la suppression:', err);
+      setError('Erreur lors de la suppression de la transaction');
     }
   };
 
@@ -324,7 +627,6 @@ const TransactionReport: React.FC = () => {
       return;
     }
 
-    // Filtrer les transactions en espèces positives uniquement
     const especesTransactions = transactions.filter(t => t.mode_paiement === 'Espece' && t.montant > 0);
 
     if (especesTransactions.length === 0) {
@@ -395,209 +697,6 @@ const TransactionReport: React.FC = () => {
 
     const fileName = `cheques_${dateFrom}_au_${dateTo}.xlsx`;
     XLSX.writeFile(wb, fileName);
-  };
-
-  const handleDeleteTransaction = async (transaction: Transaction) => {
-    if (!confirm(`Êtes-vous sûr de vouloir supprimer cette transaction ${transaction.type} ?`)) {
-      return;
-    }
-
-    try {
-      let sourceDeleteSuccess = false;
-
-      switch (transaction.type) {
-        case 'Terme':
-          if (transaction.numero_contrat && transaction.echeance) {
-            const echeanceDate = new Date(transaction.echeance);
-            const echeanceISO = echeanceDate.toISOString().split('T')[0];
-
-            const { error: termeError } = await supabase
-              .from('terme')
-              .delete()
-              .eq('numero_contrat', transaction.numero_contrat)
-              .eq('echeance', echeanceISO);
-
-            sourceDeleteSuccess = !termeError;
-            if (termeError) console.error('Erreur suppression terme:', termeError);
-          }
-          break;
-
-        case 'Affaire':
-          if (transaction.numero_contrat) {
-            const createdDate = new Date(transaction.created_at);
-            const createdISO = createdDate.toISOString().split('T')[0];
-
-            const { error: affaireError } = await supabase
-              .from('affaire')
-              .delete()
-              .eq('numero_contrat', transaction.numero_contrat)
-              .gte('created_at', `${createdISO}T00:00:00`)
-              .lt('created_at', `${createdISO}T23:59:59`);
-
-            sourceDeleteSuccess = !affaireError;
-            if (affaireError) console.error('Erreur suppression affaire:', affaireError);
-          }
-          break;
-
-        case 'Dépense':
-          if (transaction.date_depense && transaction.montant) {
-            const { data: matchingDepenses, error: findError } = await supabase
-              .from('depenses')
-              .select('*')
-              .eq('date_depense', transaction.date_depense)
-              .eq('montant', Math.abs(transaction.montant))
-              .limit(1);
-
-            if (!findError && matchingDepenses && matchingDepenses.length > 0) {
-              const { error: depenseError } = await supabase
-                .from('depenses')
-                .delete()
-                .eq('id', matchingDepenses[0].id);
-
-              sourceDeleteSuccess = !depenseError;
-              if (depenseError) console.error('Erreur suppression dépense:', depenseError);
-            } else {
-              console.warn('Dépense correspondante non trouvée dans la table depenses');
-            }
-          }
-          break;
-
-        case 'Recette Exceptionnelle':
-        case 'Recette':
-          if (transaction.date_recette && transaction.montant) {
-            const { data: matchingRecettes, error: findError } = await supabase
-              .from('recettes_exceptionnelles')
-              .select('*')
-              .eq('date_recette', transaction.date_recette)
-              .eq('montant', transaction.montant)
-              .limit(1);
-
-            if (!findError && matchingRecettes && matchingRecettes.length > 0) {
-              const { error: recetteError } = await supabase
-                .from('recettes_exceptionnelles')
-                .delete()
-                .eq('id', matchingRecettes[0].id);
-
-              sourceDeleteSuccess = !recetteError;
-              if (recetteError) console.error('Erreur suppression recette:', recetteError);
-            } else {
-              console.warn('Recette correspondante non trouvée dans la table recettes_exceptionnelles');
-            }
-          }
-          break;
-
-        case 'Ristourne':
-          if (transaction.numero_contrat && transaction.date_ristourne) {
-            const { data: matchingRistournes, error: findError } = await supabase
-              .from('ristournes')
-              .select('*')
-              .eq('date_ristourne', transaction.date_ristourne);
-
-            if (!findError && matchingRistournes && matchingRistournes.length > 0) {
-              const ristourneToDelete = matchingRistournes.find(r =>
-                r.numero_contrat?.trim() === transaction.numero_contrat?.trim() ||
-                parseFloat(r.montant_ristourne) === Math.abs(transaction.montant)
-              );
-
-              if (ristourneToDelete) {
-                const { error: ristourneError } = await supabase
-                  .from('ristournes')
-                  .delete()
-                  .eq('id', ristourneToDelete.id);
-
-                sourceDeleteSuccess = !ristourneError;
-                if (ristourneError) console.error('Erreur suppression ristourne:', ristourneError);
-              } else {
-                console.warn('Ristourne correspondante non trouvée dans la table ristournes');
-              }
-            }
-          }
-          break;
-
-        case 'Sinistre':
-          if (transaction.numero_sinistre && transaction.date_sinistre) {
-            const { data: matchingSinistres, error: findError } = await supabase
-              .from('sinistres')
-              .select('*')
-              .eq('date_sinistre', transaction.date_sinistre);
-
-            if (!findError && matchingSinistres && matchingSinistres.length > 0) {
-              const sinistreToDelete = matchingSinistres.find(s =>
-                s.numero_sinistre?.trim() === transaction.numero_sinistre?.trim() ||
-                Math.abs(parseFloat(s.montant)) === Math.abs(transaction.montant)
-              );
-
-              if (sinistreToDelete) {
-                const { error: sinistreError } = await supabase
-                  .from('sinistres')
-                  .delete()
-                  .eq('id', sinistreToDelete.id);
-
-                sourceDeleteSuccess = !sinistreError;
-                if (sinistreError) console.error('Erreur suppression sinistre:', sinistreError);
-              } else {
-                console.warn('Sinistre correspondant non trouvé dans la table sinistres');
-              }
-            }
-          }
-          break;
-
-        case 'Paiement Crédit':
-          break;
-
-        case 'Encaissement pour autre code':
-          if (transaction.numero_contrat && transaction.echeance) {
-            const { error: encaissementError } = await supabase
-              .from('encaissement_autre_code')
-              .delete()
-              .eq('numero_contrat', transaction.numero_contrat)
-              .eq('echeance', transaction.echeance);
-
-            sourceDeleteSuccess = !encaissementError;
-            if (encaissementError) console.error('Erreur suppression encaissement:', encaissementError);
-          }
-          break;
-
-        case 'Avenant':
-          if (transaction.numero_contrat) {
-            const createdDate = new Date(transaction.created_at);
-            const createdISO = createdDate.toISOString().split('T')[0];
-
-            const { error: avenantError } = await supabase
-              .from('Avenant_Changement_véhicule')
-              .delete()
-              .eq('numero_contrat', transaction.numero_contrat)
-              .gte('created_at', `${createdISO}T00:00:00`)
-              .lt('created_at', `${createdISO}T23:59:59`);
-
-            sourceDeleteSuccess = !avenantError;
-            if (avenantError) console.error('Erreur suppression avenant:', avenantError);
-          }
-          break;
-
-        default:
-          sourceDeleteSuccess = true;
-      }
-
-      const { error: rapportError } = await supabase
-        .from('rapport')
-        .delete()
-        .eq('id', transaction.id);
-
-      if (rapportError) {
-        console.error('Erreur suppression rapport:', rapportError);
-        setError('❌ Erreur lors de la suppression de la transaction');
-        return;
-      }
-
-      setError('');
-      alert('✅ Transaction supprimée avec succès' + (sourceDeleteSuccess ? ' (y compris de la table source)' : ''));
-
-      handleSearch();
-    } catch (err) {
-      console.error('Erreur lors de la suppression:', err);
-      setError('❌ Erreur lors de la suppression de la transaction');
-    }
   };
 
   const handleExportByCategory = (category: string, categoryName: string) => {
@@ -697,6 +796,15 @@ const TransactionReport: React.FC = () => {
     }).format(amount)} DT`;
   };
 
+  const getTransactionInfo = (t: Transaction) => {
+    const parts = [];
+    if (t.numero_contrat) parts.push(`N° ${t.numero_contrat}`);
+    if (t.assure) parts.push(t.assure);
+    if (t.prime) parts.push(`${t.prime} DT`);
+    if (t.echeance) parts.push(`Échéance: ${t.echeance}`);
+    return parts.join(' - ');
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
@@ -714,9 +822,7 @@ const TransactionReport: React.FC = () => {
 
         <div className="flex gap-4 items-end">
           <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Date du
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date du</label>
             <input
               type="date"
               value={dateFrom}
@@ -725,9 +831,7 @@ const TransactionReport: React.FC = () => {
             />
           </div>
           <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Date au
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date au</label>
             <input
               type="date"
               value={dateTo}
@@ -1094,7 +1198,7 @@ const TransactionReport: React.FC = () => {
                     <td className="px-4 py-3 text-sm text-gray-600">{new Date(transaction.created_at).toLocaleString('fr-FR')}</td>
                     <td className="px-4 py-3 text-center">
                       <button
-                        onClick={() => handleDeleteTransaction(transaction)}
+                        onClick={() => initiateDelete(transaction)}
                         className="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded-lg transition-colors"
                         title="Supprimer cette transaction"
                       >
@@ -1116,6 +1220,14 @@ const TransactionReport: React.FC = () => {
           <p className="text-gray-600">Aucune transaction n'a été trouvée pour la période sélectionnée</p>
         </div>
       )}
+
+      <DeleteMotifModal
+        isOpen={deleteModalOpen}
+        transactionType={pendingDeleteTransaction?.type || ''}
+        transactionInfo={pendingDeleteTransaction ? getTransactionInfo(pendingDeleteTransaction) : ''}
+        onConfirm={handleDeleteConfirmed}
+        onCancel={handleDeleteCancelled}
+      />
     </div>
   );
 };
