@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, FileText, Upload, BarChart3, Clock, User, Search, Calendar, Receipt, Building2, DollarSign, TrendingUp, Home, Briefcase, Award, Trash2 } from 'lucide-react';
+import { LogOut, FileText, Upload, BarChart3, Clock, User, Search, Calendar, Receipt, Building2, DollarSign, TrendingUp, Home, Briefcase, Award, Trash2, Shield } from 'lucide-react';
 import { getSession, clearSession, isAdmin } from '../utils/auth';
 import LogoutConfirmation from './LogoutConfirmation';
 import { shouldShowLogoutConfirmation } from '../utils/auth';
@@ -20,6 +20,14 @@ import StatisticsChart from './StatisticsChart';
 import SalairesLoyer from './SalairesLoyer';
 import AttestationSequences from './AttestationSequences';
 import ReportingSuppression from './ReportingSuppression';
+import GestionAcces from './GestionAcces';
+import { getUserPermissions, UserPermissions, DEFAULT_PERMISSIONS } from '../utils/permissionsService';
+
+type TabId =
+  | 'home' | 'contract' | 'xml' | 'reports' | 'credits' | 'financial'
+  | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement'
+  | 'encaissement' | 'commissions' | 'statistics' | 'salaires'
+  | 'attestations' | 'reporting' | 'gestion_acces';
 
 interface DashboardProps {
   username: string;
@@ -27,9 +35,13 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'home' | 'contract' | 'xml' | 'reports' | 'credits' | 'financial' | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement' | 'encaissement' | 'commissions' | 'statistics' | 'salaires' | 'attestations' | 'reporting'>('home');
+  const [activeTab, setActiveTab] = useState<TabId>('home');
   const [sessionInfo, setSessionInfo] = useState<any>(null);
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false);
+  const [permissions, setPermissions] = useState<UserPermissions>({ ...DEFAULT_PERMISSIONS });
+
+  const isHamza = username.toLowerCase() === 'hamza';
+  const isUserAdmin = isAdmin(username);
 
   useEffect(() => {
     const session = getSession();
@@ -37,17 +49,20 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
       setSessionInfo(session);
     }
 
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    const handleBeforeUnload = () => {
       clearSession();
       onLogout();
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [onLogout]);
+
+  useEffect(() => {
+    if (!isHamza) {
+      getUserPermissions(username).then(setPermissions);
+    }
+  }, [username, isHamza]);
 
   const handleLogout = () => {
     if (shouldShowLogoutConfirmation(username)) {
@@ -72,8 +87,24 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
     return new Date(timestamp).toLocaleString('fr-FR');
   };
 
-  const isUserAdmin = isAdmin(username);
-  const isHamza = username.toLowerCase() === 'hamza';
+  const canAccess = (tab: keyof UserPermissions): boolean => {
+    if (isHamza) return true;
+    return permissions[tab] ?? true;
+  };
+
+  const navBtn = (tab: TabId, label: string, icon: React.ReactNode) => (
+    <button
+      onClick={() => setActiveTab(tab)}
+      className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
+        activeTab === tab
+          ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
+          : 'text-white/90 hover:bg-white/20 hover:text-white'
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
@@ -122,217 +153,41 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
       <nav className="bg-gradient-to-r from-emerald-500 via-gray-600 to-gray-800 shadow-md overflow-x-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex space-x-1 sm:space-x-2 min-w-max">
-            <button
-              onClick={() => setActiveTab('home')}
-              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                activeTab === 'home'
-                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                  : 'text-white/90 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              <Home className="w-4 h-4" />
-              <span>Accueil</span>
-            </button>
+            {navBtn('home', 'Accueil', <Home className="w-4 h-4" />)}
 
-            <button
-              onClick={() => setActiveTab('contract')}
-              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                activeTab === 'contract'
-                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                  : 'text-white/90 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              <FileText className="w-4 h-4" />
-              <span>Nouveau Contrat</span>
-            </button>
+            {canAccess('contract') && navBtn('contract', 'Nouveau Contrat', <FileText className="w-4 h-4" />)}
 
-            {isUserAdmin && (
-              <button
-                onClick={() => setActiveTab('xml')}
-                className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                  activeTab === 'xml'
-                    ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                    : 'text-white/90 hover:bg-white/20 hover:text-white'
-                }`}
-              >
-                <Upload className="w-4 h-4" />
-                <span>Import XLSX</span>
-              </button>
-            )}
+            {isUserAdmin && navBtn('xml', 'Import XLSX', <Upload className="w-4 h-4" />)}
 
-            <button
-              onClick={() => setActiveTab('reports')}
-              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                activeTab === 'reports'
-                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                  : 'text-white/90 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              <BarChart3 className="w-4 h-4" />
-              <span>Rapports</span>
-            </button>
+            {canAccess('reports') && navBtn('reports', 'Rapports', <BarChart3 className="w-4 h-4" />)}
 
-            <button
-              onClick={() => setActiveTab('statistics')}
-              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                activeTab === 'statistics'
-                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                  : 'text-white/90 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              <TrendingUp className="w-4 h-4" />
-              <span>Statistiques</span>
-            </button>
+            {canAccess('statistics') && navBtn('statistics', 'Statistiques', <TrendingUp className="w-4 h-4" />)}
 
-            <button
-              onClick={() => setActiveTab('credits')}
-              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                activeTab === 'credits'
-                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                  : 'text-white/90 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              <FileText className="w-4 h-4" />
-              <span>Liste des Credits</span>
-            </button>
+            {canAccess('credits') && navBtn('credits', 'Liste des Credits', <FileText className="w-4 h-4" />)}
 
-            <button
-              onClick={() => setActiveTab('financial')}
-              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                activeTab === 'financial'
-                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                  : 'text-white/90 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              <DollarSign className="w-4 h-4" />
-              <span>Gestion Financiere</span>
-            </button>
+            {canAccess('financial') && navBtn('financial', 'Gestion Financiere', <DollarSign className="w-4 h-4" />)}
 
-            <button
-              onClick={() => setActiveTab('payment')}
-              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                activeTab === 'payment'
-                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                  : 'text-white/90 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              <DollarSign className="w-4 h-4" />
-              <span>Paiement Credit</span>
-            </button>
+            {canAccess('payment') && navBtn('payment', 'Paiement Credit', <DollarSign className="w-4 h-4" />)}
 
-            <button
-              onClick={() => setActiveTab('terme')}
-              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                activeTab === 'terme'
-                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                  : 'text-white/90 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              <Search className="w-4 h-4" />
-              <span>Terme</span>
-            </button>
+            {canAccess('terme') && navBtn('terme', 'Terme', <Search className="w-4 h-4" />)}
 
-            <button
-              onClick={() => setActiveTab('transactions')}
-              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                activeTab === 'transactions'
-                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                  : 'text-white/90 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              <Calendar className="w-4 h-4" />
-              <span>Rapport Transactions</span>
-            </button>
+            {canAccess('transactions') && navBtn('transactions', 'Rapport Transactions', <Calendar className="w-4 h-4" />)}
 
-            <button
-              onClick={() => setActiveTab('reporting')}
-              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                activeTab === 'reporting'
-                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                  : 'text-white/90 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Reporting</span>
-            </button>
+            {canAccess('reporting') && navBtn('reporting', 'Reporting', <Trash2 className="w-4 h-4" />)}
+
+            {canAccess('encaissement') && navBtn('encaissement', 'Encaissement', <DollarSign className="w-4 h-4" />)}
 
             {/* Section reservee a Hamza */}
             {isHamza && (
               <>
-                <button
-                  onClick={() => setActiveTab('cheques')}
-                  className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                    activeTab === 'cheques'
-                      ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                      : 'text-white/90 hover:bg-white/20 hover:text-white'
-                  }`}
-                >
-                  <Receipt className="w-4 h-4" />
-                  <span>Cheques</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('versement')}
-                  className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                    activeTab === 'versement'
-                      ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                      : 'text-white/90 hover:bg-white/20 hover:text-white'
-                  }`}
-                >
-                  <Building2 className="w-4 h-4" />
-                  <span>Versement Bancaire</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('commissions')}
-                  className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                    activeTab === 'commissions'
-                      ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                      : 'text-white/90 hover:bg-white/20 hover:text-white'
-                  }`}
-                >
-                  <TrendingUp className="w-4 h-4" />
-                  <span>Etat des Commissions</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('salaires')}
-                  className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                    activeTab === 'salaires'
-                      ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                      : 'text-white/90 hover:bg-white/20 hover:text-white'
-                  }`}
-                >
-                  <Briefcase className="w-4 h-4" />
-                  <span>Salaires et Loyer</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('attestations')}
-                  className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                    activeTab === 'attestations'
-                      ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                      : 'text-white/90 hover:bg-white/20 hover:text-white'
-                  }`}
-                >
-                  <Award className="w-4 h-4" />
-                  <span>Séquences Attestation</span>
-                </button>
+                {navBtn('cheques', 'Cheques', <Receipt className="w-4 h-4" />)}
+                {navBtn('versement', 'Versement Bancaire', <Building2 className="w-4 h-4" />)}
+                {navBtn('commissions', 'Etat des Commissions', <TrendingUp className="w-4 h-4" />)}
+                {navBtn('salaires', 'Salaires et Loyer', <Briefcase className="w-4 h-4" />)}
+                {navBtn('attestations', 'Sequences Attestation', <Award className="w-4 h-4" />)}
+                {navBtn('gestion_acces', 'Gestion Acces', <Shield className="w-4 h-4" />)}
               </>
             )}
-
-            {/* Encaissement - visible pour tous les utilisateurs */}
-            <button
-              onClick={() => setActiveTab('encaissement')}
-              className={`py-3 sm:py-4 px-3 sm:px-4 font-medium text-xs sm:text-sm transition-all duration-200 flex items-center space-x-1 sm:space-x-2 whitespace-nowrap rounded-t-lg ${
-                activeTab === 'encaissement'
-                  ? 'bg-white text-emerald-700 shadow-lg transform scale-105'
-                  : 'text-white/90 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              <DollarSign className="w-4 h-4" />
-              <span>Encaissement</span>
-            </button>
           </div>
         </div>
       </nav>
@@ -340,25 +195,25 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
       {/* Content */}
       <main className="max-w-7xl mx-auto py-3 sm:py-6 px-2 sm:px-4 lg:px-8">
         {activeTab === 'home' && <HomePage username={username} />}
-        {activeTab === 'contract' && <ContractForm username={username} />}
+        {activeTab === 'contract' && canAccess('contract') && <ContractForm username={username} />}
         {activeTab === 'xml' && isUserAdmin && <XLSXUploader />}
-        {activeTab === 'reports' && <ReportGenerator />}
-        {activeTab === 'statistics' && <StatisticsChart username={username} />}
-        {activeTab === 'credits' && <CreditsList />}
-        {activeTab === 'financial' && <FinancialManagement username={username} />}
-        {activeTab === 'payment' && <CreditPayment />}
-        {activeTab === 'terme' && <TermeSearch />}
-        {activeTab === 'transactions' && <TransactionReport />}
+        {activeTab === 'reports' && canAccess('reports') && <ReportGenerator />}
+        {activeTab === 'statistics' && canAccess('statistics') && <StatisticsChart username={username} />}
+        {activeTab === 'credits' && canAccess('credits') && <CreditsList />}
+        {activeTab === 'financial' && canAccess('financial') && <FinancialManagement username={username} />}
+        {activeTab === 'payment' && canAccess('payment') && <CreditPayment />}
+        {activeTab === 'terme' && canAccess('terme') && <TermeSearch />}
+        {activeTab === 'transactions' && canAccess('transactions') && <TransactionReport />}
+        {activeTab === 'reporting' && canAccess('reporting') && <ReportingSuppression />}
+        {activeTab === 'encaissement' && canAccess('encaissement') && <Encaissement username={username} />}
         {activeTab === 'cheques' && isHamza && <ChequesManagement />}
         {activeTab === 'versement' && isHamza && <VersementBancaire username={username} />}
-        {activeTab === 'encaissement' && <Encaissement username={username} />}
         {activeTab === 'commissions' && isHamza && <EtatCommissions />}
         {activeTab === 'salaires' && isHamza && <SalairesLoyer />}
         {activeTab === 'attestations' && isHamza && <AttestationSequences />}
-        {activeTab === 'reporting' && <ReportingSuppression />}
+        {activeTab === 'gestion_acces' && isHamza && <GestionAcces currentUser={username} />}
       </main>
 
-      {/* Modal de confirmation de déconnexion */}
       {showLogoutConfirmation && (
         <LogoutConfirmation
           username={username}
