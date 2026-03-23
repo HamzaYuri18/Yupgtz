@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { getSessionDate } from './auth';
+import { getSessionDate, getSession } from './auth';
 
 // Types pour les données de crédit
 interface CreditData {
@@ -1432,6 +1432,33 @@ const saveSuppressionRecord = async (
   });
 };
 
+const libererAttestationPourReutilisation = async (
+  numeroAttestation: string,
+  numeroContrat: string,
+  assure: string,
+  motif: string,
+  suppressPar: string
+) => {
+  try {
+    const { error } = await supabase.from('attestations_disponibles').insert({
+      numero_attestation: numeroAttestation,
+      libere_par: suppressPar,
+      motif_liberation: motif,
+      ancien_numero_contrat: numeroContrat,
+      ancien_assure: assure,
+      reutilise: false
+    });
+
+    if (error) {
+      console.error('Erreur libération attestation:', error.message);
+    } else {
+      console.log(`✓ Attestation ${numeroAttestation} libérée et disponible pour réutilisation`);
+    }
+  } catch (err) {
+    console.error('Erreur libération attestation:', err);
+  }
+};
+
 // Fonction pour supprimer un contrat de la table rapport
 export const deleteRapportContract = async (
   id: number,
@@ -1484,6 +1511,13 @@ export const deleteRapportContract = async (
 
     if (numeroAttestation) {
       await resetAttestationStatutInCarnet(numeroAttestation);
+      await libererAttestationPourReutilisation(
+        numeroAttestation,
+        contract.numero_contrat,
+        contract.assure || 'Inconnu',
+        motif,
+        suppressPar
+      );
     }
 
     const { error: rapportError } = await supabase.from('rapport').delete().eq('id', id);
@@ -1531,6 +1565,13 @@ export const deleteAffaireContract = async (id: number, motif: string, suppressP
 
     if (numeroAttestation) {
       await resetAttestationStatutInCarnet(numeroAttestation);
+      await libererAttestationPourReutilisation(
+        numeroAttestation,
+        contract.numero_contrat,
+        contract.assure || 'Inconnu',
+        motif,
+        suppressPar
+      );
     }
 
     await supabase.from('liste_credits').delete().eq('numero_contrat', contract.numero_contrat);
@@ -1579,6 +1620,13 @@ export const deleteTermeContract = async (id: number, motif: string, suppressPar
 
     if (numeroAttestation) {
       await resetAttestationStatutInCarnet(numeroAttestation);
+      await libererAttestationPourReutilisation(
+        numeroAttestation,
+        contract.numero_contrat,
+        contract.assure || 'Inconnu',
+        motif,
+        suppressPar
+      );
     }
 
     await supabase.from('liste_credits').delete().eq('numero_contrat', contract.numero_contrat);

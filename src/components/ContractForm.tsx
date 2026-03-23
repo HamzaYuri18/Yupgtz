@@ -79,9 +79,18 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const [missingAttestationNumbers, setMissingAttestationNumbers] = useState<string[]>([]);
   const [carnetTableName, setCarnetTableName] = useState<string>('');
   const [pendingSubmitData, setPendingSubmitData] = useState<any>(null);
+  const [attestationsDisponibles, setAttestationsDisponibles] = useState<Array<{
+    id: number;
+    numero_attestation: string;
+    ancien_assure: string;
+    ancien_numero_contrat: string;
+    libere_le: string;
+  }>>([]);
+  const [useAttestationDisponible, setUseAttestationDisponible] = useState(false);
 
   React.useEffect(() => {
     loadAvailableMonths();
+    loadAttestationsDisponibles();
   }, []);
 
   const loadAvailableMonths = async () => {
@@ -96,6 +105,18 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     )).sort((a, b) => parseInt(b) - parseInt(a));
 
     setAvailableYears(years);
+  };
+
+  const loadAttestationsDisponibles = async () => {
+    const { data, error } = await supabase
+      .from('attestations_disponibles')
+      .select('id, numero_attestation, ancien_assure, ancien_numero_contrat, libere_le')
+      .eq('reutilise', false)
+      .order('libere_le', { ascending: false });
+
+    if (!error && data) {
+      setAttestationsDisponibles(data);
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -272,6 +293,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     setIsRetourContentieuxMode(false);
     setOriginalPremiumAmount('');
     setShowAutreCodeMessage(false);
+    setUseAttestationDisponible(false);
     setMessage('');
 
     const inputs = document.querySelectorAll('input');
@@ -645,6 +667,28 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           console.error('❌ Erreur attestation:', attestationError);
           setMessage(prev => prev + ' (erreur attestation)');
         }
+
+        // Si une attestation disponible a été réutilisée, marquer comme utilisée
+        if (useAttestationDisponible) {
+          try {
+            const { error: updateError } = await supabase
+              .from('attestations_disponibles')
+              .update({
+                reutilise: true,
+                reutilise_le: new Date().toISOString(),
+                reutilise_par: username,
+                nouveau_numero_contrat: contract.contractNumber
+              })
+              .eq('numero_attestation', contract.numeroAttestation);
+
+            if (!updateError) {
+              console.log(`✅ Attestation ${contract.numeroAttestation} marquée comme réutilisée`);
+              loadAttestationsDisponibles();
+            }
+          } catch (err) {
+            console.error('Erreur marquage réutilisation:', err);
+          }
+        }
       }
 
       resetForm();
@@ -704,8 +748,8 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
         return;
       }
 
-      // Si l'utilisateur est Hamza, bypass toutes les validations d'attestation
-      if (!isHamza) {
+      // Si l'utilisateur est Hamza ou utilise une attestation disponible, bypass toutes les validations d'attestation
+      if (!isHamza && !useAttestationDisponible) {
         // Vérifier si l'attestation existe et est disponible
         const { data: attestationCheck, error: attestationError } = await supabase
           .rpc('check_attestation_disponible', { attestation_numero: attestationNum });
@@ -1228,17 +1272,60 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                   <span className="text-xs text-green-600 ml-2 font-semibold">✓ Saisie libre autorisée</span>
                 )}
               </label>
-              <input
-                type="number"
-                name="numeroAttestation"
-                value={formData.numeroAttestation}
-                onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
-                placeholder="Ex: 12345"
-                required
-              />
+
+              {/* Option pour utiliser une attestation disponible */}
+              {attestationsDisponibles.length > 0 && (
+                <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useAttestationDisponible}
+                      onChange={(e) => {
+                        setUseAttestationDisponible(e.target.checked);
+                        if (!e.target.checked) {
+                          setFormData(prev => ({ ...prev, numeroAttestation: '' }));
+                        }
+                      }}
+                      className="mr-2"
+                    />
+                    <span className="text-sm font-medium text-green-700">
+                      Réutiliser une attestation disponible ({attestationsDisponibles.length})
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              {useAttestationDisponible ? (
+                <select
+                  name="numeroAttestation"
+                  value={formData.numeroAttestation}
+                  onChange={handleInputChange}
+                  className="w-full p-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-green-50"
+                  required
+                >
+                  <option value="">Sélectionner une attestation disponible</option>
+                  {attestationsDisponibles.map((att) => (
+                    <option key={att.id} value={att.numero_attestation}>
+                      {att.numero_attestation} - {att.ancien_assure} (ex: {att.ancien_numero_contrat})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="number"
+                  name="numeroAttestation"
+                  value={formData.numeroAttestation}
+                  onChange={handleInputChange}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
+                  placeholder="Ex: 12345"
+                  required
+                />
+              )}
+
               <p className="text-xs text-gray-500 mt-1">
-                {username.toLowerCase() === 'hamza'
+                {useAttestationDisponible
+                  ? 'Attestation libérée suite à une suppression - réutilisation sans contrainte de séquence'
+                  : username.toLowerCase() === 'hamza'
                   ? 'Vous pouvez saisir n\'importe quel numéro d\'attestation sans restriction'
                   : 'Saisir le numéro d\'attestation Auto'}
               </p>

@@ -337,6 +337,30 @@ const TransactionReport: React.FC = () => {
     }
   };
 
+  const libererAttestation = async (numeroAttestation: string, transaction: Transaction, motif: string) => {
+    const session = getSession();
+    const currentUser = session?.username || 'inconnu';
+
+    try {
+      const { error } = await supabase.from('attestations_disponibles').insert({
+        numero_attestation: numeroAttestation,
+        libere_par: currentUser,
+        motif_liberation: motif,
+        ancien_numero_contrat: transaction.numero_contrat,
+        ancien_assure: transaction.assure,
+        reutilise: false
+      });
+
+      if (error) {
+        console.error('Erreur libération attestation:', error.message);
+      } else {
+        console.log(`✓ Attestation ${numeroAttestation} libérée pour réutilisation`);
+      }
+    } catch (err) {
+      console.error('Erreur libération:', err);
+    }
+  };
+
   const saveToReportingSuppression = async (transaction: Transaction, motif: string): Promise<boolean> => {
     const session = getSession();
     const currentUser = session?.username || 'inconnu';
@@ -407,6 +431,9 @@ const TransactionReport: React.FC = () => {
             if (sourceDeleteSuccess) {
               const attestationNum = termeRow?.['Numero Attestation'] || transaction.numero_attestation;
               await resetAttestationStatut(attestationNum);
+              if (attestationNum) {
+                await libererAttestation(attestationNum, transaction, motif);
+              }
             }
           }
           break;
@@ -437,6 +464,9 @@ const TransactionReport: React.FC = () => {
             if (sourceDeleteSuccess) {
               const attestationNum = affaireRow?.['Numero Attestation'] || transaction.numero_attestation;
               await resetAttestationStatut(attestationNum);
+              if (attestationNum) {
+                await libererAttestation(attestationNum, transaction, motif);
+              }
             }
           }
           break;
