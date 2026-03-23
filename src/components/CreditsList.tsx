@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, DollarSign, User, Download, MessageSquare } from 'lucide-react';
+import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, DollarSign, User, Download, MessageSquare, BarChart3 } from 'lucide-react';
 import { getCredits, updateCreditStatus } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
 import * as XLSX from 'xlsx';
 import SMSModal from './SMSModal';
+import CreditStatsDetailModal from './CreditStatsDetailModal';
+import CreditEvolutionModal from './CreditEvolutionModal';
 
 const CreditsList: React.FC = () => {
   const [credits, setCredits] = useState<any[]>([]);
@@ -24,6 +26,14 @@ const CreditsList: React.FC = () => {
   const [hoveredCredit, setHoveredCredit] = useState<any | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [selectedCreditForSMS, setSelectedCreditForSMS] = useState<any | null>(null);
+
+  const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+  const [statsModalData, setStatsModalData] = useState<{
+    title: string;
+    credits: any[];
+    type: 'payes' | 'nonPayes' | 'echeances' | 'retard';
+  } | null>(null);
+  const [isEvolutionModalOpen, setIsEvolutionModalOpen] = useState(false);
 
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const isHamza = currentUser === 'Hamza';
@@ -351,6 +361,41 @@ const CreditsList: React.FC = () => {
     }, 100);
   };
 
+  const openStatsModal = (type: 'payes' | 'nonPayes' | 'echeances' | 'retard') => {
+    let title = '';
+    let creditsToShow: any[] = [];
+
+    switch (type) {
+      case 'payes':
+        title = 'Crédits Payés - Détails';
+        creditsToShow = filteredCredits.filter(c =>
+          c.statut === 'Payé' || c.statut === 'Payé en total'
+        );
+        break;
+      case 'nonPayes':
+        title = 'Crédits Non Payés - Détails';
+        creditsToShow = filteredCredits.filter(c =>
+          c.statut === 'Non payé'
+        );
+        break;
+      case 'echeances':
+        title = 'Échéances 7 Jours - Détails';
+        creditsToShow = getCreditsDueIn7Days();
+        break;
+      case 'retard':
+        title = 'Crédits en Retard - Détails';
+        creditsToShow = getOverdueCredits();
+        break;
+    }
+
+    setStatsModalData({
+      title,
+      credits: creditsToShow,
+      type
+    });
+    setIsStatsModalOpen(true);
+  };
+
   const clearFilters = () => {
     setActiveFilter('none');
     setFilters({
@@ -591,7 +636,7 @@ const CreditsList: React.FC = () => {
 
         {/* Statistiques Détaillées */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-blue-50 rounded-lg p-4">
+          <div className="bg-blue-50 rounded-lg p-4 cursor-pointer hover:bg-blue-100 transition-colors">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-blue-600">
@@ -604,7 +649,10 @@ const CreditsList: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-green-50 rounded-lg p-4">
+          <div
+            className="bg-green-50 rounded-lg p-4 cursor-pointer hover:bg-green-100 transition-colors"
+            onClick={() => openStatsModal('payes')}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-green-600">Montant Payé</p>
@@ -615,7 +663,10 @@ const CreditsList: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-orange-50 rounded-lg p-4">
+          <div
+            className="bg-orange-50 rounded-lg p-4 cursor-pointer hover:bg-orange-100 transition-colors"
+            onClick={() => openStatsModal('nonPayes')}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-orange-600">Montant Non Payé</p>
@@ -626,13 +677,16 @@ const CreditsList: React.FC = () => {
             </div>
           </div>
 
-          <div 
+          <div
             className={`rounded-lg p-4 cursor-pointer transition-colors ${
-              activeFilter === 'echeances' 
-                ? 'bg-yellow-100 border-2 border-yellow-400' 
+              activeFilter === 'echeances'
+                ? 'bg-yellow-100 border-2 border-yellow-400'
                 : 'bg-purple-50 hover:bg-purple-100'
             }`}
-            onClick={showDueIn7Days}
+            onClick={() => {
+              showDueIn7Days();
+              openStatsModal('echeances');
+            }}
           >
             <div className="flex items-center justify-between">
               <div>
@@ -673,13 +727,16 @@ const CreditsList: React.FC = () => {
             </div>
           </div>
 
-          <div 
+          <div
             className={`rounded-lg p-4 cursor-pointer transition-colors ${
-              activeFilter === 'retard' 
-                ? 'bg-red-100 border-2 border-red-400' 
+              activeFilter === 'retard'
+                ? 'bg-red-100 border-2 border-red-400'
                 : 'bg-red-50 hover:bg-red-100'
             }`}
-            onClick={showOverdueCredits}
+            onClick={() => {
+              showOverdueCredits();
+              openStatsModal('retard');
+            }}
           >
             <div className="flex items-center justify-between">
               <div>
@@ -690,6 +747,17 @@ const CreditsList: React.FC = () => {
               <XCircle className="w-8 h-8 text-red-600" />
             </div>
           </div>
+        </div>
+
+        {/* Bouton Evolution P/C */}
+        <div className="mb-6">
+          <button
+            onClick={() => setIsEvolutionModalOpen(true)}
+            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold py-4 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center space-x-3"
+          >
+            <BarChart3 className="w-6 h-6" />
+            <span className="text-lg">Evolution P/C - Analyse 15 Derniers Jours</span>
+          </button>
         </div>
 
         {/* Filtres (masqués quand un filtre spécial est actif) */}
@@ -1080,6 +1148,26 @@ const CreditsList: React.FC = () => {
             solde: 0,
             telephone: ''
           }}
+        />
+
+        {/* Stats Detail Modal */}
+        {statsModalData && (
+          <CreditStatsDetailModal
+            isOpen={isStatsModalOpen}
+            onClose={() => {
+              setIsStatsModalOpen(false);
+              setStatsModalData(null);
+            }}
+            title={statsModalData.title}
+            credits={statsModalData.credits}
+            type={statsModalData.type}
+          />
+        )}
+
+        {/* Evolution P/C Modal */}
+        <CreditEvolutionModal
+          isOpen={isEvolutionModalOpen}
+          onClose={() => setIsEvolutionModalOpen(false)}
         />
       </div>
     </div>
