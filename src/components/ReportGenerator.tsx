@@ -3,7 +3,13 @@ import { BarChart3, Download, Calendar, DollarSign, FileText, Users, Trash2, Ban
 import { getContracts, exportToXLSX } from '../utils/storage';
 import { Contract } from '../types';
 import { getAffaireContracts, getRapportContracts, getTermeContracts, deleteRapportContract, deleteAffaireContract, deleteTermeContract, getFilteredDataForExport } from '../utils/supabaseService';
-import { getSessionDate } from '../utils/auth';
+import { getSessionDate, getSession } from '../utils/auth';
+import DeleteMotifModal from './DeleteMotifModal';
+
+type PendingDelete =
+  | { kind: 'rapport'; id: number; numeroContrat: string; type: string; info: string }
+  | { kind: 'affaire'; id: number; type: string; info: string }
+  | { kind: 'terme'; id: number; type: string; info: string };
 
 const ReportGenerator: React.FC = () => {
   const [rapportContracts, setRapportContracts] = useState<any[]>([]);
@@ -23,6 +29,8 @@ const ReportGenerator: React.FC = () => {
     createdBy: 'all'
   });
   const [showSessionData, setShowSessionData] = useState(true);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
 
   useEffect(() => {
     const localData = getContracts();
@@ -238,47 +246,51 @@ const ReportGenerator: React.FC = () => {
     }
   };
 
-  const handleDeleteRapport = async (id: number, numeroContrat: string) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce contrat du rapport et des tables liées ?')) {
-      return;
+  const initiateDeleteRapport = (id: number, numeroContrat: string, type: string, assure: string) => {
+    setPendingDelete({ kind: 'rapport', id, numeroContrat, type, info: `N° ${numeroContrat}${assure ? ` - ${assure}` : ''}` });
+    setDeleteModalOpen(true);
+  };
+
+  const initiateDeleteAffaire = (id: number, numeroContrat: string, assure: string) => {
+    setPendingDelete({ kind: 'affaire', id, type: 'Affaire', info: `N° ${numeroContrat}${assure ? ` - ${assure}` : ''}` });
+    setDeleteModalOpen(true);
+  };
+
+  const initiateDeleteTerme = (id: number, numeroContrat: string, assure: string) => {
+    setPendingDelete({ kind: 'terme', id, type: 'Terme', info: `N° ${numeroContrat}${assure ? ` - ${assure}` : ''}` });
+    setDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirmed = async (motif: string) => {
+    setDeleteModalOpen(false);
+    if (!pendingDelete) return;
+
+    const session = getSession();
+    const suppressPar = session?.username || 'inconnu';
+    const pd = pendingDelete;
+    setPendingDelete(null);
+
+    let success = false;
+
+    if (pd.kind === 'rapport') {
+      success = await deleteRapportContract(pd.id, pd.numeroContrat, motif, suppressPar);
+      if (success) { loadRapportContracts(); loadAffaireContracts(); loadTermeContracts(); }
+    } else if (pd.kind === 'affaire') {
+      success = await deleteAffaireContract(pd.id, motif, suppressPar);
+      if (success) { loadAffaireContracts(); loadRapportContracts(); }
+    } else if (pd.kind === 'terme') {
+      success = await deleteTermeContract(pd.id, motif, suppressPar);
+      if (success) { loadTermeContracts(); loadRapportContracts(); }
     }
 
-    const success = await deleteRapportContract(id, numeroContrat);
-    if (success) {
-      loadRapportContracts();
-      loadAffaireContracts();
-      loadTermeContracts();
-    } else {
+    if (!success) {
       alert('Erreur lors de la suppression du contrat');
     }
   };
 
-  const handleDeleteAffaire = async (id: number) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce contrat Affaire et du rapport ?')) {
-      return;
-    }
-
-    const success = await deleteAffaireContract(id);
-    if (success) {
-      loadAffaireContracts();
-      loadRapportContracts();
-    } else {
-      alert('Erreur lors de la suppression du contrat');
-    }
-  };
-
-  const handleDeleteTerme = async (id: number) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce contrat Terme et du rapport ?')) {
-      return;
-    }
-
-    const success = await deleteTermeContract(id);
-    if (success) {
-      loadTermeContracts();
-      loadRapportContracts();
-    } else {
-      alert('Erreur lors de la suppression du contrat');
-    }
+  const handleDeleteCancelled = () => {
+    setDeleteModalOpen(false);
+    setPendingDelete(null);
   };
 
   const stats = calculateStats();
@@ -626,7 +638,7 @@ const ReportGenerator: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <button
-                          onClick={() => handleDeleteTerme(contract.id)}
+                          onClick={() => initiateDeleteTerme(contract.id, contract.numero_contrat, contract.Assure || contract.assure || '')}
                           className="text-red-600 hover:text-red-800 transition-colors"
                           title="Supprimer"
                         >
@@ -711,7 +723,7 @@ const ReportGenerator: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <button
-                          onClick={() => handleDeleteAffaire(contract.id)}
+                          onClick={() => initiateDeleteAffaire(contract.id, contract.numero_contrat, contract.Assure || contract.assure || '')}
                           className="text-red-600 hover:text-red-800 transition-colors"
                           title="Supprimer"
                         >
@@ -859,7 +871,7 @@ const ReportGenerator: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <button
-                      onClick={() => handleDeleteRapport(contract.id, contract.numero_contrat)}
+                      onClick={() => initiateDeleteRapport(contract.id, contract.numero_contrat, contract.type, contract.assure || '')}
                       className="text-red-600 hover:text-red-800 transition-colors"
                       title="Supprimer"
                     >
@@ -893,6 +905,14 @@ const ReportGenerator: React.FC = () => {
           </div>
         )}
       </div>
+
+      <DeleteMotifModal
+        isOpen={deleteModalOpen}
+        transactionType={pendingDelete?.type || ''}
+        transactionInfo={pendingDelete?.info || ''}
+        onConfirm={handleDeleteConfirmed}
+        onCancel={handleDeleteCancelled}
+      />
     </div>
   );
 };
