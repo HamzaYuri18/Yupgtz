@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, FileText, Upload, BarChart3, Clock, User, Search, Calendar, Receipt, Building2, DollarSign, TrendingUp, Home, Briefcase, Award, Trash2, Shield } from 'lucide-react';
+import { LogOut, FileText, Upload, BarChart3, Clock, User, Search, Calendar, Receipt, Building2, DollarSign, TrendingUp, Home, Briefcase, Award, Trash2, Shield, MessageSquare } from 'lucide-react';
 import { getSession, clearSession, isAdmin } from '../utils/auth';
 import LogoutConfirmation from './LogoutConfirmation';
 import { shouldShowLogoutConfirmation } from '../utils/auth';
@@ -21,13 +21,14 @@ import SalairesLoyer from './SalairesLoyer';
 import AttestationSequences from './AttestationSequences';
 import ReportingSuppression from './ReportingSuppression';
 import GestionAcces from './GestionAcces';
+import SMSingHistory from './SMSingHistory';
 import { getUserPermissions, UserPermissions, DEFAULT_PERMISSIONS } from '../utils/permissionsService';
 
 type TabId =
   | 'home' | 'contract' | 'xml' | 'reports' | 'credits' | 'financial'
   | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement'
   | 'encaissement' | 'commissions' | 'statistics' | 'salaires'
-  | 'attestations' | 'reporting' | 'gestion_acces';
+  | 'attestations' | 'reporting' | 'gestion_acces' | 'smsing';
 
 interface DashboardProps {
   username: string;
@@ -184,7 +185,8 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
             {(isHamza || canAccess('salaires')) && navBtn('salaires', 'Salaires et Loyer', <Briefcase className="w-4 h-4" />)}
             {(isHamza || canAccess('attestations')) && navBtn('attestations', 'Sequences Attestation', <Award className="w-4 h-4" />)}
 
-            {/* Gestion Acces - Hamza uniquement */}
+            {/* Gestion Acces et SMSing - Hamza uniquement */}
+            {isHamza && navBtn('smsing', 'SMSing', <MessageSquare className="w-4 h-4" />)}
             {isHamza && navBtn('gestion_acces', 'Gestion Acces', <Shield className="w-4 h-4" />)}
           </div>
         </div>
@@ -209,6 +211,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
         {activeTab === 'commissions' && (isHamza || canAccess('commissions')) && <EtatCommissions />}
         {activeTab === 'salaires' && (isHamza || canAccess('salaires')) && <SalairesLoyer />}
         {activeTab === 'attestations' && (isHamza || canAccess('attestations')) && <AttestationSequences />}
+        {activeTab === 'smsing' && isHamza && <SMSingHistory />}
         {activeTab === 'gestion_acces' && isHamza && <GestionAcces currentUser={username} />}
       </main>
 

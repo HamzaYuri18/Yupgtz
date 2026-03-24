@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Send, MessageSquare, Phone, Languages } from 'lucide-react';
 import { getSession } from '../utils/auth';
+import { supabase } from '../lib/supabase';
 
 interface SMSModalProps {
   isOpen: boolean;
@@ -95,6 +96,18 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
       const result = await response.json();
 
       if (result.success) {
+        const session = getSession();
+        const currentUsername = session?.username || 'Inconnu';
+
+        await supabase.from('smsing').insert({
+          date_envoi: new Date().toISOString(),
+          description: message,
+          destinataire: cleanedPhone,
+          client: credit.assure,
+          numero_contrat: credit.numero_contrat,
+          utilisateur: currentUsername,
+        });
+
         setStatus({ type: 'success', message: 'SMS envoyé avec succès!' });
         setTimeout(() => {
           onClose();
