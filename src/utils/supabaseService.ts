@@ -1447,29 +1447,26 @@ const libererAttestationPourReutilisation = async (
       .maybeSingle();
 
     if (existingAttestation) {
-      if (existingAttestation.reutilise) {
-        const { error: updateError } = await supabase
-          .from('attestations_disponibles')
-          .update({
-            reutilise: false,
-            libere_le: new Date().toISOString(),
-            libere_par: suppressPar,
-            motif_liberation: motif,
-            ancien_numero_contrat: numeroContrat,
-            ancien_assure: assure,
-            reutilise_le: null,
-            reutilise_par: null,
-            nouveau_numero_contrat: null
-          })
-          .eq('id', existingAttestation.id);
+      const { error: updateError } = await supabase
+        .from('attestations_disponibles')
+        .update({
+          reutilise: false,
+          libere_le: new Date().toISOString(),
+          libere_par: suppressPar,
+          motif_liberation: motif,
+          ancien_numero_contrat: numeroContrat,
+          ancien_assure: assure,
+          reutilise_le: null,
+          reutilise_par: null,
+          nouveau_numero_contrat: null
+        })
+        .eq('id', existingAttestation.id);
 
-        if (updateError) {
-          console.error('Erreur mise à jour attestation:', updateError.message);
-        } else {
-          console.log(`✓ Attestation ${numeroAttestation} remise à disponible pour réutilisation`);
-        }
+      if (updateError) {
+        console.error('Erreur mise à jour attestation:', updateError.message);
       } else {
-        console.log(`✓ Attestation ${numeroAttestation} déjà disponible`);
+        const action = existingAttestation.reutilise ? 'remise' : 'mise à jour';
+        console.log(`✓ Attestation ${numeroAttestation} ${action} à disponible pour réutilisation`);
       }
     } else {
       const { error } = await supabase.from('attestations_disponibles').insert({
