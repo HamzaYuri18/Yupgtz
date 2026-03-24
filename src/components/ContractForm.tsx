@@ -300,6 +300,8 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     inputs.forEach(input => {
       input.value = '';
     });
+
+    loadAttestationsDisponibles();
   };
 
   // Fonction pour déterminer si les champs doivent être verrouillés

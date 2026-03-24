@@ -1440,19 +1440,52 @@ const libererAttestationPourReutilisation = async (
   suppressPar: string
 ) => {
   try {
-    const { error } = await supabase.from('attestations_disponibles').insert({
-      numero_attestation: numeroAttestation,
-      libere_par: suppressPar,
-      motif_liberation: motif,
-      ancien_numero_contrat: numeroContrat,
-      ancien_assure: assure,
-      reutilise: false
-    });
+    const { data: existingAttestation } = await supabase
+      .from('attestations_disponibles')
+      .select('id, reutilise')
+      .eq('numero_attestation', numeroAttestation)
+      .maybeSingle();
 
-    if (error) {
-      console.error('Erreur libération attestation:', error.message);
+    if (existingAttestation) {
+      if (existingAttestation.reutilise) {
+        const { error: updateError } = await supabase
+          .from('attestations_disponibles')
+          .update({
+            reutilise: false,
+            libere_le: new Date().toISOString(),
+            libere_par: suppressPar,
+            motif_liberation: motif,
+            ancien_numero_contrat: numeroContrat,
+            ancien_assure: assure,
+            reutilise_le: null,
+            reutilise_par: null,
+            nouveau_numero_contrat: null
+          })
+          .eq('id', existingAttestation.id);
+
+        if (updateError) {
+          console.error('Erreur mise à jour attestation:', updateError.message);
+        } else {
+          console.log(`✓ Attestation ${numeroAttestation} remise à disponible pour réutilisation`);
+        }
+      } else {
+        console.log(`✓ Attestation ${numeroAttestation} déjà disponible`);
+      }
     } else {
-      console.log(`✓ Attestation ${numeroAttestation} libérée et disponible pour réutilisation`);
+      const { error } = await supabase.from('attestations_disponibles').insert({
+        numero_attestation: numeroAttestation,
+        libere_par: suppressPar,
+        motif_liberation: motif,
+        ancien_numero_contrat: numeroContrat,
+        ancien_assure: assure,
+        reutilise: false
+      });
+
+      if (error) {
+        console.error('Erreur libération attestation:', error.message);
+      } else {
+        console.log(`✓ Attestation ${numeroAttestation} libérée et disponible pour réutilisation`);
+      }
     }
   } catch (err) {
     console.error('Erreur libération attestation:', err);
