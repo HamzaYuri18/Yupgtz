@@ -4,7 +4,7 @@ import { getCredits, updateCreditStatus } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
 import * as XLSX from 'xlsx';
 import SMSModal from './SMSModal';
-import CreditStatsDetailModal from './CreditStatsDetailModal';
+import CreditDetailsModal from './CreditDetailsModal';
 import CreditEvolutionModal from './CreditEvolutionModal';
 
 const CreditsList: React.FC = () => {
@@ -1152,7 +1152,7 @@ const CreditsList: React.FC = () => {
 
         {/* Stats Detail Modal */}
         {statsModalData && (
-          <CreditStatsDetailModal
+          <CreditDetailsModal
             isOpen={isStatsModalOpen}
             onClose={() => {
               setIsStatsModalOpen(false);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, TrendingUp, Calendar, DollarSign, Filter } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import CreditStatsDetailModal from './CreditStatsDetailModal';
 
 interface CreditEvolutionModalProps {
   isOpen: boolean;
@@ -20,6 +21,8 @@ const CreditEvolutionModal: React.FC<CreditEvolutionModalProps> = ({ isOpen, onC
   const [isLoading, setIsLoading] = useState(true);
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [detailModalType, setDetailModalType] = useState<'nouveaux' | 'payes'>('nouveaux');
 
   useEffect(() => {
     if (isOpen) {
@@ -195,6 +198,11 @@ const CreditEvolutionModal: React.FC<CreditEvolutionModalProps> = ({ isOpen, onC
     initializeDates();
   };
 
+  const openDetailModal = (type: 'nouveaux' | 'payes') => {
+    setDetailModalType(type);
+    setDetailModalOpen(true);
+  };
+
   const dernierIndex = quinzainesData.length - 1;
   const derniersNouveaux = dernierIndex >= 0 ? quinzainesData[dernierIndex].totalNouveauxCredits : 0;
   const derniersPayes = dernierIndex >= 0 ? quinzainesData[dernierIndex].totalCreditsPayes : 0;
@@ -270,7 +278,10 @@ const CreditEvolutionModal: React.FC<CreditEvolutionModalProps> = ({ isOpen, onC
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white rounded-lg p-4 shadow">
+            <button
+              onClick={() => openDetailModal('nouveaux')}
+              className="bg-white rounded-lg p-4 shadow hover:shadow-lg transition-shadow cursor-pointer text-left"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Total Nouveaux Crédits</p>
@@ -280,9 +291,12 @@ const CreditEvolutionModal: React.FC<CreditEvolutionModalProps> = ({ isOpen, onC
                 </div>
                 <TrendingUp className="w-8 h-8 text-orange-500" />
               </div>
-            </div>
+            </button>
 
-            <div className="bg-white rounded-lg p-4 shadow">
+            <button
+              onClick={() => openDetailModal('payes')}
+              className="bg-white rounded-lg p-4 shadow hover:shadow-lg transition-shadow cursor-pointer text-left"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Total Crédits Payés</p>
@@ -292,7 +306,7 @@ const CreditEvolutionModal: React.FC<CreditEvolutionModalProps> = ({ isOpen, onC
                 </div>
                 <TrendingUp className="w-8 h-8 text-green-500" />
               </div>
-            </div>
+            </button>
 
             <div className="bg-white rounded-lg p-4 shadow">
               <div className="flex items-center justify-between">
@@ -451,6 +465,14 @@ const CreditEvolutionModal: React.FC<CreditEvolutionModalProps> = ({ isOpen, onC
           </button>
         </div>
       </div>
+
+      <CreditStatsDetailModal
+        isOpen={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        type={detailModalType}
+        dateDebut={dateDebut}
+        dateFin={dateFin}
+      />
     </div>
   );
 };

@@ -1,73 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { X, CreditCard, User, Calendar, DollarSign } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 
-interface CreditStatsDetailModalProps {
+interface CreditDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  type: 'nouveaux' | 'payes';
-  dateDebut: string;
-  dateFin: string;
+  title: string;
+  credits: any[];
+  type: 'payes' | 'nonPayes' | 'echeances' | 'retard';
 }
 
-const CreditStatsDetailModal: React.FC<CreditStatsDetailModalProps> = ({
+const CreditDetailsModal: React.FC<CreditDetailsModalProps> = ({
   isOpen,
   onClose,
-  type,
-  dateDebut,
-  dateFin
+  title,
+  credits,
+  type
 }) => {
-  const [credits, setCredits] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    if (isOpen && dateDebut && dateFin) {
-      loadCredits();
-    }
-  }, [isOpen, type, dateDebut, dateFin]);
-
-  const loadCredits = async () => {
-    try {
-      setIsLoading(true);
-
-      const startDate = new Date(dateDebut);
-      const endDate = new Date(dateFin);
-      endDate.setHours(23, 59, 59, 999);
-
-      const { data: allCredits, error } = await supabase
-        .from('liste_credits')
-        .select('*');
-
-      if (error) {
-        console.error('Erreur chargement crédits:', error);
-        return;
-      }
-
-      let filteredCredits: any[] = [];
-
-      if (type === 'nouveaux') {
-        filteredCredits = allCredits?.filter(credit => {
-          const creditDate = new Date(credit.created_at);
-          return creditDate >= startDate && creditDate <= endDate;
-        }) || [];
-      } else if (type === 'payes') {
-        filteredCredits = allCredits?.filter(credit => {
-          if (credit.statut === 'Non payé' || !credit.date_paiement_effectif) {
-            return false;
-          }
-          const paiementDate = new Date(credit.date_paiement_effectif);
-          return paiementDate >= startDate && paiementDate <= endDate;
-        }) || [];
-      }
-
-      setCredits(filteredCredits);
-    } catch (error) {
-      console.error('Erreur:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   if (!isOpen) return null;
 
   const getStatusColor = (statut: string) => {
@@ -97,24 +45,27 @@ const CreditStatsDetailModal: React.FC<CreditStatsDetailModalProps> = ({
   };
 
   const getHeaderColor = () => {
-    return type === 'nouveaux'
-      ? 'bg-gradient-to-r from-orange-500 to-orange-600'
-      : 'bg-gradient-to-r from-green-500 to-green-600';
-  };
-
-  const getTitle = () => {
-    return type === 'nouveaux'
-      ? 'Détails des Nouveaux Crédits'
-      : 'Détails des Crédits Payés';
+    switch (type) {
+      case 'payes':
+        return 'bg-gradient-to-r from-green-500 to-green-600';
+      case 'nonPayes':
+        return 'bg-gradient-to-r from-orange-500 to-orange-600';
+      case 'echeances':
+        return 'bg-gradient-to-r from-blue-500 to-blue-600';
+      case 'retard':
+        return 'bg-gradient-to-r from-red-500 to-red-600';
+      default:
+        return 'bg-gradient-to-r from-gray-500 to-gray-600';
+    }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
         <div className={`${getHeaderColor()} text-white p-6 rounded-t-xl`}>
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold">{getTitle()}</h2>
+              <h2 className="text-2xl font-bold">{title}</h2>
               <p className="text-white text-opacity-90 mt-1">
                 {credits.length} crédit{credits.length > 1 ? 's' : ''} trouvé{credits.length > 1 ? 's' : ''}
               </p>
@@ -169,14 +120,7 @@ const CreditStatsDetailModal: React.FC<CreditStatsDetailModalProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-600">Chargement des données...</p>
-              </div>
-            </div>
-          ) : credits.length === 0 ? (
+          {credits.length === 0 ? (
             <div className="text-center py-12">
               <CreditCard className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500 text-lg">Aucun crédit trouvé</p>
@@ -239,9 +183,6 @@ const CreditStatsDetailModal: React.FC<CreditStatsDetailModalProps> = ({
                         <Calendar className="w-4 h-4 text-orange-600" />
                         <p className="text-xs text-gray-500 font-medium">Dates & Statut</p>
                       </div>
-                      <p className="text-sm text-gray-600">
-                        Créé le: {new Date(credit.created_at).toLocaleDateString('fr-FR')}
-                      </p>
                       {credit.date_paiement_prevue && (
                         <p className="text-sm text-gray-600">
                           Échéance: {new Date(credit.date_paiement_prevue).toLocaleDateString('fr-FR')}
@@ -278,4 +219,4 @@ const CreditStatsDetailModal: React.FC<CreditStatsDetailModalProps> = ({
   );
 };
 
-export default CreditStatsDetailModal;
+export default CreditDetailsModal;
