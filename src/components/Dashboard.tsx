@@ -186,7 +186,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
             {(isHamza || canAccess('attestations')) && navBtn('attestations', 'Sequences Attestation', <Award className="w-4 h-4" />)}
 
             {/* Gestion Acces et SMSing - Hamza uniquement */}
-            {isHamza && navBtn('smsing', 'SMSing', <MessageSquare className="w-4 h-4" />)}
+            {(isHamza || canAccess('smsing')) && navBtn('smsing', 'SMSing', <MessageSquare className="w-4 h-4" />)}
             {isHamza && navBtn('gestion_acces', 'Gestion Acces', <Shield className="w-4 h-4" />)}
           </div>
         </div>
@@ -211,7 +211,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
         {activeTab === 'commissions' && (isHamza || canAccess('commissions')) && <EtatCommissions />}
         {activeTab === 'salaires' && (isHamza || canAccess('salaires')) && <SalairesLoyer />}
         {activeTab === 'attestations' && (isHamza || canAccess('attestations')) && <AttestationSequences />}
-        {activeTab === 'smsing' && isHamza && <SMSingHistory />}
+        {activeTab === 'smsing' && (isHamza || canAccess('smsing')) && <SMSingHistory />}
         {activeTab === 'gestion_acces' && isHamza && <GestionAcces currentUser={username} />}
       </main>
 
