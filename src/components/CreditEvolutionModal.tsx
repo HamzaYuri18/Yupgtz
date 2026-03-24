@@ -102,14 +102,12 @@ const CreditEvolutionModal: React.FC<CreditEvolutionModalProps> = ({ isOpen, onC
       const endDate = new Date(dateFin);
       endDate.setHours(23, 59, 59, 999);
 
-      const { data: credits, error } = await supabase
+      const { data: allCredits, error: errorAll } = await supabase
         .from('liste_credits')
-        .select('*')
-        .gte('created_at', startDate.toISOString())
-        .lte('created_at', endDate.toISOString());
+        .select('*');
 
-      if (error) {
-        console.error('Erreur chargement données:', error);
+      if (errorAll) {
+        console.error('Erreur chargement données:', errorAll);
         return;
       }
 
@@ -120,20 +118,16 @@ const CreditEvolutionModal: React.FC<CreditEvolutionModalProps> = ({ isOpen, onC
         const qFin = new Date(quinzaine.dateFin);
         qFin.setHours(23, 59, 59, 999);
 
-        credits?.forEach(credit => {
+        allCredits?.forEach(credit => {
           const creditDate = new Date(credit.created_at);
-
           if (creditDate >= qDebut && creditDate <= qFin) {
             quinzaine.totalNouveauxCredits += credit.montant_credit || 0;
           }
 
-          if (credit.statut === 'Payé' || credit.statut === 'Payé en total' || credit.statut === 'Payé partiellement') {
-            if (credit.date_paiement_effectif) {
-              const paiementDate = new Date(credit.date_paiement_effectif);
-
-              if (paiementDate >= qDebut && paiementDate <= qFin) {
-                quinzaine.totalCreditsPayes += credit.paiement || 0;
-              }
+          if (credit.statut !== 'Non payé' && credit.date_paiement_effectif) {
+            const paiementDate = new Date(credit.date_paiement_effectif);
+            if (paiementDate >= qDebut && paiementDate <= qFin) {
+              quinzaine.totalCreditsPayes += credit.paiement || 0;
             }
           }
         });
