@@ -633,13 +633,13 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       if (contract.paymentMode === 'Cheque') {
         try {
           const chequeSuccess = await saveCheque({
-            contractNumber: contract.contractNumber,
-            insuredName: contract.insuredName,
-            premiumAmount: contract.premiumAmount,
+            numeroContrat: contract.contractNumber,
+            assure: contract.insuredName,
+            montant: contract.premiumAmount,
             numeroCheque: cleanedFormData.numeroCheque,
             banque: cleanedFormData.banque,
             dateEncaissementPrevue: cleanedFormData.dateEncaissementPrevue,
-            createdBy: username
+            creePar: username
           });
 
           if (!chequeSuccess) {
