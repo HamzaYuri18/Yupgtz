@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Send, MessageSquare, Phone, Languages } from 'lucide-react';
+import { X, Send, MessageSquare, Phone, Languages, AlertCircle, Calendar } from 'lucide-react';
 import { getSession } from '../utils/auth';
 import { supabase } from '../lib/supabase';
 
@@ -14,13 +14,39 @@ interface SMSModalProps {
   };
 }
 
+type SMSType = 'normal' | 'advanced';
+
 const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [status, setStatus] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const [language, setLanguage] = useState<'fr' | 'ar'>('fr');
   const [isMessageEditable, setIsMessageEditable] = useState(false);
+  const [dateLimite, setDateLimite] = useState('');
+  const [smsType, setSmsType] = useState<SMSType>('normal');
+  const [charCount, setCharCount] = useState(0);
+  const maxChars = 160;
+
+  const generateMessage = (lang: 'fr' | 'ar', type: SMSType, date: string) => {
+    const soldeFormatted = Math.abs(credit.solde).toLocaleString('fr-FR');
+
+    if (lang === 'fr') {
+      let msg = `Cher Assuré, Vous avez un montant impayé de ${soldeFormatted} DT.Nous vous prions de le payer avant le ${date}.`;
+      if (type === 'advanced') {
+        msg += ' Afin d\'eviter la suspension de votre contrat.';
+      }
+      msg += ' Merci pour votre comprehension. STAR 72486210';
+      return msg;
+    } else {
+      let msg = `عزيزي المؤمن، لديك مبلغ غير مدفوع قدره ${soldeFormatted} دت. نرجو منك دفعه قبل ${date}.`;
+      if (type === 'advanced') {
+        msg += ' لتجنب تعليق عقدك.';
+      }
+      msg += ' شكرا لفهمك. STAR 72486210';
+      return msg;
+    }
+  };
 
   useEffect(() => {
     if (isOpen && credit && credit.numero_contrat) {
@@ -31,34 +57,23 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
       const currentUsername = session?.username || '';
       setIsMessageEditable(currentUsername === 'Hamza');
 
-      const formatContractNumber = (contrat: string): string => {
-        if (contrat.length >= 4) {
-          const firstTwo = contrat.substring(0, 2);
-          const lastTwo = contrat.substring(contrat.length - 2);
-          return `${firstTwo}xx${lastTwo}`;
-        }
-        return contrat;
-      };
-
-      const formattedContract = formatContractNumber(credit.numero_contrat);
-
-      if (language === 'fr') {
-        setMessage(
-          `Bonjour ${credit.assure}, vous avez un solde impayé de ${Math.abs(credit.solde).toLocaleString('fr-FR')} DT pour le contrat ${formattedContract}. Merci de régulariser votre situation. Salutations. STAR SHIRI 72486210`
-        );
-      } else {
-        setMessage(
-          `مرحبا ${credit.assure}، لديك رصيد غير مدفوع قدره ${Math.abs(credit.solde).toLocaleString('fr-FR')} دت للعقد ${formattedContract}. يرجى تسوية وضعيتك. تحياتنا. STAR SHIRI 72486210`
-        );
-      }
+      setDateLimite('');
+      setSmsType('normal');
       setStatus(null);
+      setMessage('');
     }
-  }, [isOpen, credit, language]);
+  }, [isOpen, credit]);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (dateLimite) {
+      const newMessage = generateMessage(language, smsType, dateLimite);
+      setMessage(newMessage);
+      setCharCount(newMessage.length);
+    }
+  }, [dateLimite, language, smsType, credit.solde]);
 
   const handleSendSMS = async () => {
-    if (!phoneNumber || !message) {
+    if (!phoneNumber || !message || !dateLimite) {
       setStatus({ type: 'error', message: 'Veuillez remplir tous les champs' });
       return;
     }
@@ -69,8 +84,8 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
       return;
     }
 
-    if (message.length > 160) {
-      setStatus({ type: 'error', message: 'Le message ne peut pas dépasser 160 caractères' });
+    if (message.length > maxChars) {
+      setStatus({ type: 'error', message: `Le message dépasse la limite de ${maxChars} caractères` });
       return;
     }
 
@@ -106,24 +121,49 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
           client: credit.assure,
           numero_contrat: credit.numero_contrat,
           utilisateur: currentUsername,
+          statut: 'Envoyé',
         });
 
-        setStatus({ type: 'success', message: 'SMS envoyé avec succès!' });
+        setStatus({ type: 'success', message: 'SMS Envoyé' });
         setTimeout(() => {
           onClose();
         }, 2000);
       } else {
-        setStatus({ type: 'error', message: result.error || 'Erreur lors de l\'envoi du SMS' });
+        await supabase.from('smsing').insert({
+          date_envoi: new Date().toISOString(),
+          description: message,
+          destinataire: cleanedPhone,
+          client: credit.assure,
+          numero_contrat: credit.numero_contrat,
+          utilisateur: session?.username || 'Inconnu',
+          statut: 'Non envoyé',
+        });
+
+        setStatus({ type: 'error', message: 'Non envoyé' });
       }
     } catch (error) {
       console.error('Erreur:', error);
-      setStatus({ type: 'error', message: 'Erreur de connexion au serveur' });
+
+      const session = getSession();
+      await supabase.from('smsing').insert({
+        date_envoi: new Date().toISOString(),
+        description: message,
+        destinataire: cleanedPhone,
+        client: credit.assure,
+        numero_contrat: credit.numero_contrat,
+        utilisateur: session?.username || 'Inconnu',
+        statut: 'Non envoyé',
+      });
+
+      setStatus({ type: 'error', message: 'Non envoyé' });
     } finally {
       setIsSending(false);
     }
   };
 
-  const remainingChars = 160 - message.length;
+  if (!isOpen) return null;
+
+  const remainingChars = maxChars - charCount;
 
   return (
     <div
@@ -158,7 +198,7 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
             <p className="text-sm text-gray-600">
               <span className="font-semibold">Solde:</span>{' '}
               <span className="text-red-600 font-bold">
-                {credit.solde.toLocaleString('fr-FR')} DT
+                {Math.abs(credit.solde).toLocaleString('fr-FR')} DT
               </span>
             </p>
           </div>
@@ -178,6 +218,51 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
             <p className="text-xs text-gray-500 mt-1">
               Format: 8 chiffres ou avec préfixe international 216
             </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Calendar className="w-4 h-4 inline mr-2" />
+              Date limite de paiement
+            </label>
+            <input
+              type="date"
+              value={dateLimite}
+              onChange={(e) => setDateLimite(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-3">Type de SMS</label>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setSmsType('normal')}
+                className={`flex-1 p-3 rounded-lg border-2 transition-all ${
+                  smsType === 'normal'
+                    ? 'border-blue-600 bg-blue-50 text-blue-900 font-semibold'
+                    : 'border-gray-300 bg-white hover:border-gray-400'
+                }`}
+              >
+                Normal
+              </button>
+              <button
+                onClick={() => setSmsType('advanced')}
+                className={`flex-1 p-3 rounded-lg border-2 transition-all ${
+                  smsType === 'advanced'
+                    ? 'border-blue-600 bg-blue-50 text-blue-900 font-semibold'
+                    : 'border-gray-300 bg-white hover:border-gray-400'
+                }`}
+              >
+                Avancée
+              </button>
+            </div>
+            {smsType === 'advanced' && (
+              <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                Message incluant l'avertissement de suspension
+              </p>
+            )}
           </div>
 
           <div>
@@ -213,37 +298,38 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
             </div>
             <textarea
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e) => {
+                setMessage(e.target.value);
+                setCharCount(e.target.value.length);
+              }}
               rows={5}
-              maxLength={160}
-              disabled={!isMessageEditable}
-              className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${
+              maxLength={maxChars}
+              disabled={true}
+              className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-gray-100 cursor-not-allowed ${
                 language === 'ar' ? 'text-right' : 'text-left'
-              } ${!isMessageEditable ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-              placeholder="Votre message..."
+              }`}
+              placeholder="Le message sera généré automatiquement..."
               dir={language === 'ar' ? 'rtl' : 'ltr'}
             />
-            {!isMessageEditable && (
-              <p className="text-xs text-orange-600 mt-1">
-                Seul Hamza peut modifier le message
-              </p>
-            )}
             <div className="flex justify-between items-center mt-2">
-              <p className="text-xs text-gray-500">Limite: 160 caractères</p>
+              <p className="text-xs text-gray-500">Limite: {maxChars} caractères</p>
               <p className={`text-sm font-medium ${remainingChars < 20 ? 'text-red-600' : 'text-gray-600'}`}>
-                {remainingChars} caractères restants
+                {charCount}/{maxChars}
               </p>
             </div>
           </div>
 
           {status && (
             <div
-              className={`p-4 rounded-lg ${
+              className={`p-4 rounded-lg flex items-center gap-2 ${
                 status.type === 'success'
                   ? 'bg-green-100 text-green-800 border border-green-200'
-                  : 'bg-red-100 text-red-800 border border-red-200'
+                  : status.type === 'error'
+                  ? 'bg-red-100 text-red-800 border border-red-200'
+                  : 'bg-blue-100 text-blue-800 border border-blue-200'
               }`}
             >
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
               <p className="text-sm font-medium">{status.message}</p>
             </div>
           )}
@@ -258,7 +344,7 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
             </button>
             <button
               onClick={handleSendSMS}
-              disabled={isSending || !phoneNumber || !message}
+              disabled={isSending || !phoneNumber || !message || !dateLimite}
               className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center space-x-2"
             >
               {isSending ? (
