@@ -97,6 +97,11 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [upcomingTermes, setUpcomingTermes] = useState<any[]>([]);
   const [creditsDueToday, setCreditsDueToday] = useState<any[]>([]);
 
+  const [searchOverdue, setSearchOverdue] = useState('');
+  const [searchUnpaid, setSearchUnpaid] = useState('');
+  const [searchPaid, setSearchPaid] = useState('');
+  const [searchUpcoming, setSearchUpcoming] = useState('');
+
   const [showOverdueDetails, setShowOverdueDetails] = useState(false);
   const [showUnpaidDetails, setShowUnpaidDetails] = useState(false);
   const [showPaidDetails, setShowPaidDetails] = useState(false);
@@ -408,6 +413,47 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'
   ];
 
+  const normalizeString = (str: string): string => {
+    return str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  };
+
+  const fuzzyMatch = (search: string, target: string): boolean => {
+    const normalized = normalizeString(target);
+    const pattern = normalizeString(search);
+
+    if (pattern.length === 0) return true;
+
+    let patternIdx = 0;
+    for (let i = 0; i < normalized.length; i++) {
+      if (normalized[i] === pattern[patternIdx]) {
+        patternIdx++;
+      }
+      if (patternIdx === pattern.length) return true;
+    }
+    return false;
+  };
+
+  const filterTermes = (termes: any[], searchTerm: string): any[] => {
+    if (!searchTerm) return termes;
+
+    return termes.filter(terme =>
+      fuzzyMatch(searchTerm, terme.numero_contrat || '') ||
+      fuzzyMatch(searchTerm, terme.assure || '') ||
+      fuzzyMatch(searchTerm, terme.echeance || '')
+    );
+  };
+
+  const sortByEcheance = (termes: any[]): any[] => {
+    return [...termes].sort((a, b) => {
+      const dateA = new Date(a.echeance || '9999-12-31').getTime();
+      const dateB = new Date(b.echeance || '9999-12-31').getTime();
+      return dateA - dateB;
+    });
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -741,26 +787,23 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
               {(() => {
-                // Calculer les totaux uniquement pour les contrats du mois sélectionné
                 const totalPaid = calculateTotal(paidTermes);
                 const totalUnpaid = calculateTotal(unpaidTermes);
                 const totalUpcoming = calculateTotal(upcomingTermes);
                 const totalOverdue = calculateTotal(overdueTermes);
-                
-                // Pour les pourcentages: payés vs non payés = 100%
-                const totalTermesCount = paidTermes.length + unpaidTermes.length;
-                const paidPercentage = totalTermesCount > 0 ? (paidTermes.length / totalTermesCount) * 100 : 0;
-                const unpaidPercentage = totalTermesCount > 0 ? (unpaidTermes.length / totalTermesCount) * 100 : 0;
-                
-                // Pour les termes à venir et échus, on utilise leur propre total comme référence
-                const upcomingPercentage = totalUnpaid > 0 ? (totalUpcoming / totalUnpaid) * 100 : 0;
-                const overduePercentage = totalUnpaid > 0 ? (totalOverdue / totalUnpaid) * 100 : 0;
+
+                const totalAllTermes = paidTermes.length + unpaidTermes.length;
+
+                const overduePercentage = totalAllTermes > 0 ? (overdueTermes.length / totalAllTermes) * 100 : 0;
+                const unpaidPercentage = totalAllTermes > 0 ? (unpaidTermes.length / totalAllTermes) * 100 : 0;
+                const paidPercentage = totalAllTermes > 0 ? (paidTermes.length / totalAllTermes) * 100 : 0;
+                const upcomingPercentage = totalAllTermes > 0 ? (upcomingTermes.length / totalAllTermes) * 100 : 0;
 
                 return (
                   <>
                     <CircularStatCard
                       title="Termes Échus"
-                      subtitle="Non payés et en retard"
+                      subtitle="Échéances dépassées du mois"
                       count={overdueTermes.length}
                       total={totalOverdue}
                       percentage={overduePercentage}
@@ -771,7 +814,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     />
                     <CircularStatCard
                       title="Termes Non Payés"
-                      subtitle="Total dans le mois"
+                      subtitle="Du mois"
                       count={unpaidTermes.length}
                       total={totalUnpaid}
                       percentage={unpaidPercentage}
@@ -782,7 +825,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     />
                     <CircularStatCard
                       title="Échéances Proches"
-                      subtitle={`${daysFilter} prochains jours`}
+                      subtitle={`${daysFilter} prochains jours du mois`}
                       count={upcomingTermes.length}
                       total={totalUpcoming}
                       percentage={upcomingPercentage}
@@ -793,7 +836,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     />
                     <CircularStatCard
                       title="Termes Payés"
-                      subtitle="Total dans le mois"
+                      subtitle="Du mois"
                       count={paidTermes.length}
                       total={totalPaid}
                       percentage={paidPercentage}
@@ -825,10 +868,19 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
             {showOverdueDetails && overdueTermes.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-                <h3 className="text-xl font-bold text-red-600 mb-4 flex items-center gap-2">
-                  <AlertCircle className="w-6 h-6" />
-                  Détails des Termes Échus ({overdueTermes.length})
-                </h3>
+                <div className="mb-4">
+                  <h3 className="text-xl font-bold text-red-600 mb-4 flex items-center gap-2">
+                    <AlertCircle className="w-6 h-6" />
+                    Détails des Termes Échus ({filterTermes(overdueTermes, searchOverdue).length}/{overdueTermes.length})
+                  </h3>
+                  <input
+                    type="text"
+                    placeholder="Rechercher par N° contrat, nom assuré ou date d'échéance..."
+                    value={searchOverdue}
+                    onChange={(e) => setSearchOverdue(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                  />
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-red-50">
@@ -842,7 +894,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {overdueTermes.map((terme, index) => {
+                      {sortByEcheance(filterTermes(overdueTermes, searchOverdue)).map((terme, index) => {
                         const remarqueLower = terme.remarque?.toLowerCase() || '';
                         const bgColor = remarqueLower === 'vendu' ? 'bg-yellow-100 hover:bg-yellow-200' :
                                        remarqueLower === 'rt' ? 'bg-blue-100 hover:bg-blue-200' :
@@ -882,10 +934,19 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
             {showUnpaidDetails && unpaidTermes.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-                <h3 className="text-xl font-bold text-orange-600 mb-4 flex items-center gap-2">
-                  <Clock className="w-6 h-6" />
-                  Détails des Termes Non Payés ({unpaidTermes.length})
-                </h3>
+                <div className="mb-4">
+                  <h3 className="text-xl font-bold text-orange-600 mb-4 flex items-center gap-2">
+                    <Clock className="w-6 h-6" />
+                    Détails des Termes Non Payés ({filterTermes(unpaidTermes, searchUnpaid).length}/{unpaidTermes.length})
+                  </h3>
+                  <input
+                    type="text"
+                    placeholder="Rechercher par N° contrat, nom assuré ou date d'échéance..."
+                    value={searchUnpaid}
+                    onChange={(e) => setSearchUnpaid(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                  />
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-orange-50">
@@ -899,7 +960,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {unpaidTermes.map((terme, index) => {
+                      {sortByEcheance(filterTermes(unpaidTermes, searchUnpaid)).map((terme, index) => {
                         const remarqueLower = terme.remarque?.toLowerCase() || '';
                         const bgColor = remarqueLower === 'vendu' ? 'bg-yellow-100 hover:bg-yellow-200' :
                                        remarqueLower === 'rt' ? 'bg-blue-100 hover:bg-blue-200' :
@@ -939,10 +1000,19 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
             {showUpcomingDetails && upcomingTermes.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-                <h3 className="text-xl font-bold text-blue-600 mb-4 flex items-center gap-2">
-                  <Calendar className="w-6 h-6" />
-                  Détails des Échéances Proches ({upcomingTermes.length})
-                </h3>
+                <div className="mb-4">
+                  <h3 className="text-xl font-bold text-blue-600 mb-4 flex items-center gap-2">
+                    <Calendar className="w-6 h-6" />
+                    Détails des Échéances Proches ({filterTermes(upcomingTermes, searchUpcoming).length}/{upcomingTermes.length})
+                  </h3>
+                  <input
+                    type="text"
+                    placeholder="Rechercher par N° contrat, nom assuré ou date d'échéance..."
+                    value={searchUpcoming}
+                    onChange={(e) => setSearchUpcoming(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  />
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-blue-50">
@@ -956,7 +1026,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {upcomingTermes.map((terme, index) => {
+                      {sortByEcheance(filterTermes(upcomingTermes, searchUpcoming)).map((terme, index) => {
                         const remarqueLower = terme.remarque?.toLowerCase() || '';
                         const bgColor = remarqueLower === 'vendu' ? 'bg-yellow-100 hover:bg-yellow-200' :
                                        remarqueLower === 'rt' ? 'bg-blue-100 hover:bg-blue-200' :
@@ -996,10 +1066,19 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
             {showPaidDetails && paidTermes.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-                <h3 className="text-xl font-bold text-green-600 mb-4 flex items-center gap-2">
-                  <CheckCircle className="w-6 h-6" />
-                  Détails des Termes Payés ({paidTermes.length})
-                </h3>
+                <div className="mb-4">
+                  <h3 className="text-xl font-bold text-green-600 mb-4 flex items-center gap-2">
+                    <CheckCircle className="w-6 h-6" />
+                    Détails des Termes Payés ({filterTermes(paidTermes, searchPaid).length}/{paidTermes.length})
+                  </h3>
+                  <input
+                    type="text"
+                    placeholder="Rechercher par N° contrat, nom assuré ou date d'échéance..."
+                    value={searchPaid}
+                    onChange={(e) => setSearchPaid(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                  />
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-green-50">
@@ -1013,7 +1092,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {paidTermes.map((terme, index) => {
+                      {sortByEcheance(filterTermes(paidTermes, searchPaid)).map((terme, index) => {
                         const remarqueLower = terme.remarque?.toLowerCase() || '';
                         const bgColor = remarqueLower === 'vendu' ? 'bg-yellow-100 hover:bg-yellow-200' :
                                        remarqueLower === 'rt' ? 'bg-blue-100 hover:bg-blue-200' :
