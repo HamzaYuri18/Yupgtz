@@ -962,7 +962,7 @@ const CreditsList: React.FC = () => {
                     {(credit.solde !== null && credit.solde !== undefined && credit.solde !== 0) ? (
                       <div className="flex items-center space-x-2">
                         <span className={`font-bold ${
-                          credit.solde > 0 ? 'text-green-600' : 'text-red-600'
+                          credit.solde > 0 ? 'text-red-600' : 'text-green-600'
                         }`}>
                           {credit.solde.toLocaleString('fr-FR')}
                         </span>
@@ -1098,7 +1098,7 @@ const CreditsList: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-gray-500 font-medium">Solde</p>
-                  <p className={`font-semibold ${(hoveredCredit.solde || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <p className={`font-semibold ${(hoveredCredit.solde || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {(hoveredCredit.solde || 0).toLocaleString('fr-FR')} DT
                   </p>
                 </div>

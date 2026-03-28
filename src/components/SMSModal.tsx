@@ -43,7 +43,7 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
       if (type === 'advanced') {
         msg += ' لتجنب تعليق عقدك.';
       }
-      msg += ' شكرا لفهمك. STAR 72486210';
+      msg += ' شكرا لتفهمك. STAR 72486210';
       return msg;
     }
   };
@@ -229,7 +229,10 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
               type="date"
               value={dateLimite}
               onChange={(e) => setDateLimite(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                language === 'ar' ? 'text-right' : 'text-left'
+              }`}
+              dir={language === 'ar' ? 'rtl' : 'ltr'}
             />
           </div>
 
