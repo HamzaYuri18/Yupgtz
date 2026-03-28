@@ -30,16 +30,17 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
 
   const generateMessage = (lang: 'fr' | 'ar', type: SMSType, date: string) => {
     const soldeFormatted = Math.abs(credit.solde).toLocaleString('fr-FR');
+    const formattedDate = lang === 'fr' ? new Date(date).toLocaleDateString('fr-FR') : new Date(date).toLocaleDateString('ar-SA');
 
     if (lang === 'fr') {
-      let msg = `Cher Assuré, Vous avez un montant impayé de ${soldeFormatted} DT.Nous vous prions de le payer avant le ${date}.`;
+      let msg = `Cher Assuré, Vous avez un montant impayé de ${soldeFormatted} DT.Nous vous prions de le payer avant le ${formattedDate}.`;
       if (type === 'advanced') {
         msg += ' Afin d\'eviter la suspension de votre contrat.';
       }
       msg += ' Merci pour votre comprehension. STAR 72486210';
       return msg;
     } else {
-      let msg = `عزيزي المؤمن، لديك مبلغ غير مدفوع قدره ${soldeFormatted} دت. نرجو منك دفعه قبل ${date}.`;
+      let msg = `عزيزي المؤمن، لديك مبلغ غير مدفوع قدره ${soldeFormatted} دت. نرجو منك دفعه قبل ${formattedDate}.`;
       if (type === 'advanced') {
         msg += ' لتجنب تعليق عقدك.';
       }
