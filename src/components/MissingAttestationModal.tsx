@@ -32,7 +32,6 @@ export default function MissingAttestationModal({
 
   useEffect(() => {
     if (isOpen && missingNumbers.length > 0) {
-      console.log('Initializing attestations with:', missingNumbers);
       setAttestations(
         missingNumbers.map(num => ({
           numero: num,
@@ -44,8 +43,6 @@ export default function MissingAttestationModal({
       setCurrentIndex(0);
     }
   }, [isOpen, missingNumbers]);
-
-  console.log('Modal render:', { isOpen, missingNumbers, attestations });
 
   if (!isOpen) return null;
 
@@ -74,8 +71,6 @@ export default function MissingAttestationModal({
     const updated = [...attestations];
     updated[currentIndex].motif = motif;
     setAttestations(updated);
-    console.log('Motif changed to:', motif);
-    console.log('Updated attestations:', updated);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -111,10 +106,6 @@ export default function MissingAttestationModal({
   };
 
   const handleNext = async () => {
-    console.log('handleNext called');
-    console.log('Current attestation:', currentAttestation);
-    console.log('Current motif:', currentAttestation.motif);
-
     if (!currentAttestation.motif) {
       alert('Veuillez sélectionner un motif');
       return;
@@ -146,14 +137,6 @@ export default function MissingAttestationModal({
           }
         }
 
-        console.log('Recording attestation:', {
-          p_numero_attestation: attestation.numero,
-          p_motif: attestation.motif,
-          p_scan_url: scanUrl,
-          p_user: currentUser,
-          p_carnet_table: carnetTable
-        });
-
         const { error } = await supabase.rpc('record_missing_attestation', {
           p_numero_attestation: attestation.numero,
           p_motif: attestation.motif,
@@ -163,8 +146,7 @@ export default function MissingAttestationModal({
         });
 
         if (error) {
-          console.error('RPC Error for attestation', attestation.numero, ':', error);
-          throw error;
+          throw new Error(`Erreur pour l'attestation ${attestation.numero}: ${error.message}`);
         }
       }
 
@@ -172,7 +154,6 @@ export default function MissingAttestationModal({
       onComplete();
       onClose();
     } catch (error) {
-      console.error('Error recording missing attestations:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erreur lors de l\'enregistrement des attestations manquantes';
       alert(errorMessage);
     } finally {
@@ -311,10 +292,7 @@ export default function MissingAttestationModal({
                 </button>
               )}
               <button
-                onClick={() => {
-                  console.log('Button clicked!');
-                  handleNext();
-                }}
+                onClick={handleNext}
                 disabled={isSubmitting || !currentAttestation.motif}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold"
               >
