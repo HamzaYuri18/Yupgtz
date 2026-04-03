@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw, Edit, Save, X, MessageSquare, RotateCcw } from 'lucide-react';
+import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw, CreditCard as Edit, Save, X, MessageSquare, RotateCcw } from 'lucide-react';
 import {
   getRecentSessions,
   getSessionsByDateRange,
@@ -170,12 +170,12 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     });
 
     try {
-      // Récupérer uniquement les sessions non versées pour la date d'aujourd'hui
+      // Récupérer uniquement les sessions non versées et qui ne sont pas d'aujourd'hui
       const { data: sessionsToUpdate, error: fetchError } = await supabase
         .from('sessions')
-        .select('id, total_espece, charges, statut')
-        .eq('date_session', today)
-        .eq('statut', 'Non versé'); // Filtrer uniquement les sessions non versées
+        .select('id, total_espece, charges, statut, date_session')
+        .eq('statut', 'Non versé')
+        .neq('date_session', today); // Exclure les sessions d'aujourd'hui
 
       if (fetchError) {
         console.error('❌ Erreur récupération sessions:', fetchError);
