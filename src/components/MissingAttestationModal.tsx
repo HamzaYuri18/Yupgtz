@@ -146,6 +146,14 @@ export default function MissingAttestationModal({
           }
         }
 
+        console.log('Recording attestation:', {
+          p_numero_attestation: attestation.numero,
+          p_motif: attestation.motif,
+          p_scan_url: scanUrl,
+          p_user: currentUser,
+          p_carnet_table: carnetTable
+        });
+
         const { error } = await supabase.rpc('record_missing_attestation', {
           p_numero_attestation: attestation.numero,
           p_motif: attestation.motif,
@@ -154,7 +162,10 @@ export default function MissingAttestationModal({
           p_carnet_table: carnetTable
         });
 
-        if (error) throw error;
+        if (error) {
+          console.error('RPC Error for attestation', attestation.numero, ':', error);
+          throw error;
+        }
       }
 
       alert(`${attestations.length} attestation(s) manquante(s) enregistrée(s) avec succès`);
@@ -162,7 +173,8 @@ export default function MissingAttestationModal({
       onClose();
     } catch (error) {
       console.error('Error recording missing attestations:', error);
-      alert('Erreur lors de l\'enregistrement des attestations manquantes');
+      const errorMessage = error instanceof Error ? error.message : 'Erreur lors de l\'enregistrement des attestations manquantes';
+      alert(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
