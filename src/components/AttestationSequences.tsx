@@ -253,11 +253,10 @@ const AttestationSequences: React.FC = () => {
         const { count, error: countError } = await supabase
           .from(carnet.table_name)
           .select('*', { count: 'exact', head: true })
-          .not('date_impression', 'is', null);
+          .is('statut', null);
 
         if (!countError) {
-          const remaining_count = carnet.nombre_total - (count || 0);
-          remaining[carnet.table_name] = remaining_count;
+          remaining[carnet.table_name] = count || 0;
         }
       }
 
