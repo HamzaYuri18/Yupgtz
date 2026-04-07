@@ -535,6 +535,66 @@ const AttestationSequences: React.FC = () => {
     XLSX.writeFile(wb, `statistiques_carnets_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  const handleExportCarnetDetails = async () => {
+    if (!selectedCarnet) {
+      alert('Aucun carnet sélectionné');
+      return;
+    }
+
+    try {
+      const { data: allData, error } = await supabase
+        .from(selectedCarnet)
+        .select('*')
+        .order('numero_attestation', { ascending: true });
+
+      if (error) throw error;
+      if (!allData || allData.length === 0) {
+        alert('Aucune donnée à exporter pour ce carnet');
+        return;
+      }
+
+      const carnetInfo = carnets.find(c => c.table_name === selectedCarnet);
+
+      const dataToExport = allData.map(a => ({
+        'N° Attestation': a.numero_attestation,
+        'N° Contrat': a.numero_contrat || '',
+        'Assuré': a.assure || '',
+        'Date Impression': a.date_impression
+          ? new Date(a.date_impression).toLocaleString('fr-FR')
+          : '',
+        'Montant': a.montant || '',
+        'Statut': a.statut || 'Non utilisée',
+        'Date Création': a.created_at
+          ? new Date(a.created_at).toLocaleString('fr-FR')
+          : ''
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Carnet Complet');
+
+      const colWidths = [
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 30 },
+        { wch: 20 },
+        { wch: 12 },
+        { wch: 15 },
+        { wch: 20 }
+      ];
+      ws['!cols'] = colWidths;
+
+      const fileName = carnetInfo
+        ? `carnet_complet_${carnetInfo.nom_carnet}_${new Date().toISOString().split('T')[0]}.xlsx`
+        : `carnet_complet_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      XLSX.writeFile(wb, fileName);
+    } catch (error) {
+      console.error('Erreur export carnet:', error);
+      alert('Erreur lors de l\'export du carnet');
+    }
+  };
+
   const handleExport = () => {
     if (attestations.length === 0) {
       alert('Aucune attestation à exporter');
@@ -718,6 +778,14 @@ const AttestationSequences: React.FC = () => {
                 </option>
               ))}
             </select>
+            <button
+              onClick={handleExportCarnetDetails}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              title="Exporter tous les détails du carnet"
+            >
+              <Download className="w-4 h-4" />
+              Carnet Complet
+            </button>
             <button
               onClick={handleExport}
               className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
