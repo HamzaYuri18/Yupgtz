@@ -30,7 +30,7 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
 
   const generateMessage = (lang: 'fr' | 'ar', type: SMSType, date: string) => {
     const soldeFormatted = Math.abs(credit.solde).toLocaleString('fr-FR');
-    const formattedDate = lang === 'fr' ? new Date(date).toLocaleDateString('fr-FR') : new Date(date).toLocaleDateString('ar-SA');
+    const formattedDate = new Date(date).toLocaleDateString('fr-FR');
 
     if (lang === 'fr') {
       let msg = `Cher Assuré, Vous avez un montant impayé de ${soldeFormatted} DT.Nous vous prions de le payer avant le ${formattedDate}.`;
@@ -51,7 +51,6 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
 
   useEffect(() => {
     if (isOpen && credit && credit.numero_contrat) {
-      console.log('SMS Modal ouvert pour:', credit);
       setPhoneNumber(credit.telephone || '');
 
       const session = getSession();
@@ -143,8 +142,6 @@ const SMSModal: React.FC<SMSModalProps> = ({ isOpen, onClose, credit }) => {
         setStatus({ type: 'error', message: 'Non envoyé' });
       }
     } catch (error) {
-      console.error('Erreur:', error);
-
       const session = getSession();
       await supabase.from('smsing').insert({
         date_envoi: new Date().toISOString(),

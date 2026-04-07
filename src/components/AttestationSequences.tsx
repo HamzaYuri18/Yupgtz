@@ -40,6 +40,10 @@ interface CarnetStatistics {
   attestations_annulees: number;
 }
 
+interface CarnetRemaining {
+  [carnetName: string]: number;
+}
+
 const AttestationSequences: React.FC = () => {
   const [numeroDebut, setNumeroDebut] = useState('');
   const [numeroFin, setNumeroFin] = useState('');
@@ -64,6 +68,7 @@ const AttestationSequences: React.FC = () => {
     attestations_servies: 0,
     attestations_annulees: 0
   });
+  const [carnetRemaining, setCarnetRemaining] = useState<CarnetRemaining>({});
   const [currentUser, setCurrentUser] = useState<string>('');
 
   const itemsPerPage = 5;
@@ -79,6 +84,7 @@ const AttestationSequences: React.FC = () => {
     loadCarnets();
     loadStatistics();
     loadCarnetStatistics();
+    loadCarnetRemaining();
   }, []);
 
   useEffect(() => {
@@ -232,6 +238,35 @@ const AttestationSequences: React.FC = () => {
     }
   };
 
+  const loadCarnetRemaining = async () => {
+    try {
+      const { data: carnetsData, error: carnetsError } = await supabase
+        .from('carnets_attestations')
+        .select('table_name, nombre_total');
+
+      if (carnetsError) throw carnetsError;
+      if (!carnetsData) return;
+
+      const remaining: CarnetRemaining = {};
+
+      for (const carnet of carnetsData) {
+        const { count, error: countError } = await supabase
+          .from(carnet.table_name)
+          .select('*', { count: 'exact', head: true })
+          .not('date_impression', 'is', null);
+
+        if (!countError) {
+          const remaining_count = carnet.nombre_total - (count || 0);
+          remaining[carnet.table_name] = remaining_count;
+        }
+      }
+
+      setCarnetRemaining(remaining);
+    } catch (error) {
+      console.error('Erreur lors du chargement des attestations restantes:', error);
+    }
+  };
+
   const checkSequenceOverlap = async (debut: number, fin: number): Promise<{ exists: boolean; carnetName: string | null }> => {
     try {
       const { data, error } = await supabase
@@ -317,6 +352,7 @@ const AttestationSequences: React.FC = () => {
       setNombreAttestations(0);
       await loadCarnets();
       await loadStatistics();
+      await loadCarnetRemaining();
     } catch (error: any) {
       console.error('Erreur lors de l\'enregistrement:', error);
       if (error.code === '23505') {
@@ -365,6 +401,7 @@ const AttestationSequences: React.FC = () => {
       await loadAttestationsFromCarnet(selectedCarnet);
       await loadStatistics();
       await loadCarnetStatistics();
+      await loadCarnetRemaining();
     } catch (error) {
       console.error('Erreur lors de la réinitialisation de l\'attestation:', error);
       alert('Erreur lors de la réinitialisation de l\'attestation');
@@ -660,9 +697,16 @@ const AttestationSequences: React.FC = () => {
 
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-bold text-gray-800">
-            Dernières Attestations Imprimées (20)
-          </h3>
+          <div>
+            <h3 className="text-xl font-bold text-gray-800">
+              Dernières Attestations Imprimées (20)
+            </h3>
+            {selectedCarnet && carnetRemaining[selectedCarnet] !== undefined && (
+              <p className="text-sm text-gray-600 mt-2">
+                <span className="font-semibold text-blue-600">{carnetRemaining[selectedCarnet]}</span> attestation(s) restante(s) pour ce carnet
+              </p>
+            )}
+          </div>
           <div className="flex gap-2 items-center">
             <select
               value={selectedCarnet}
