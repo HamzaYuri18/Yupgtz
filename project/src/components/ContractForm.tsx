@@ -38,6 +38,8 @@ const determineBrancheForAffaire = (contractNumber: string): 'Auto' | 'Vie' | 'S
 };
 
 const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
+  const isHamza = username.toLowerCase() === 'hamza';
+
   const [formData, setFormData] = useState({
     type: 'Affaire' as 'Terme' | 'Affaire' | 'Avenant changement de véhicule' | 'Encaissement pour autre code',
     branch: 'Auto' as 'Auto' | 'Vie' | 'Santé' | 'IRDS',
@@ -48,6 +50,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     paymentType: 'Au comptant' as 'Au comptant' | 'Crédit',
     creditAmount: '',
     paymentDate: '',
+    customCreatedAt: '',
     numeroCheque: '',
     banque: '',
     dateEncaissementPrevue: '',
@@ -279,6 +282,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       paymentType: 'Au comptant',
       creditAmount: '',
       paymentDate: '',
+      customCreatedAt: '',
       numeroCheque: '',
       banque: '',
       dateEncaissementPrevue: '',
@@ -579,7 +583,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             premiumAmount: contract.premiumAmount,
             creditAmount: contract.creditAmount,
             branch: contract.branch,
-            paymentDate: sessionDate,
+            paymentDate: cleanedFormData.customCreatedAt || sessionDate,
             paymentMode: contract.paymentMode,
             paymentType: contract.paymentType,
             createdBy: username,
@@ -734,7 +738,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
     // VALIDATION POUR NUMERO D'ATTESTATION (obligatoire pour branche Auto sauf Terme avec Retour Contentieux)
     const isRetourContentieuxTerme = cleanedFormData.type === 'Terme' && isRetourContentieuxMode;
-    const isHamza = username.toLowerCase() === 'hamza';
 
     if (cleanedFormData.branch === 'Auto' && !isRetourContentieuxTerme) {
       if (!cleanedFormData.numeroAttestation || cleanedFormData.numeroAttestation.trim() === '') {
@@ -918,18 +921,19 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
         return;
       }
       
-      // Validation de la date pour crédit
-      if (!cleanedFormData.paymentDate) {
-        setMessage('❌ Veuillez saisir une date de paiement prévue pour le crédit');
-        setTimeout(() => setMessage(''), 5000);
-        return;
-      }
-      
-      const sessionDate = getSessionDate();
-      if (cleanedFormData.paymentDate <= sessionDate) {
-        setMessage('❌ La date de paiement prévue doit être postérieure à la date de session actuelle');
-        setTimeout(() => setMessage(''), 5000);
-        return;
+      // Validation de la date pour crédit — uniquement pour Hamza
+      if (isHamza) {
+        if (!cleanedFormData.paymentDate) {
+          setMessage('❌ Veuillez saisir une date de paiement prévue pour le crédit');
+          setTimeout(() => setMessage(''), 5000);
+          return;
+        }
+        const sessionDate = getSessionDate();
+        if (cleanedFormData.paymentDate <= sessionDate) {
+          setMessage('❌ La date de paiement prévue doit être postérieure à la date de session actuelle');
+          setTimeout(() => setMessage(''), 5000);
+          return;
+        }
       }
     } else {
       // Validation pour paiement au comptant
@@ -988,6 +992,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     paymentType: 'Au comptant',
                     creditAmount: '',
                     paymentDate: '',
+                    customCreatedAt: '',
                     numeroCheque: '',
                     banque: '',
                     dateEncaissementPrevue: '',
@@ -1457,24 +1462,26 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    Date de paiement prévue *
-                  </label>
-                  <input
-                    type="date"
-                    name="paymentDate"
-                    value={formData.paymentDate}
-                    onChange={handleInputChange}
-                    min={new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
-                    className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 bg-white"
-                    required
-                  />
-                  <p className="text-xs text-orange-600 mt-1">
-                    Date minimum: {new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR')}
-                  </p>
-                </div>
+                {isHamza && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                      <Calendar className="w-4 h-4 mr-2" />
+                      Date de paiement prévue *
+                    </label>
+                    <input
+                      type="date"
+                      name="paymentDate"
+                      value={formData.paymentDate}
+                      onChange={handleInputChange}
+                      min={new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                      className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 bg-white"
+                      required
+                    />
+                    <p className="text-xs text-orange-600 mt-1">
+                      Date minimum: {new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR')}
+                    </p>
+                  </div>
+                )}
               </div>
               
               {/* Récapitulatif du crédit */}
@@ -1499,6 +1506,27 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Champ Date de création — Hamza uniquement */}
+          {isHamza && (
+            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
+              <label className="block text-sm font-medium text-purple-800 mb-2 flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                Date de création (created_at)
+                <span className="text-xs font-normal text-purple-600">— Hamza uniquement</span>
+              </label>
+              <input
+                type="date"
+                name="customCreatedAt"
+                value={formData.customCreatedAt}
+                onChange={handleInputChange}
+                className="w-full p-3 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 bg-white"
+              />
+              <p className="text-xs text-purple-600 mt-1">
+                Laisser vide pour utiliser la date de session automatique
+              </p>
             </div>
           )}
 
