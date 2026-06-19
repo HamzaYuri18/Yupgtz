@@ -1,0 +1,789 @@
+import React, { useState, useEffect } from 'react';
+import { Calendar, CreditCard as Edit2, Check, X, DollarSign, TrendingDown, TrendingUp, Download, Filter } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import * as XLSX from 'xlsx';
+
+interface QuinzaineData {
+  id?: string;
+  annee: number;
+  mois: number;
+  quinzaine: number;
+  date_debut: string;
+  date_fin: string;
+  commission: number;
+  total_charges: number;
+  total_depenses: number;
+  commission_nette: number;
+  statut: 'Non Liquidée' | 'Liquidée';
+  date_liquidation: string | null;
+  banque: string | null;
+  mode_liquidation: 'Chèque' | 'Virement' | null;
+  remarques: string | null;
+}
+
+const EtatCommissions: React.FC = () => {
+  const [quinzaines, setQuinzaines] = useState<QuinzaineData[]>([]);
+  const [filteredQuinzaines, setFilteredQuinzaines] = useState<QuinzaineData[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editData, setEditData] = useState<Partial<QuinzaineData>>({});
+  const [commissionInput, setCommissionInput] = useState<string>('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [filterAnnee, setFilterAnnee] = useState<string>('all');
+  const [filterQuinzaine, setFilterQuinzaine] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const moisNoms = [
+    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+  ];
+
+  const getLastDayOfMonth = (year: number, month: number): number => {
+    return new Date(year, month, 0).getDate();
+  };
+
+  const generateQuinzaines = () => {
+    const quinzainesArray: QuinzaineData[] = [];
+    const startDate = new Date(2025, 8, 1);
+    const currentDate = new Date();
+
+    let year = startDate.getFullYear();
+    let month = startDate.getMonth() + 1;
+
+    while (year < currentDate.getFullYear() || (year === currentDate.getFullYear() && month <= currentDate.getMonth() + 1)) {
+      const lastDay = getLastDayOfMonth(year, month);
+
+      quinzainesArray.push({
+        annee: year,
+        mois: month,
+        quinzaine: 1,
+        date_debut: `${year}-${String(month).padStart(2, '0')}-01`,
+        date_fin: `${year}-${String(month).padStart(2, '0')}-15`,
+        commission: 0,
+        total_charges: 0,
+        total_depenses: 0,
+        commission_nette: 0,
+        statut: 'Non Liquidée',
+        date_liquidation: null,
+        banque: null,
+        mode_liquidation: null,
+        remarques: null
+      });
+
+      quinzainesArray.push({
+        annee: year,
+        mois: month,
+        quinzaine: 2,
+        date_debut: `${year}-${String(month).padStart(2, '0')}-16`,
+        date_fin: `${year}-${String(month).padStart(2, '0')}-${lastDay}`,
+        commission: 0,
+        total_charges: 0,
+        total_depenses: 0,
+        commission_nette: 0,
+        statut: 'Non Liquidée',
+        date_liquidation: null,
+        banque: null,
+        mode_liquidation: null,
+        remarques: null
+      });
+
+      month++;
+      if (month > 12) {
+        month = 1;
+        year++;
+      }
+    }
+
+    return quinzainesArray;
+  };
+
+  // Returns true if this quinzaine is >= Q2 Mai 2026 (the threshold for auto-adding Commissions table)
+  const isAfterThreshold = (annee: number, mois: number, quinzaine: number): boolean => {
+    if (annee > 2026) return true;
+    if (annee === 2026 && mois > 5) return true;
+    if (annee === 2026 && mois === 5 && quinzaine >= 2) return true;
+    return false;
+  };
+
+  const calculateCommissionsFromTable = async (dateDebut: string, dateFin: string): Promise<number> => {
+    try {
+      const { data, error } = await supabase
+        .from('Commissions')
+        .select('"Commission nette"')
+        .gte('Date', dateDebut)
+        .lte('Date', dateFin);
+
+      if (error) throw error;
+
+      return data?.reduce((sum, row) => sum + (Number(row['Commission nette']) || 0), 0) || 0;
+    } catch (err) {
+      console.error('Erreur calcul commissions from table:', err);
+      return 0;
+    }
+  };
+
+  const calculateCharges = async (dateDebut: string, dateFin: string): Promise<number> => {
+    try {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('charges')
+        .gte('date_session', dateDebut)
+        .lte('date_session', dateFin);
+
+      if (error) throw error;
+
+      return data?.reduce((sum, session) => sum + (Number(session.charges) || 0), 0) || 0;
+    } catch (err) {
+      console.error('Erreur calcul charges:', err);
+      return 0;
+    }
+  };
+
+  const calculateDepenses = async (dateDebut: string, dateFin: string): Promise<number> => {
+    try {
+      const excludedTypes = ['Versement Bancaire', 'A/S Ahlem', 'A/S Rouae', 'Reprise sur Avance Client'];
+
+      const { data, error } = await supabase
+        .from('depenses')
+        .select('montant, type_depense, statut_depense')
+        .gte('date_depense', dateDebut)
+        .lte('date_depense', dateFin);
+
+      if (error) throw error;
+
+      return data?.reduce((sum, depense) => {
+        if (excludedTypes.includes(depense.type_depense)) return sum;
+        if (depense.type_depense === 'Dépense Récupérable' && depense.statut_depense === 'Payé') return sum;
+        return sum + (Number(depense.montant) || 0);
+      }, 0) || 0;
+    } catch (err) {
+      console.error('Erreur calcul dépenses:', err);
+      return 0;
+    }
+  };
+
+  const loadQuinzaines = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const { error: updateError } = await supabase.rpc('update_etat_commission');
+      if (updateError) console.error('Erreur actualisation etat_commission:', updateError);
+
+      const generatedQuinzaines = generateQuinzaines();
+
+      const { data: existingData, error: fetchError } = await supabase
+        .from('etat_commission')
+        .select('*')
+        .order('annee', { ascending: false })
+        .order('mois', { ascending: false })
+        .order('quinzaine', { ascending: false });
+
+      if (fetchError) throw fetchError;
+
+      const enrichedQuinzaines = await Promise.all(
+        generatedQuinzaines.map(async (quinzaine) => {
+          const existing = existingData?.find(
+            e => e.annee === quinzaine.annee &&
+                 e.mois === quinzaine.mois &&
+                 e.quinzaine === quinzaine.quinzaine
+          );
+
+          if (existing) {
+            const baseCommission = Number(existing.commission) || 0;
+            let commissionFromTable = 0;
+            if (isAfterThreshold(quinzaine.annee, quinzaine.mois, quinzaine.quinzaine)) {
+              commissionFromTable = await calculateCommissionsFromTable(quinzaine.date_debut, quinzaine.date_fin);
+            }
+            const totalCommission = baseCommission + commissionFromTable;
+            const charges = Number(existing.total_charges) || 0;
+            const depenses = Number(existing.total_depenses) || 0;
+            return {
+              ...quinzaine,
+              id: existing.id,
+              commission: totalCommission,
+              total_charges: charges,
+              total_depenses: depenses,
+              commission_nette: totalCommission - charges - depenses,
+              statut: existing.statut,
+              date_liquidation: existing.date_liquidation,
+              banque: existing.banque,
+              mode_liquidation: existing.mode_liquidation,
+              remarques: existing.remarques
+            };
+          } else {
+            const charges = await calculateCharges(quinzaine.date_debut, quinzaine.date_fin);
+            const depenses = await calculateDepenses(quinzaine.date_debut, quinzaine.date_fin);
+            let commissionFromTable = 0;
+            if (isAfterThreshold(quinzaine.annee, quinzaine.mois, quinzaine.quinzaine)) {
+              commissionFromTable = await calculateCommissionsFromTable(quinzaine.date_debut, quinzaine.date_fin);
+            }
+            const totalCommission = quinzaine.commission + commissionFromTable;
+            return {
+              ...quinzaine,
+              commission: totalCommission,
+              total_charges: charges,
+              total_depenses: depenses,
+              commission_nette: totalCommission - charges - depenses
+            };
+          }
+        })
+      );
+
+      setQuinzaines(enrichedQuinzaines);
+    } catch (err) {
+      console.error('Erreur chargement quinzaines:', err);
+      setError('Erreur lors du chargement des quinzaines');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshCalculations = async (quinzaine: QuinzaineData) => {
+    const charges = await calculateCharges(quinzaine.date_debut, quinzaine.date_fin);
+    const depenses = await calculateDepenses(quinzaine.date_debut, quinzaine.date_fin);
+    let commissionFromTable = 0;
+    if (isAfterThreshold(quinzaine.annee, quinzaine.mois, quinzaine.quinzaine)) {
+      commissionFromTable = await calculateCommissionsFromTable(quinzaine.date_debut, quinzaine.date_fin);
+    }
+    const commission = (Number(quinzaine.commission) || 0) + commissionFromTable;
+    return {
+      total_charges: charges,
+      total_depenses: depenses,
+      commission_nette: commission - charges - depenses
+    };
+  };
+
+  const handleSave = async (quinzaine: QuinzaineData) => {
+    setError('');
+    setSuccess('');
+
+    try {
+      const calculations = await refreshCalculations({ ...quinzaine, ...editData });
+
+      const dataToSave = {
+        annee: quinzaine.annee,
+        mois: quinzaine.mois,
+        quinzaine: quinzaine.quinzaine,
+        date_debut: quinzaine.date_debut,
+        date_fin: quinzaine.date_fin,
+        commission: Number(editData.commission ?? quinzaine.commission),
+        total_charges: calculations.total_charges,
+        total_depenses: calculations.total_depenses,
+        commission_nette: calculations.commission_nette,
+        statut: editData.statut ?? quinzaine.statut,
+        date_liquidation: editData.date_liquidation ?? quinzaine.date_liquidation,
+        banque: editData.banque ?? quinzaine.banque,
+        mode_liquidation: editData.mode_liquidation ?? quinzaine.mode_liquidation,
+        remarques: editData.remarques ?? quinzaine.remarques,
+        updated_at: new Date().toISOString()
+      };
+
+      if (quinzaine.id) {
+        const { error: updateError } = await supabase
+          .from('etat_commission')
+          .update(dataToSave)
+          .eq('id', quinzaine.id);
+        if (updateError) throw updateError;
+      } else {
+        const { error: insertError } = await supabase
+          .from('etat_commission')
+          .insert([dataToSave]);
+        if (insertError) throw insertError;
+      }
+
+      setSuccess('Données enregistrées avec succès');
+      setEditingId(null);
+      setEditData({});
+      setCommissionInput('');
+      await loadQuinzaines();
+    } catch (err) {
+      console.error('Erreur sauvegarde:', err);
+      setError('Erreur lors de la sauvegarde');
+    }
+  };
+
+  const startEdit = (quinzaine: QuinzaineData) => {
+    setEditingId(quinzaine.id || `${quinzaine.annee}-${quinzaine.mois}-${quinzaine.quinzaine}`);
+    setCommissionInput(quinzaine.commission > 0 ? String(quinzaine.commission) : '');
+    setEditData({
+      commission: quinzaine.commission,
+      statut: quinzaine.statut,
+      date_liquidation: quinzaine.date_liquidation,
+      banque: quinzaine.banque,
+      mode_liquidation: quinzaine.mode_liquidation,
+      remarques: quinzaine.remarques
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditData({});
+    setCommissionInput('');
+  };
+
+  const exportCharges = async (quinzaine: QuinzaineData) => {
+    try {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('*')
+        .gte('date_session', quinzaine.date_debut)
+        .lte('date_session', quinzaine.date_fin)
+        .order('date_session', { ascending: false });
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        setError('Aucune charge trouvée pour cette période');
+        return;
+      }
+
+      const exportData = data.map(session => ({
+        'Date Session': session.date_session,
+        'Charges': Number(session.charges) || 0,
+        'Statut': session.statut,
+        'Remarques': session.remarques || ''
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Charges');
+      XLSX.writeFile(wb, `charges_${moisNoms[quinzaine.mois - 1]}_${quinzaine.annee}_Q${quinzaine.quinzaine}.xlsx`);
+    } catch (err) {
+      console.error('Erreur export charges:', err);
+      setError('Erreur lors de l\'export des charges');
+    }
+  };
+
+  const exportDepenses = async (quinzaine: QuinzaineData) => {
+    try {
+      const excludedTypes = ['Versement Bancaire', 'A/S Ahlem', 'A/S Rouae', 'Reprise sur Avance Client'];
+
+      const { data, error } = await supabase
+        .from('depenses')
+        .select('*')
+        .gte('date_depense', quinzaine.date_debut)
+        .lte('date_depense', quinzaine.date_fin)
+        .order('date_depense', { ascending: false });
+
+      if (error) throw error;
+
+      const filteredData = data?.filter(d => {
+        if (excludedTypes.includes(d.type_depense)) return false;
+        if (d.type_depense === 'Dépense Récupérable' && d.statut_depense === 'Payé') return false;
+        return true;
+      });
+
+      if (!filteredData || filteredData.length === 0) {
+        setError('Aucune dépense trouvée pour cette période');
+        return;
+      }
+
+      const exportData = filteredData.map(depense => ({
+        'Date Dépense': depense.date_depense,
+        'Type Dépense': depense.type_depense,
+        'Montant': Number(depense.montant) || 0,
+        'Statut': depense.statut_depense || '',
+        'Client': depense.Client || '',
+        'Numéro Contrat': depense.Numero_Contrat || '',
+        'Créé Par': depense.cree_par
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Dépenses');
+      XLSX.writeFile(wb, `depenses_${moisNoms[quinzaine.mois - 1]}_${quinzaine.annee}_Q${quinzaine.quinzaine}.xlsx`);
+    } catch (err) {
+      console.error('Erreur export dépenses:', err);
+      setError('Erreur lors de l\'export des dépenses');
+    }
+  };
+
+  const applyFilters = () => {
+    let filtered = [...quinzaines];
+
+    if (filterAnnee !== 'all') filtered = filtered.filter(q => q.annee === Number(filterAnnee));
+    if (filterQuinzaine !== 'all') filtered = filtered.filter(q => q.quinzaine === Number(filterQuinzaine));
+
+    filtered.sort((a, b) => {
+      if (b.annee !== a.annee) return b.annee - a.annee;
+      if (b.mois !== a.mois) return b.mois - a.mois;
+      return b.quinzaine - a.quinzaine;
+    });
+
+    setFilteredQuinzaines(filtered);
+    setCurrentPage(1);
+  };
+
+  useEffect(() => { loadQuinzaines(); }, []);
+  useEffect(() => { applyFilters(); }, [quinzaines, filterAnnee, filterQuinzaine]);
+
+  const formatCurrency = (amount: number) => {
+    return `${new Intl.NumberFormat('fr-FR', {
+      minimumFractionDigits: 3,
+      maximumFractionDigits: 3
+    }).format(amount)} DT`;
+  };
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('fr-FR');
+  };
+
+  const isEditing = (quinzaine: QuinzaineData) => {
+    return editingId === (quinzaine.id || `${quinzaine.annee}-${quinzaine.mois}-${quinzaine.quinzaine}`);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center">
+              <Calendar className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Etat des Commissions</h2>
+              <p className="text-sm text-gray-500">Gestion des commissions par quinzaine</p>
+            </div>
+          </div>
+          <button
+            onClick={loadQuinzaines}
+            disabled={loading}
+            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:bg-gray-400"
+          >
+            {loading ? 'Chargement...' : 'Actualiser'}
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">{error}</div>
+        )}
+        {success && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-600 text-sm">{success}</div>
+        )}
+
+        <div className="flex items-center space-x-4 mt-4">
+          <div className="flex items-center space-x-2">
+            <Filter className="w-4 h-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Filtres:</span>
+          </div>
+
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Année</label>
+            <select
+              value={filterAnnee}
+              onChange={(e) => setFilterAnnee(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+            >
+              <option value="all">Toutes les années</option>
+              {Array.from(new Set(quinzaines.map(q => q.annee))).sort((a, b) => b - a).map(annee => (
+                <option key={annee} value={annee}>{annee}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Quinzaine</label>
+            <select
+              value={filterQuinzaine}
+              onChange={(e) => setFilterQuinzaine(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+            >
+              <option value="all">Toutes les quinzaines</option>
+              <option value="1">Quinzaine 1</option>
+              <option value="2">Quinzaine 2</option>
+            </select>
+          </div>
+
+          {(filterAnnee !== 'all' || filterQuinzaine !== 'all') && (
+            <button
+              onClick={() => { setFilterAnnee('all'); setFilterQuinzaine('all'); }}
+              className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Réinitialiser
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+        <div className="bg-white rounded-xl shadow-md border-l-4 border-sky-500 p-6">
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <DollarSign className="w-7 h-7 text-sky-600" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Total Commissions</p>
+              <p className="text-2xl font-bold text-sky-700">
+                {formatCurrency(filteredQuinzaines.reduce((sum, q) => sum + q.commission, 0))}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-md border-l-4 border-rose-500 p-6">
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 bg-rose-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <TrendingDown className="w-7 h-7 text-rose-600" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Total Charges</p>
+              <p className="text-2xl font-bold text-rose-700">
+                {formatCurrency(filteredQuinzaines.reduce((sum, q) => sum + q.total_charges, 0))}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-md border-l-4 border-amber-500 p-6">
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <TrendingDown className="w-7 h-7 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Total Dépenses</p>
+              <p className="text-2xl font-bold text-amber-700">
+                {formatCurrency(filteredQuinzaines.reduce((sum, q) => sum + q.total_depenses, 0))}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-md border-l-4 border-emerald-500 p-6">
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <TrendingUp className="w-7 h-7 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Total Net</p>
+              <p className={`text-2xl font-bold ${filteredQuinzaines.reduce((sum, q) => sum + q.commission_nette, 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                {formatCurrency(filteredQuinzaines.reduce((sum, q) => sum + q.commission_nette, 0))}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Période</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Commission</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Charges</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Dépenses</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Commission Nette</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Statut</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Liquidation</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Remarques</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredQuinzaines.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((quinzaine) => (
+                <tr key={`${quinzaine.annee}-${quinzaine.mois}-${quinzaine.quinzaine}`} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 text-sm">
+                    <div className="font-medium text-gray-900">
+                      {moisNoms[quinzaine.mois - 1]} {quinzaine.annee} - Q{quinzaine.quinzaine}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {formatDate(quinzaine.date_debut)} au {formatDate(quinzaine.date_fin)}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-right">
+                    {isEditing(quinzaine) ? (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={commissionInput}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(',', '.');
+                          if (raw === '' || /^-?\d*\.?\d*$/.test(raw)) {
+                            setCommissionInput(e.target.value.replace(',', '.'));
+                            const parsed = parseFloat(raw);
+                            if (!isNaN(parsed)) {
+                              setEditData({ ...editData, commission: parsed });
+                            }
+                          }
+                        }}
+                        onBlur={() => {
+                          const parsed = parseFloat(commissionInput);
+                          if (!isNaN(parsed)) {
+                            setCommissionInput(String(parsed));
+                            setEditData({ ...editData, commission: parsed });
+                          } else {
+                            setCommissionInput('0');
+                            setEditData({ ...editData, commission: 0 });
+                          }
+                        }}
+                        placeholder="0.000"
+                        className="w-32 px-2 py-1 border border-emerald-400 rounded text-right focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-emerald-50 font-medium"
+                      />
+                    ) : (
+                      <span className="font-semibold text-blue-600">{formatCurrency(quinzaine.commission)}</span>
+                    )}
+                  </td>
+                  <td
+                    className="px-4 py-3 text-sm text-right cursor-pointer hover:bg-red-50 transition-colors group"
+                    onClick={() => exportCharges(quinzaine)}
+                    title="Cliquer pour exporter les détails"
+                  >
+                    <div className="flex items-center justify-end space-x-1">
+                      <span className="font-semibold text-red-600">{formatCurrency(quinzaine.total_charges)}</span>
+                      <Download className="w-3 h-3 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </td>
+                  <td
+                    className="px-4 py-3 text-sm text-right cursor-pointer hover:bg-orange-50 transition-colors group"
+                    onClick={() => exportDepenses(quinzaine)}
+                    title="Cliquer pour exporter les détails"
+                  >
+                    <div className="flex items-center justify-end space-x-1">
+                      <span className="font-semibold text-orange-600">{formatCurrency(quinzaine.total_depenses)}</span>
+                      <Download className="w-3 h-3 text-orange-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-right">
+                    <span className={`font-bold ${quinzaine.commission_nette >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(quinzaine.commission_nette)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    {isEditing(quinzaine) ? (
+                      <select
+                        value={editData.statut ?? quinzaine.statut}
+                        onChange={(e) => setEditData({ ...editData, statut: e.target.value as 'Non Liquidée' | 'Liquidée' })}
+                        className="w-full px-2 py-1 border border-gray-300 rounded"
+                      >
+                        <option value="Non Liquidée">Non Liquidée</option>
+                        <option value="Liquidée">Liquidée</option>
+                      </select>
+                    ) : (
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        quinzaine.statut === 'Liquidée' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                      }`}>
+                        {quinzaine.statut}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    {isEditing(quinzaine) && (editData.statut === 'Liquidée' || quinzaine.statut === 'Liquidée') ? (
+                      <div className="space-y-2">
+                        <input
+                          type="date"
+                          value={editData.date_liquidation ?? quinzaine.date_liquidation ?? ''}
+                          onChange={(e) => setEditData({ ...editData, date_liquidation: e.target.value })}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Banque"
+                          value={editData.banque ?? quinzaine.banque ?? ''}
+                          onChange={(e) => setEditData({ ...editData, banque: e.target.value })}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                        />
+                        <select
+                          value={editData.mode_liquidation ?? quinzaine.mode_liquidation ?? ''}
+                          onChange={(e) => setEditData({ ...editData, mode_liquidation: e.target.value as 'Chèque' | 'Virement' })}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                        >
+                          <option value="">Mode</option>
+                          <option value="Chèque">Chèque</option>
+                          <option value="Virement">Virement</option>
+                        </select>
+                      </div>
+                    ) : quinzaine.statut === 'Liquidée' ? (
+                      <div className="text-xs">
+                        <div className="font-medium">{formatDate(quinzaine.date_liquidation)}</div>
+                        <div className="text-gray-600">{quinzaine.banque}</div>
+                        <div className="text-gray-600">{quinzaine.mode_liquidation}</div>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 text-xs">-</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    {isEditing(quinzaine) ? (
+                      <textarea
+                        value={editData.remarques ?? quinzaine.remarques ?? ''}
+                        onChange={(e) => setEditData({ ...editData, remarques: e.target.value })}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                        rows={2}
+                        placeholder="Remarques..."
+                      />
+                    ) : (
+                      <span className="text-gray-600 text-xs">{quinzaine.remarques || '-'}</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    <div className="flex items-center justify-center space-x-2">
+                      {isEditing(quinzaine) ? (
+                        <>
+                          <button
+                            onClick={() => handleSave(quinzaine)}
+                            className="p-1 text-green-600 hover:bg-green-50 rounded"
+                            title="Enregistrer"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            title="Annuler"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => startEdit(quinzaine)}
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                          title="Modifier"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {filteredQuinzaines.length > itemsPerPage && (
+          <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200">
+            <p className="text-sm text-gray-600">
+              Affichage {(currentPage - 1) * itemsPerPage + 1} – {Math.min(currentPage * itemsPerPage, filteredQuinzaines.length)} sur {filteredQuinzaines.length} quinzaines
+            </p>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 font-medium rounded-lg transition-colors"
+              >
+                ← Précédent
+              </button>
+              <span className="px-4 py-2 bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-lg">
+                {currentPage} / {Math.ceil(filteredQuinzaines.length / itemsPerPage)}
+              </span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(Math.ceil(filteredQuinzaines.length / itemsPerPage), p + 1))}
+                disabled={currentPage === Math.ceil(filteredQuinzaines.length / itemsPerPage)}
+                className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 font-medium rounded-lg transition-colors"
+              >
+                Suivant →
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default EtatCommissions;

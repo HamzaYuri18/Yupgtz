@@ -1,0 +1,1566 @@
+import React, { useState, useEffect } from 'react';
+import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, DollarSign, X, Tag } from 'lucide-react';
+import { getAvailableMonths, getUnpaidTermesByMonth, getOverdueUnpaidTermes, getPaidTermesByMonth, getUpcomingTermes, getCreditsDueToday, getTotalTermesByMonth, getRemarqueStatsByMonth, getRemarqueContractsByMonth, RemarqueMonthStats } from '../utils/supabaseService';
+import { getSessionDate } from '../utils/auth';
+import { isSessionClosed } from '../utils/sessionService';
+import { supabase } from '../lib/supabase';
+import TaskManagement from './TaskManagement';
+import RemarqueModal from './RemarqueModal';
+
+interface CircularStatCardProps {
+  title: string;
+  subtitle: string;
+  count: number;
+  total: number;
+  percentage: number;
+  color: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  showAmount?: boolean;
+}
+
+const CircularStatCard: React.FC<CircularStatCardProps> = ({
+  title,
+  subtitle,
+  count,
+  total,
+  percentage,
+  color,
+  icon,
+  onClick,
+  showAmount = true
+}) => {
+  const radius = 60;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+  return (
+    <div
+      onClick={onClick}
+      className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-[1.02]"
+    >
+      <div className="flex flex-col items-center">
+        <div className="relative w-32 h-32 mb-3">
+          <svg className="transform -rotate-90 w-32 h-32">
+            <circle
+              cx="64"
+              cy="64"
+              r={radius}
+              stroke="#E5E7EB"
+              strokeWidth="10"
+              fill="none"
+            />
+            <circle
+              cx="64"
+              cy="64"
+              r={radius}
+              stroke={color}
+              strokeWidth="10"
+              fill="none"
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+              className="transition-all duration-1000 ease-out"
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <div style={{ color }} className="mb-0.5">
+              {icon}
+            </div>
+            <span className="text-2xl font-bold text-gray-900">{count}</span>
+            <span className="text-xs text-gray-500">{percentage.toFixed(0)}%</span>
+          </div>
+        </div>
+        <h3 className="text-base font-semibold text-gray-900 mb-0.5 text-center">{title}</h3>
+        <p className="text-xs text-gray-500 mb-2 text-center">{subtitle}</p>
+        {showAmount && (
+          <div className="text-xl font-bold" style={{ color }}>{total.toFixed(2)} DT</div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+interface HomePageProps {
+  username?: string;
+}
+
+const HomePage: React.FC<HomePageProps> = ({ username }) => {
+  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [selectedYear, setSelectedYear] = useState<string>('');
+  const [availableYears, setAvailableYears] = useState<string[]>([]);
+
+  const [overdueTermes, setOverdueTermes] = useState<any[]>([]);
+  const [unpaidTermes, setUnpaidTermes] = useState<any[]>([]);
+  const [paidTermes, setPaidTermes] = useState<any[]>([]);
+  const [upcomingTermes, setUpcomingTermes] = useState<any[]>([]);
+  const [creditsDueToday, setCreditsDueToday] = useState<any[]>([]);
+  const [totalTermes, setTotalTermes] = useState<number>(0);
+
+  const [searchOverdue, setSearchOverdue] = useState('');
+  const [searchUnpaid, setSearchUnpaid] = useState('');
+  const [searchPaid, setSearchPaid] = useState('');
+  const [searchUpcoming, setSearchUpcoming] = useState('');
+
+  const [showOverdueDetails, setShowOverdueDetails] = useState(false);
+  const [showUnpaidDetails, setShowUnpaidDetails] = useState(false);
+  const [showPaidDetails, setShowPaidDetails] = useState(false);
+  const [showUpcomingDetails, setShowUpcomingDetails] = useState(false);
+  const [showCreditsDueTodayDetails, setShowCreditsDueTodayDetails] = useState(false);
+
+  const [daysFilter, setDaysFilter] = useState<number>(7);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showCreditAlert, setShowCreditAlert] = useState(false);
+  const [showTaskAlert, setShowTaskAlert] = useState(false);
+  const [sessionClosed, setSessionClosed] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
+  const [sessionTasks, setSessionTasks] = useState<any[]>([]);
+  const [totalUncompletedTasks, setTotalUncompletedTasks] = useState<number>(0);
+
+  const [isRemarqueModalOpen, setIsRemarqueModalOpen] = useState(false);
+  const [selectedContrat, setSelectedContrat] = useState<any>(null);
+  const [hasShownCreditAlert, setHasShownCreditAlert] = useState(false);
+  const [hasShownTaskAlert, setHasShownTaskAlert] = useState(false);
+  const [showPromoBanner, setShowPromoBanner] = useState(false);
+  const [promoImageIndex, setPromoImageIndex] = useState(0);
+  const [remarqueStats, setRemarqueStats] = useState<RemarqueMonthStats[]>([]);
+  const [remarqueStatsLoading, setRemarqueStatsLoading] = useState(false);
+  const [remarqueDrillDown, setRemarqueDrillDown] = useState<{ month: string; type: string; contracts: any[] } | null>(null);
+  const [remarqueDrillLoading, setRemarqueDrillLoading] = useState(false);
+
+  const isHamza = username?.toLowerCase() === 'hamza';
+
+  useEffect(() => {
+    loadAvailableMonths();
+    checkSessionStatus();
+    loadCreditsDueToday();
+    loadSessionTasks();
+    loadTotalUncompletedTasks();
+  }, []);
+
+  useEffect(() => {
+    if (availableMonths.length > 0) {
+      loadRemarqueStats();
+    }
+  }, [availableMonths]);
+
+  useEffect(() => {
+    if (selectedMonth && selectedYear) {
+      loadTermesData();
+    }
+  }, [selectedMonth, selectedYear, daysFilter]);
+
+
+  useEffect(() => {
+    if (creditsDueToday.length > 0 && !showCreditAlert && !hasShownCreditAlert) {
+      setShowCreditAlert(true);
+      setHasShownCreditAlert(true);
+    }
+  }, [creditsDueToday, showCreditAlert, hasShownCreditAlert]);
+
+  useEffect(() => {
+    if (sessionTasks.length > 0 && !showTaskAlert && !showCreditAlert && !hasShownTaskAlert) {
+      setTimeout(() => {
+        setShowTaskAlert(true);
+        setHasShownTaskAlert(true);
+      }, 500);
+    }
+  }, [sessionTasks, showCreditAlert, showTaskAlert, hasShownTaskAlert]);
+
+  useEffect(() => {
+    if (showCreditAlert || showTaskAlert) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showCreditAlert, showTaskAlert]);
+
+  useEffect(() => {
+    if (!showPromoBanner) return;
+    const t = setInterval(() => setPromoImageIndex(i => (i + 1) % 3), 3000);
+    return () => clearInterval(t);
+  }, [showPromoBanner]);
+
+  const openPromoBanner = () => {
+    setPromoImageIndex(0);
+    setShowPromoBanner(true);
+  };
+
+  const checkSessionStatus = async () => {
+    if (sessionDate) {
+      const closed = await isSessionClosed(sessionDate);
+      setSessionClosed(closed);
+
+      // Vérifier si une session existe déjà pour cette date
+      const { data } = await supabase
+        .from('sessions')
+        .select('id')
+        .eq('date_session', sessionDate)
+        .maybeSingle();
+
+      if (data) {
+        setCurrentSessionId(data.id);
+      } else {
+        // Créer une nouvelle session vide si elle n'existe pas
+        console.log('📅 Aucune session trouvée pour', sessionDate, '- Création automatique...');
+
+        const { data: newSession, error } = await supabase
+          .from('sessions')
+          .insert({
+            date_session: sessionDate,
+            total_espece: 0,
+            cree_par: username,
+            statut: 'Non versé',
+            session_fermee: false
+          })
+          .select('id')
+          .maybeSingle();
+
+        if (error) {
+          console.error('❌ Erreur création session automatique:', error);
+        } else if (newSession) {
+          console.log('✅ Session créée automatiquement:', newSession.id);
+          setCurrentSessionId(newSession.id);
+        }
+      }
+    }
+  };
+
+  const loadAvailableMonths = async () => {
+    const months = await getAvailableMonths();
+    setAvailableMonths(months);
+
+    const years = Array.from(new Set(
+      months.map(month => {
+        const parts = month.split(' ');
+        return parts[1];
+      }).filter(year => year)
+    )).sort((a, b) => parseInt(b) - parseInt(a));
+
+    setAvailableYears(years);
+
+    const monthsFR = [
+      'janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin',
+      'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'
+    ];
+
+    const sessionDate = getSessionDate();
+
+    let currentMonthIndex: number;
+    let currentYear: string;
+
+    if (sessionDate) {
+      const dateParts = sessionDate.split('-');
+      currentYear = dateParts[0];
+      currentMonthIndex = parseInt(dateParts[1], 10) - 1;
+    } else {
+      const now = new Date();
+      currentYear = now.getFullYear().toString();
+      currentMonthIndex = now.getMonth();
+    }
+
+    const currentMonthName = monthsFR[currentMonthIndex];
+    const currentMonthYear = `${currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1)} ${currentYear}`;
+
+    console.log('Date de session:', sessionDate);
+    console.log('Mois calculé:', currentMonthYear);
+    console.log('Mois disponibles:', months);
+
+    setSelectedYear(currentYear);
+
+    if (months.includes(currentMonthYear)) {
+      setSelectedMonth(currentMonthYear);
+      console.log('Mois trouvé et sélectionné:', currentMonthYear);
+    } else if (months.length > 0) {
+      const currentYearMonths = months.filter(m => m.includes(currentYear));
+      if (currentYearMonths.length > 0) {
+        setSelectedMonth(currentYearMonths[0]);
+        console.log('Mois de l\'année en cours sélectionné:', currentYearMonths[0]);
+      } else {
+        setSelectedMonth(months[0]);
+        const parts = months[0].split(' ');
+        if (parts[1]) {
+          setSelectedYear(parts[1]);
+        }
+        console.log('Premier mois disponible sélectionné:', months[0]);
+      }
+    }
+  };
+
+  const loadTermesData = async () => {
+    setIsLoading(true);
+    try {
+      const monthParts = selectedMonth.toLowerCase().split(' ');
+      if (monthParts.length < 2) return;
+
+      const monthName = monthParts[0];
+      const year = monthParts[1];
+
+      const [overdue, unpaid, paid, upcoming, total] = await Promise.all([
+        getOverdueUnpaidTermes(monthName, year),
+        getUnpaidTermesByMonth(monthName, year),
+        getPaidTermesByMonth(monthName, year),
+        getUpcomingTermes(monthName, year, daysFilter),
+        getTotalTermesByMonth(monthName, year)
+      ]);
+
+      setOverdueTermes(overdue);
+      setUnpaidTermes(unpaid);
+      setPaidTermes(paid);
+      setUpcomingTermes(upcoming);
+      setTotalTermes(total);
+    } catch (error) {
+      console.error('Erreur lors du chargement des données:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadCreditsDueToday = async () => {
+    try {
+      const sessionDate = getSessionDate();
+      if (sessionDate) {
+        const credits = await getCreditsDueToday(sessionDate);
+        setCreditsDueToday(credits);
+        console.log('Crédits à payer chargés:', credits.length);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des crédits à payer aujourd\'hui:', error);
+    }
+  };
+
+  const loadSessionTasks = async () => {
+    try {
+      const sessionDate = getSessionDate();
+      if (sessionDate) {
+        const { data, error } = await supabase
+          .from('taches')
+          .select('*')
+          .eq('date_effectuer', sessionDate)
+          .eq('statut', 'A faire')
+          .order('degre_importance', { ascending: true });
+
+        if (error) throw error;
+        setSessionTasks(data || []);
+      } else {
+        setSessionTasks([]);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des tâches de la session:', error);
+    }
+  };
+
+  const loadTotalUncompletedTasks = async () => {
+    try {
+      const { count, error } = await supabase
+        .from('taches')
+        .select('*', { count: 'exact', head: true })
+        .eq('statut', 'A faire');
+
+      if (error) throw error;
+      setTotalUncompletedTasks(count || 0);
+    } catch (error) {
+      console.error('Erreur lors du chargement du nombre total de tâches non accomplies:', error);
+    }
+  };
+
+
+  const loadRemarqueStats = async () => {
+    setRemarqueStatsLoading(true);
+    try {
+      const stats = await getRemarqueStatsByMonth(availableMonths);
+      setRemarqueStats(stats.filter(s => s.total > 0));
+    } catch (error) {
+      console.error('Erreur chargement stats remarques:', error);
+    } finally {
+      setRemarqueStatsLoading(false);
+    }
+  };
+
+  const handleRemarqueCellClick = async (month: string, type: string, count: number) => {
+    if (count === 0) return;
+    if (remarqueDrillDown?.month === month && remarqueDrillDown?.type === type) {
+      setRemarqueDrillDown(null);
+      return;
+    }
+    setRemarqueDrillLoading(true);
+    const contracts = await getRemarqueContractsByMonth(month, type);
+    setRemarqueDrillDown({ month, type, contracts });
+    setRemarqueDrillLoading(false);
+  };
+
+  const calculateTotal = (termes: any[]) => {
+    return termes.reduce((sum, terme) => {
+      const prime = parseFloat(terme.prime);
+      return sum + (isNaN(prime) ? 0 : prime);
+    }, 0);
+  };
+
+  const calculateCreditTotal = (credits: any[]) => {
+    return credits.reduce((sum, credit) => {
+      const solde = parseFloat(credit.solde || credit.montant_credit);
+      return sum + (isNaN(solde) ? 0 : solde);
+    }, 0);
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('fr-FR');
+  };
+
+  const handleTermeClick = (terme: any, overrideMonth?: string) => {
+    const monthRef = overrideMonth || selectedMonth;
+    const monthParts = monthRef.split(' ');
+    const mois = monthParts.length >= 2
+      ? `${monthParts[1]}-${String(monthsFR.indexOf(monthParts[0].toLowerCase()) + 1).padStart(2, '0')}`
+      : '';
+
+    setSelectedContrat({
+      police: terme.numero_contrat,
+      mois: mois,
+      terme: 0,
+      remarque: terme.remarque,
+      date_remarque: terme.date_remarque,
+      user_remarque: terme.user_remarque,
+      echeance: terme.echeance,
+      assure: terme.assure,
+      prime: terme.prime,
+      id: terme.id,
+      table_mois: monthRef
+    });
+    setIsRemarqueModalOpen(true);
+  };
+
+  const monthsFR = [
+    'janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin',
+    'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'
+  ];
+
+  const normalizeString = (str: string): string => {
+    return str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  };
+
+  const fuzzyMatch = (search: string, target: string): boolean => {
+    const normalized = normalizeString(target);
+    const pattern = normalizeString(search);
+
+    if (pattern.length === 0) return true;
+
+    let patternIdx = 0;
+    for (let i = 0; i < normalized.length; i++) {
+      if (normalized[i] === pattern[patternIdx]) {
+        patternIdx++;
+      }
+      if (patternIdx === pattern.length) return true;
+    }
+    return false;
+  };
+
+  const filterTermes = (termes: any[], searchTerm: string): any[] => {
+    if (!searchTerm) return termes;
+
+    return termes.filter(terme =>
+      fuzzyMatch(searchTerm, terme.numero_contrat || '') ||
+      fuzzyMatch(searchTerm, terme.assure || '') ||
+      fuzzyMatch(searchTerm, terme.echeance || '')
+    );
+  };
+
+  const sortByEcheance = (termes: any[]): any[] => {
+    return [...termes].sort((a, b) => {
+      const dateA = new Date(a.echeance || '9999-12-31').getTime();
+      const dateB = new Date(b.echeance || '9999-12-31').getTime();
+      return dateA - dateB;
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
+                  <TrendingUp className="w-6 h-6 text-white" />
+                </div>
+                <span className="text-xl font-bold text-gray-800">Dashboard</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3 px-4 py-2 bg-gray-100 rounded-lg">
+                <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+                  {username?.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-sm font-medium text-gray-700">{username}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {showCreditAlert && creditsDueToday.length > 0 && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[9999] p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowCreditAlert(false);
+                if (sessionTasks.length > 0 && !hasShownTaskAlert) {
+                  setTimeout(() => {
+                    setShowTaskAlert(true);
+                    setHasShownTaskAlert(true);
+                  }, 300);
+                } else {
+                  setTimeout(openPromoBanner, 300);
+                }
+              }
+            }}
+          >
+            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-6 rounded-t-2xl flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-10 h-10" />
+                  <div>
+                    <h2 className="text-2xl font-bold">RAPPEL URGENT</h2>
+                    <p className="text-red-100">Crédits à payer aujourd'hui</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowCreditAlert(false);
+                    if (sessionTasks.length > 0 && !hasShownTaskAlert) {
+                      setTimeout(() => {
+                        setShowTaskAlert(true);
+                        setHasShownTaskAlert(true);
+                      }, 300);
+                    } else {
+                      setTimeout(openPromoBanner, 300);
+                    }
+                  }}
+                  className="p-2 hover:bg-red-800 rounded-lg transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="p-6">
+                <div className="mb-4 text-center">
+                  <p className="text-lg text-gray-700">
+                    <span className="font-bold text-red-600">{creditsDueToday.length}</span> crédit(s) à régler aujourd'hui
+                  </p>
+                  {isHamza && (
+                    <p className="text-2xl font-bold text-red-600 mt-2">
+                      Total: {calculateCreditTotal(creditsDueToday).toFixed(2)} DT
+                    </p>
+                  )}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-red-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Branche</th>
+                        {isHamza && (
+                          <>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Crédit (DT)</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Solde (DT)</th>
+                          </>
+                        )}
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date Prévue</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {creditsDueToday.map((credit, index) => (
+                        <tr key={index} className="hover:bg-red-50">
+                          <td className="px-4 py-3 text-sm font-medium">{credit.numero_contrat}</td>
+                          <td className="px-4 py-3 text-sm">{credit.assure}</td>
+                          <td className="px-4 py-3 text-sm">{credit.branche}</td>
+                          {isHamza && (
+                            <>
+                              <td className="px-4 py-3 text-sm font-semibold">{parseFloat(credit.montant_credit).toFixed(2)}</td>
+                              <td className="px-4 py-3 text-sm text-red-600 font-semibold">
+                                {parseFloat(credit.solde || credit.montant_credit).toFixed(2)}
+                              </td>
+                            </>
+                          )}
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                              credit.statut === 'Non payé' ? 'bg-red-100 text-red-800' :
+                              credit.statut === 'Payé partiellement' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-green-100 text-green-800'
+                            }`}>
+                              {credit.statut}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-red-600 font-medium">
+                            {formatDate(credit.date_paiement_prevue)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-6 flex justify-center">
+                  <button
+                    onClick={() => {
+                      setShowCreditAlert(false);
+                      if (sessionTasks.length > 0 && !hasShownTaskAlert) {
+                        setTimeout(() => {
+                          setShowTaskAlert(true);
+                          setHasShownTaskAlert(true);
+                        }, 300);
+                      } else {
+                        setTimeout(openPromoBanner, 300);
+                      }
+                    }}
+                    className="px-8 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors"
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showTaskAlert && sessionTasks.length > 0 && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[9999] p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowTaskAlert(false);
+                setTimeout(openPromoBanner, 300);
+              }
+            }}
+          >
+            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-2xl flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-10 h-10" />
+                  <div>
+                    <h2 className="text-2xl font-bold">RAPPEL DES TACHES NON ACCOMPLIES</h2>
+                    <p className="text-blue-100">{sessionTasks.length} tâche(s) en attente</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setShowTaskAlert(false); setTimeout(openPromoBanner, 300); }}
+                  className="p-2 hover:bg-blue-700 rounded-lg transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="p-6">
+                <div className="mb-4 text-center">
+                  <p className="text-lg text-gray-700">
+                    Vous avez <span className="font-bold text-blue-600">{sessionTasks.length}</span> tâche(s) non accomplie(s) à effectuer aujourd'hui
+                  </p>
+                  <p className="text-sm text-gray-600 mt-2">
+                    Veuillez consulter ces tâches et les accomplir dès que possible
+                  </p>
+                  <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-base text-red-800 font-semibold">
+                      Total de toutes les tâches non accomplies : <span className="text-2xl">{totalUncompletedTasks}</span>
+                    </p>
+                  </div>
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-sm text-amber-800 font-medium">
+                      Important : Assurez-vous de marquer chaque tâche comme "Accomplie" une fois terminée
+                    </p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-blue-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Titre</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Description</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Importance</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Chargé à</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {sessionTasks.map((task, index) => (
+                        <tr key={index} className="hover:bg-blue-50">
+                          <td className="px-4 py-3 text-sm font-medium">{task.titre}</td>
+                          <td className="px-4 py-3 text-sm">{task.description || 'N/A'}</td>
+                          <td className="px-4 py-3 text-sm text-blue-600 font-medium">
+                            {formatDate(task.date_effectuer)}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                              task.degre_importance === 'Urgent' ? 'bg-red-100 text-red-800' :
+                              task.degre_importance === 'Haute' ? 'bg-orange-100 text-orange-800' :
+                              task.degre_importance === 'Moyenne' ? 'bg-blue-100 text-blue-800' :
+                              'bg-green-100 text-green-800'
+                            }`}>
+                              {task.degre_importance}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
+                              {task.statut}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium">{task.utilisateur_charge}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-6 flex justify-center">
+                  <button
+                    onClick={() => { setShowTaskAlert(false); setTimeout(openPromoBanner, 300); }}
+                    className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold transition-colors"
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Tableau de bord des Termes</h1>
+          <p className="text-sm text-gray-600">Vue d'ensemble des paiements et échéances</p>
+        </div>
+
+        <div className="mb-6">
+          <TaskManagement
+            currentUser={username || 'Inconnu'}
+            sessionId={currentSessionId}
+            isSessionClosed={sessionClosed}
+            onTaskUpdate={() => {
+              loadTotalUncompletedTasks();
+              loadSessionTasks();
+            }}
+          />
+        </div>
+
+
+        {/* Statistiques Remarques par Mois */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex items-center gap-2 mb-5">
+            <Tag className="w-5 h-5 text-teal-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Contrats par Remarque — par Mois</h2>
+            <span className="text-xs text-gray-400 ml-1">(cliquer sur un chiffre pour voir les détails)</span>
+          </div>
+
+          {remarqueStatsLoading ? (
+            <div className="flex justify-center py-6">
+              <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : remarqueStats.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-4">Aucune donnée de remarque disponible.</p>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Mois</th>
+                      <th className="px-4 py-3 text-center font-semibold text-yellow-700">
+                        <span className="inline-flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block"></span>
+                          Vendu
+                        </span>
+                      </th>
+                      <th className="px-4 py-3 text-center font-semibold text-blue-700">
+                        <span className="inline-flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-full bg-blue-400 inline-block"></span>
+                          RT
+                        </span>
+                      </th>
+                      <th className="px-4 py-3 text-center font-semibold text-emerald-700">
+                        <span className="inline-flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span>
+                          Payé par Note de Crédit
+                        </span>
+                      </th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-700">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {remarqueStats.map((stat, i) => (
+                      <tr key={i} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 font-medium text-gray-900">{stat.month}</td>
+                        <td className="px-4 py-3 text-center">
+                          {stat.vendu > 0 ? (
+                            <button
+                              onClick={() => handleRemarqueCellClick(stat.month, 'vendu', stat.vendu)}
+                              className={`inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full font-semibold transition-all hover:scale-110 hover:shadow-md ${
+                                remarqueDrillDown?.month === stat.month && remarqueDrillDown?.type === 'vendu'
+                                  ? 'bg-yellow-400 text-yellow-900 ring-2 ring-yellow-500'
+                                  : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                              }`}
+                            >
+                              {stat.vendu}
+                            </button>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {stat.rt > 0 ? (
+                            <button
+                              onClick={() => handleRemarqueCellClick(stat.month, 'rt', stat.rt)}
+                              className={`inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full font-semibold transition-all hover:scale-110 hover:shadow-md ${
+                                remarqueDrillDown?.month === stat.month && remarqueDrillDown?.type === 'rt'
+                                  ? 'bg-blue-400 text-blue-900 ring-2 ring-blue-500'
+                                  : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                              }`}
+                            >
+                              {stat.rt}
+                            </button>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {stat.payeParNoteCredit > 0 ? (
+                            <button
+                              onClick={() => handleRemarqueCellClick(stat.month, 'payé par note de credit', stat.payeParNoteCredit)}
+                              className={`inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full font-semibold transition-all hover:scale-110 hover:shadow-md ${
+                                remarqueDrillDown?.month === stat.month && remarqueDrillDown?.type === 'payé par note de credit'
+                                  ? 'bg-emerald-400 text-emerald-900 ring-2 ring-emerald-500'
+                                  : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                              }`}
+                            >
+                              {stat.payeParNoteCredit}
+                            </button>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 font-bold">
+                            {stat.total}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-gray-50 border-t-2 border-gray-300 font-bold">
+                      <td className="px-4 py-3 text-gray-700">Total</td>
+                      <td className="px-4 py-3 text-center text-yellow-800">
+                        {remarqueStats.reduce((s, r) => s + r.vendu, 0)}
+                      </td>
+                      <td className="px-4 py-3 text-center text-blue-800">
+                        {remarqueStats.reduce((s, r) => s + r.rt, 0)}
+                      </td>
+                      <td className="px-4 py-3 text-center text-emerald-800">
+                        {remarqueStats.reduce((s, r) => s + r.payeParNoteCredit, 0)}
+                      </td>
+                      <td className="px-4 py-3 text-center text-gray-800">
+                        {remarqueStats.reduce((s, r) => s + r.total, 0)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* Drill-down detail panel */}
+              {remarqueDrillLoading && (
+                <div className="flex justify-center py-6 mt-4">
+                  <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              )}
+
+              {!remarqueDrillLoading && remarqueDrillDown && (
+                <div className="mt-5 border-t border-gray-200 pt-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-base font-semibold text-gray-800">
+                      Détails —{' '}
+                      <span className={`capitalize ${
+                        remarqueDrillDown.type === 'vendu' ? 'text-yellow-700' :
+                        remarqueDrillDown.type === 'rt' ? 'text-blue-700' :
+                        'text-emerald-700'
+                      }`}>
+                        {remarqueDrillDown.type === 'payé par note de credit' ? 'Payé par Note de Crédit' :
+                         remarqueDrillDown.type === 'vendu' ? 'Vendu' : 'RT'}
+                      </span>
+                      {' '}· {remarqueDrillDown.month}
+                      <span className="text-gray-500 font-normal ml-2">({remarqueDrillDown.contracts.length} contrat{remarqueDrillDown.contracts.length > 1 ? 's' : ''})</span>
+                    </h3>
+                    <button
+                      onClick={() => setRemarqueDrillDown(null)}
+                      className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto rounded-lg border border-gray-200">
+                    <table className="w-full text-sm">
+                      <thead className={`${
+                        remarqueDrillDown.type === 'vendu' ? 'bg-yellow-50' :
+                        remarqueDrillDown.type === 'rt' ? 'bg-blue-50' :
+                        'bg-emerald-50'
+                      }`}>
+                        <tr>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-700">N° Contrat</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Assuré</th>
+                          {isHamza && <th className="px-4 py-3 text-left font-semibold text-gray-700">Prime (DT)</th>}
+                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Échéance</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Téléphone</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Statut</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {remarqueDrillDown.contracts.map((c, idx) => (
+                          <tr
+                            key={idx}
+                            className={`transition-colors cursor-pointer ${
+                              remarqueDrillDown.type === 'vendu' ? 'hover:bg-yellow-50' :
+                              remarqueDrillDown.type === 'rt' ? 'hover:bg-blue-50' :
+                              'hover:bg-emerald-50'
+                            }`}
+                            onClick={() => handleTermeClick(c, remarqueDrillDown.month)}
+                            title="Cliquez pour modifier la remarque"
+                          >
+                            <td className="px-4 py-3 font-medium text-gray-900">{c.numero_contrat}</td>
+                            <td className="px-4 py-3 text-gray-700">{c.assure}</td>
+                            {isHamza && <td className="px-4 py-3 text-gray-700">{parseFloat(c.prime || 0).toFixed(2)}</td>}
+                            <td className="px-4 py-3 text-gray-700">{formatDate(c.echeance)}</td>
+                            <td className="px-4 py-3 text-gray-700">{c.num_tel || c.num_tel_2 || 'N/A'}</td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
+                                c.statut === 'Payé' ? 'bg-green-100 text-green-800' :
+                                c.statut === 'Non payé' ? 'bg-red-100 text-red-800' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {c.statut || 'N/A'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Filter className="w-5 h-5 text-blue-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Filtres</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Année
+              </label>
+              <select
+                value={selectedYear}
+                onChange={(e) => {
+                  setSelectedYear(e.target.value);
+                  setSelectedMonth('');
+                }}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+              >
+                <option value="">Choisir une année...</option>
+                {availableYears.map((year, index) => (
+                  <option key={index} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Mois
+              </label>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                disabled={!selectedYear}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+              >
+                <option value="">Choisir un mois...</option>
+                {availableMonths
+                  .filter(month => month.includes(selectedYear))
+                  .map((month, index) => (
+                    <option key={index} value={month}>{month}</option>
+                  ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Échéances à venir (jours)
+              </label>
+              <select
+                value={daysFilter}
+                onChange={(e) => setDaysFilter(parseInt(e.target.value))}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+              >
+                <option value={7}>7 jours</option>
+                <option value={15}>15 jours</option>
+                <option value={30}>30 jours</option>
+              </select>
+            </div>
+          </div>
+
+        </div>
+
+        {isLoading ? (
+          <div className="flex justify-center items-center py-12">
+            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : selectedMonth ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5 mb-6">
+              {(() => {
+                const totalPaid = calculateTotal(paidTermes);
+                const totalUnpaid = calculateTotal(unpaidTermes);
+                const totalUpcoming = calculateTotal(upcomingTermes);
+                const totalOverdue = calculateTotal(overdueTermes);
+
+                const totalAllTermes = totalTermes > 0 ? totalTermes : paidTermes.length + unpaidTermes.length;
+
+                const overduePercentage = totalAllTermes > 0 ? (overdueTermes.length / totalAllTermes) * 100 : 0;
+                const unpaidPercentage = totalAllTermes > 0 ? (unpaidTermes.length / totalAllTermes) * 100 : 0;
+                const paidPercentage = totalAllTermes > 0 ? (paidTermes.length / totalAllTermes) * 100 : 0;
+                const upcomingPercentage = totalAllTermes > 0 ? (upcomingTermes.length / totalAllTermes) * 100 : 0;
+
+                return (
+                  <>
+                    <CircularStatCard
+                      title="Total Termes du Mois"
+                      subtitle="Tous les termes du mois"
+                      count={totalAllTermes}
+                      total={totalPaid + totalUnpaid}
+                      percentage={100}
+                      color="#6B7280"
+                      icon={<TrendingUp className="w-7 h-7" />}
+                      onClick={() => {}}
+                      showAmount={isHamza}
+                    />
+                    <CircularStatCard
+                      title="Termes Échus"
+                      subtitle="Échéances dépassées du mois"
+                      count={overdueTermes.length}
+                      total={totalOverdue}
+                      percentage={overduePercentage}
+                      color="#EF4444"
+                      icon={<AlertCircle className="w-7 h-7" />}
+                      onClick={() => setShowOverdueDetails(!showOverdueDetails)}
+                      showAmount={isHamza}
+                    />
+                    <CircularStatCard
+                      title="Termes Non Payés"
+                      subtitle="Du mois"
+                      count={unpaidTermes.length}
+                      total={totalUnpaid}
+                      percentage={unpaidPercentage}
+                      color="#F97316"
+                      icon={<Clock className="w-7 h-7" />}
+                      onClick={() => setShowUnpaidDetails(!showUnpaidDetails)}
+                      showAmount={isHamza}
+                    />
+                    <CircularStatCard
+                      title="Échéances Proches"
+                      subtitle={`${daysFilter} prochains jours du mois`}
+                      count={upcomingTermes.length}
+                      total={totalUpcoming}
+                      percentage={upcomingPercentage}
+                      color="#3B82F6"
+                      icon={<Calendar className="w-7 h-7" />}
+                      onClick={() => setShowUpcomingDetails(!showUpcomingDetails)}
+                      showAmount={isHamza}
+                    />
+                    <CircularStatCard
+                      title="Termes Payés"
+                      subtitle="Du mois"
+                      count={paidTermes.length}
+                      total={totalPaid}
+                      percentage={paidPercentage}
+                      color="#10B981"
+                      icon={<CheckCircle className="w-7 h-7" />}
+                      onClick={() => setShowPaidDetails(!showPaidDetails)}
+                      showAmount={isHamza}
+                    />
+                  </>
+                );
+              })()}
+            </div>
+
+            {creditsDueToday.length > 0 && (
+              <div className="mb-6">
+                <CircularStatCard
+                  title="Crédits à Payer Aujourd'hui"
+                  subtitle={`Date de session: ${getSessionDate()}`}
+                  count={creditsDueToday.length}
+                  total={calculateCreditTotal(creditsDueToday)}
+                  percentage={100}
+                  color="#8B5CF6"
+                  icon={<DollarSign className="w-7 h-7" />}
+                  onClick={() => setShowCreditsDueTodayDetails(!showCreditsDueTodayDetails)}
+                  showAmount={isHamza}
+                />
+              </div>
+            )}
+
+            {showOverdueDetails && overdueTermes.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                <div className="mb-4">
+                  <h3 className="text-xl font-bold text-red-600 mb-4 flex items-center gap-2">
+                    <AlertCircle className="w-6 h-6" />
+                    Détails des Termes Échus ({filterTermes(overdueTermes, searchOverdue).length}/{overdueTermes.length})
+                  </h3>
+                  <input
+                    type="text"
+                    placeholder="Rechercher par N° contrat, nom assuré ou date d'échéance..."
+                    value={searchOverdue}
+                    onChange={(e) => setSearchOverdue(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                  />
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-red-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
+                        {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Remarque</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {sortByEcheance(filterTermes(overdueTermes, searchOverdue)).map((terme, index) => {
+                        const remarqueLower = terme.remarque?.toLowerCase() || '';
+                        const bgColor = remarqueLower === 'vendu' ? 'bg-yellow-100 hover:bg-yellow-200' :
+                                       remarqueLower === 'rt' ? 'bg-blue-100 hover:bg-blue-200' :
+                                       remarqueLower === 'a récupérer' ? 'bg-purple-100 hover:bg-purple-200' :
+                                       'hover:bg-red-50';
+
+                        return (
+                          <tr
+                            key={index}
+                            className={`transition-colors cursor-pointer ${bgColor}`}
+                            onClick={() => handleTermeClick(terme)}
+                            title="Cliquez pour ajouter/modifier une remarque"
+                          >
+                            <td className="px-4 py-3 text-sm font-medium">{terme.numero_contrat}</td>
+                            <td className="px-4 py-3 text-sm">{terme.assure}</td>
+                            {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
+                            <td className="px-4 py-3 text-sm text-red-600 font-medium">{formatDate(terme.echeance)}</td>
+                            <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
+                            <td className="px-4 py-3 text-sm">
+                              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                !terme.remarque ? 'bg-gray-100 text-gray-800' :
+                                terme.remarque.toLowerCase() === 'vendu' ? 'bg-yellow-100 text-yellow-800' :
+                                terme.remarque.toLowerCase() === 'rt' ? 'bg-blue-100 text-blue-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {terme.remarque || 'Aucune'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {showUnpaidDetails && unpaidTermes.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                <div className="mb-4">
+                  <h3 className="text-xl font-bold text-orange-600 mb-4 flex items-center gap-2">
+                    <Clock className="w-6 h-6" />
+                    Détails des Termes Non Payés ({filterTermes(unpaidTermes, searchUnpaid).length}/{unpaidTermes.length})
+                  </h3>
+                  <input
+                    type="text"
+                    placeholder="Rechercher par N° contrat, nom assuré ou date d'échéance..."
+                    value={searchUnpaid}
+                    onChange={(e) => setSearchUnpaid(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                  />
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-orange-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
+                        {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Remarque</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {sortByEcheance(filterTermes(unpaidTermes, searchUnpaid)).map((terme, index) => {
+                        const remarqueLower = terme.remarque?.toLowerCase() || '';
+                        const bgColor = remarqueLower === 'vendu' ? 'bg-yellow-100 hover:bg-yellow-200' :
+                                       remarqueLower === 'rt' ? 'bg-blue-100 hover:bg-blue-200' :
+                                       remarqueLower === 'a récupérer' ? 'bg-purple-100 hover:bg-purple-200' :
+                                       'hover:bg-orange-50';
+
+                        return (
+                          <tr
+                            key={index}
+                            className={`transition-colors cursor-pointer ${bgColor}`}
+                            onClick={() => handleTermeClick(terme)}
+                            title="Cliquez pour ajouter/modifier une remarque"
+                          >
+                            <td className="px-4 py-3 text-sm font-medium">{terme.numero_contrat}</td>
+                            <td className="px-4 py-3 text-sm">{terme.assure}</td>
+                            {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
+                            <td className="px-4 py-3 text-sm">{formatDate(terme.echeance)}</td>
+                            <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
+                            <td className="px-4 py-3 text-sm">
+                              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                !terme.remarque ? 'bg-gray-100 text-gray-800' :
+                                terme.remarque.toLowerCase() === 'vendu' ? 'bg-yellow-100 text-yellow-800' :
+                                terme.remarque.toLowerCase() === 'rt' ? 'bg-blue-100 text-blue-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {terme.remarque || 'Aucune'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {showUpcomingDetails && upcomingTermes.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                <div className="mb-4">
+                  <h3 className="text-xl font-bold text-blue-600 mb-4 flex items-center gap-2">
+                    <Calendar className="w-6 h-6" />
+                    Détails des Échéances Proches ({filterTermes(upcomingTermes, searchUpcoming).length}/{upcomingTermes.length})
+                  </h3>
+                  <input
+                    type="text"
+                    placeholder="Rechercher par N° contrat, nom assuré ou date d'échéance..."
+                    value={searchUpcoming}
+                    onChange={(e) => setSearchUpcoming(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  />
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-blue-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
+                        {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Remarque</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {sortByEcheance(filterTermes(upcomingTermes, searchUpcoming)).map((terme, index) => {
+                        const remarqueLower = terme.remarque?.toLowerCase() || '';
+                        const bgColor = remarqueLower === 'vendu' ? 'bg-yellow-100 hover:bg-yellow-200' :
+                                       remarqueLower === 'rt' ? 'bg-blue-100 hover:bg-blue-200' :
+                                       remarqueLower === 'a récupérer' ? 'bg-purple-100 hover:bg-purple-200' :
+                                       'hover:bg-blue-50';
+
+                        return (
+                          <tr
+                            key={index}
+                            className={`transition-colors cursor-pointer ${bgColor}`}
+                            onClick={() => handleTermeClick(terme)}
+                            title="Cliquez pour ajouter/modifier une remarque"
+                          >
+                            <td className="px-4 py-3 text-sm font-medium">{terme.numero_contrat}</td>
+                            <td className="px-4 py-3 text-sm">{terme.assure}</td>
+                            {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
+                            <td className="px-4 py-3 text-sm text-blue-600 font-medium">{formatDate(terme.echeance)}</td>
+                            <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
+                            <td className="px-4 py-3 text-sm">
+                              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                !terme.remarque ? 'bg-gray-100 text-gray-800' :
+                                terme.remarque.toLowerCase() === 'vendu' ? 'bg-yellow-100 text-yellow-800' :
+                                terme.remarque.toLowerCase() === 'rt' ? 'bg-blue-100 text-blue-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {terme.remarque || 'Aucune'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {showPaidDetails && paidTermes.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                <div className="mb-4">
+                  <h3 className="text-xl font-bold text-green-600 mb-4 flex items-center gap-2">
+                    <CheckCircle className="w-6 h-6" />
+                    Détails des Termes Payés ({filterTermes(paidTermes, searchPaid).length}/{paidTermes.length})
+                  </h3>
+                  <input
+                    type="text"
+                    placeholder="Rechercher par N° contrat, nom assuré ou date d'échéance..."
+                    value={searchPaid}
+                    onChange={(e) => setSearchPaid(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                  />
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-green-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
+                        {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Remarque</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {sortByEcheance(filterTermes(paidTermes, searchPaid)).map((terme, index) => {
+                        const remarqueLower = terme.remarque?.toLowerCase() || '';
+                        const bgColor = remarqueLower === 'vendu' ? 'bg-yellow-100 hover:bg-yellow-200' :
+                                       remarqueLower === 'rt' ? 'bg-blue-100 hover:bg-blue-200' :
+                                       remarqueLower === 'a récupérer' ? 'bg-purple-100 hover:bg-purple-200' :
+                                       'hover:bg-green-50';
+
+                        return (
+                          <tr
+                            key={index}
+                            className={`transition-colors cursor-pointer ${bgColor}`}
+                            onClick={() => handleTermeClick(terme)}
+                            title="Cliquez pour ajouter/modifier une remarque"
+                          >
+                            <td className="px-4 py-3 text-sm font-medium">{terme.numero_contrat}</td>
+                            <td className="px-4 py-3 text-sm">{terme.assure}</td>
+                            {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
+                            <td className="px-4 py-3 text-sm">{formatDate(terme.echeance)}</td>
+                            <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
+                            <td className="px-4 py-3 text-sm">
+                              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                !terme.remarque ? 'bg-gray-100 text-gray-800' :
+                                terme.remarque.toLowerCase() === 'vendu' ? 'bg-yellow-100 text-yellow-800' :
+                                terme.remarque.toLowerCase() === 'rt' ? 'bg-blue-100 text-blue-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {terme.remarque || 'Aucune'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {showCreditsDueTodayDetails && creditsDueToday.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                <h3 className="text-xl font-bold text-purple-600 mb-4 flex items-center gap-2">
+                  <DollarSign className="w-6 h-6" />
+                  Crédits à Payer Aujourd'hui ({creditsDueToday.length})
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-purple-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Branche</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Crédit (DT)</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Payé (DT)</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Solde (DT)</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date Prévue</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {creditsDueToday.map((credit, index) => (
+                        <tr key={index} className="hover:bg-purple-50 transition-colors">
+                          <td className="px-4 py-3 text-sm font-medium">{credit.numero_contrat}</td>
+                          <td className="px-4 py-3 text-sm">{credit.assure}</td>
+                          <td className="px-4 py-3 text-sm">{credit.branche}</td>
+                          <td className="px-4 py-3 text-sm">{parseFloat(credit.montant_credit).toFixed(2)}</td>
+                          <td className="px-4 py-3 text-sm text-green-600 font-semibold">
+                            {parseFloat(credit.paiement || 0).toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-red-600 font-semibold">
+                            {parseFloat(credit.solde || credit.montant_credit).toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                              credit.statut === 'Non payé' ? 'bg-red-100 text-red-800' :
+                              credit.statut === 'Payé partiellement' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-green-100 text-green-800'
+                            }`}>
+                              {credit.statut}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-purple-600 font-medium">
+                            {formatDate(credit.date_paiement_prevue)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+            <TrendingUp className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600 text-lg">Veuillez sélectionner une année et un mois pour afficher les données</p>
+          </div>
+        )}
+
+        <RemarqueModal
+          isOpen={isRemarqueModalOpen}
+          onClose={() => setIsRemarqueModalOpen(false)}
+          contrat={selectedContrat || { police: '', mois: '', terme: 0, echeance: '' }}
+          onSave={() => {
+            if (selectedMonth && selectedYear) {
+              loadTermesData();
+            }
+          }}
+          username={username || 'Utilisateur'}
+        />
+
+        {showPromoBanner && (
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[9999] p-4"
+            onClick={() => setShowPromoBanner(false)}
+          >
+            <div
+              className="relative w-full max-w-4xl rounded-3xl overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.85)] flex"
+              style={{ maxHeight: '86vh', minHeight: '460px' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Left — image carousel */}
+              <div className="relative w-[42%] flex-shrink-0 min-h-full">
+                <img
+                  src={`/images/image${promoImageIndex}.jpeg`}
+                  alt="Promo"
+                  className="absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-500"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/25 pointer-events-none" />
+
+                {/* Badge top-left */}
+                <div className="absolute top-4 left-4">
+                  <div className="inline-flex items-center gap-1.5 bg-black/50 backdrop-blur-sm border border-white/20 rounded-full px-3 py-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="text-white text-[11px] font-bold tracking-widest uppercase">Challenge</span>
+                  </div>
+                </div>
+
+                {/* Dot nav */}
+                <div className="absolute bottom-5 inset-x-0 flex justify-center gap-2">
+                  {[0, 1, 2].map(i => (
+                    <button
+                      key={i}
+                      onClick={(e) => { e.stopPropagation(); setPromoImageIndex(i); }}
+                      className={`rounded-full transition-all duration-300 ${
+                        i === promoImageIndex
+                          ? 'w-7 h-2.5 bg-white shadow-sm'
+                          : 'w-2.5 h-2.5 bg-white/45 hover:bg-white/70'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Right — content */}
+              <div className="flex-1 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+
+                {/* Header */}
+                <div className="flex items-start justify-between px-7 pt-7 pb-5 border-b border-white/8">
+                  <div>
+                    <p className="text-amber-400 text-xs font-bold tracking-widest uppercase mb-2">Récompenses exclusives</p>
+                    <h2 className="text-3xl font-black text-white leading-tight tracking-tight">
+                      Productivité<br />
+                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">& Performance</span>
+                    </h2>
+                    <p className="text-white/45 text-sm mt-2">Atteignez vos objectifs, débloquez vos primes</p>
+                  </div>
+                  <button
+                    onClick={() => setShowPromoBanner(false)}
+                    className="w-9 h-9 rounded-full bg-white/8 border border-white/15 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/18 transition-all flex-shrink-0 ml-4"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Rewards list */}
+                <div className="flex-1 px-7 py-5 space-y-3 overflow-y-auto">
+                  <div className="rounded-2xl p-4 bg-gradient-to-r from-amber-500/15 to-yellow-600/8 border border-amber-400/25 flex items-start gap-4 hover:border-amber-400/45 transition-colors">
+                    <div className="w-10 h-10 rounded-xl bg-amber-400/20 flex items-center justify-center text-xl flex-shrink-0">🏆</div>
+                    <div>
+                      <p className="text-white font-bold text-sm mb-1">Cash Bonus</p>
+                      <p className="text-white/55 text-xs leading-relaxed">Pour toute réalisation Santé, Habitation et Transport</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl p-4 bg-gradient-to-r from-sky-500/15 to-blue-600/8 border border-sky-400/25 flex items-start gap-4 hover:border-sky-400/45 transition-colors">
+                    <div className="w-10 h-10 rounded-xl bg-sky-400/20 flex items-center justify-center text-xl flex-shrink-0">🏨</div>
+                    <div>
+                      <p className="text-white font-bold text-sm mb-1">Séjour de Luxe à Tozeur</p>
+                      <p className="text-white/55 text-xs leading-relaxed">Séjour hebdomadaire dans un hôtel de luxe pour vos clients</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl p-4 bg-gradient-to-r from-rose-500/15 to-orange-600/8 border border-rose-400/25 flex items-start gap-4 hover:border-rose-400/45 transition-colors">
+                    <div className="w-10 h-10 rounded-xl bg-rose-400/20 flex items-center justify-center text-xl flex-shrink-0">🔥</div>
+                    <div>
+                      <p className="text-white font-bold text-sm mb-1">Détecteur de Fumée Offert</p>
+                      <p className="text-white/55 text-xs leading-relaxed">Formulaires sans obligation d'achat</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CTA */}
+                <div className="px-7 pb-7 pt-4 border-t border-white/8">
+                  <button
+                    onClick={() => setShowPromoBanner(false)}
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-slate-900 font-black text-sm tracking-wide hover:from-amber-300 hover:to-orange-400 active:scale-[0.98] transition-all shadow-lg shadow-orange-500/25"
+                  >
+                    C'est parti ! 🚀
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default HomePage;

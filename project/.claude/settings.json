@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /tmp/cc-agent/59213253/project && git rev-parse --git-dir > /dev/null 2>&1 || git init && git config user.name 'HamzaYuri18' && git config user.email 'hamza@yupgtz.com'",
+            "statusMessage": "Configuring git..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /tmp/git-push-yupgtz.sh 2>/dev/null || true",
+            "statusMessage": "Pushing changes to GitHub...",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
