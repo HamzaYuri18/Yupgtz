@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 import SMSModal from './SMSModal';
 import CreditDetailsModal from './CreditDetailsModal';
 import CreditEvolutionModal from './CreditEvolutionModal';
+import CreditPaymentModal from './CreditPaymentModal';
 
 const CreditsList: React.FC = () => {
   const [credits, setCredits] = useState<any[]>([]);
@@ -26,6 +27,7 @@ const CreditsList: React.FC = () => {
   const [hoveredCredit, setHoveredCredit] = useState<any | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [selectedCreditForSMS, setSelectedCreditForSMS] = useState<any | null>(null);
+  const [selectedCreditForPayment, setSelectedCreditForPayment] = useState<any | null>(null);
 
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
   const [statsModalData, setStatsModalData] = useState<{
@@ -944,11 +946,9 @@ const CreditsList: React.FC = () => {
                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
                   Créé par
                 </th>
-                {isHamza && (
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                    Actions
-                  </th>
-                )}
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
@@ -1028,37 +1028,51 @@ const CreditsList: React.FC = () => {
                   <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
                     {credit.cree_par}
                   </td>
-                  {isHamza && (
-                    <td className="px-3 py-2.5 whitespace-nowrap">
-                      <div className="flex items-center space-x-1.5">
-                        {credit.statut !== 'Payé' && (
-                          <button
-                            onClick={() => handleStatusUpdate(credit.id, 'Payé')}
-                            className="p-1 rounded text-green-600 hover:text-green-800 hover:bg-green-50 transition-colors"
-                            title="Marquer comme payé"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                          </button>
-                        )}
-                        {credit.statut === 'Non payé' && (
-                          <button
-                            onClick={() => handleStatusUpdate(credit.id, 'En retard')}
-                            className="p-1 rounded text-orange-500 hover:text-orange-700 hover:bg-orange-50 transition-colors"
-                            title="Marquer en retard"
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </button>
-                        )}
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    <div className="flex items-center space-x-1.5">
+                      {/* Bouton paiement — visible pour tous si le crédit est partiellement ou non payé */}
+                      {(credit.statut === 'Non payé' || credit.statut === 'Payé partiellement' || credit.statut === 'En retard') && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleDeleteCredit(credit.id, credit.assure); }}
-                          className="p-1 rounded text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors"
-                          title="Supprimer ce crédit"
+                          onClick={(e) => { e.stopPropagation(); setSelectedCreditForPayment(credit); }}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-700 hover:text-emerald-900 text-xs font-semibold transition-colors"
+                          title="Enregistrer un paiement"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <DollarSign className="w-3.5 h-3.5" />
+                          Payer
                         </button>
-                      </div>
-                    </td>
-                  )}
+                      )}
+                      {/* Boutons admin — Hamza uniquement */}
+                      {isHamza && (
+                        <>
+                          {credit.statut !== 'Payé' && credit.statut !== 'Payé en total' && (
+                            <button
+                              onClick={() => handleStatusUpdate(credit.id, 'Payé')}
+                              className="p-1 rounded text-green-600 hover:text-green-800 hover:bg-green-50 transition-colors"
+                              title="Marquer comme payé"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </button>
+                          )}
+                          {credit.statut === 'Non payé' && (
+                            <button
+                              onClick={() => handleStatusUpdate(credit.id, 'En retard')}
+                              className="p-1 rounded text-orange-500 hover:text-orange-700 hover:bg-orange-50 transition-colors"
+                              title="Marquer en retard"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDeleteCredit(credit.id, credit.assure); }}
+                            className="p-1 rounded text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors"
+                            title="Supprimer ce crédit"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1167,6 +1181,15 @@ const CreditsList: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Credit Payment Modal */}
+        <CreditPaymentModal
+          isOpen={!!selectedCreditForPayment}
+          credit={selectedCreditForPayment}
+          isHamza={isHamza}
+          onClose={() => setSelectedCreditForPayment(null)}
+          onPaymentSuccess={loadCredits}
+        />
 
         {/* SMS Modal */}
         <SMSModal

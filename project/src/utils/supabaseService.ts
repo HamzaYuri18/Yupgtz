@@ -171,7 +171,8 @@ export const updateCreditPayment = async (
   assure: string,
   modePaiement: 'Espece' | 'Cheque' | 'Carte Bancaire',
   numeroContrat?: string,
-  chequeData?: ChequeData
+  chequeData?: ChequeData,
+  customDatePaiement?: string
 ): Promise<boolean> => {
   try {
     console.log('💳 Début de la mise à jour du paiement crédit...');
@@ -220,7 +221,7 @@ export const updateCreditPayment = async (
     const updateData: Partial<CreditData> = {
       paiement: nouveauPaiementTotal,
       solde: nouveauSolde,
-      date_paiement_effectif: new Date().toISOString().split('T')[0],
+      date_paiement_effectif: customDatePaiement || new Date().toISOString().split('T')[0],
       statut: nouveauStatut,
       mode_paiement: modePaiement,
       ...(chequeData && {

@@ -9,7 +9,6 @@ import XLSXUploader from './XMLUploader';
 import ReportGenerator from './ReportGenerator';
 import CreditsList from './CreditsList';
 import FinancialManagement from './FinancialManagement';
-import CreditPayment from './CreditPayment';
 import TermeSearch from './TermeSearch';
 import TransactionReport from './TransactionReport';
 import ChequesManagement from './ChequesManagement';
@@ -28,7 +27,7 @@ import { getUserPermissions, UserPermissions, DEFAULT_PERMISSIONS } from '../uti
 
 type TabId =
   | 'home' | 'contract' | 'xml' | 'reports' | 'credits' | 'financial'
-  | 'payment' | 'terme' | 'transactions' | 'cheques' | 'versement'
+  | 'terme' | 'transactions' | 'cheques' | 'versement'
   | 'encaissement' | 'commissions' | 'statistics' | 'salaires'
   | 'attestations' | 'reporting' | 'gestion_acces' | 'smsing' | 'productivite';
 
@@ -170,7 +169,6 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
 
             {canAccess('financial') && navBtn('financial', 'Gestion Financiere', <DollarSign className="w-4 h-4" />)}
 
-            {canAccess('payment') && navBtn('payment', 'Paiement Credit', <DollarSign className="w-4 h-4" />)}
 
             {canAccess('terme') && navBtn('terme', 'Terme', <Search className="w-4 h-4" />)}
 
@@ -204,7 +202,6 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
         {activeTab === 'statistics' && canAccess('statistics') && <StatisticsChart username={username} />}
         {activeTab === 'credits' && canAccess('credits') && <CreditsList />}
         {activeTab === 'financial' && canAccess('financial') && <FinancialManagement username={username} />}
-        {activeTab === 'payment' && canAccess('payment') && <CreditPayment />}
         {activeTab === 'terme' && canAccess('terme') && <TermeSearch />}
         {activeTab === 'transactions' && canAccess('transactions') && <TransactionReport />}
         {activeTab === 'reporting' && canAccess('reporting') && <ReportingSuppression />}
