@@ -146,11 +146,9 @@ const DetailModal: React.FC<DetailModalProps> = ({ utilisateur, data, allStats, 
 
         {/* Hero header */}
         <div className={`relative overflow-hidden rounded-t-2xl px-6 py-5 ${
-          isLeader
-            ? 'bg-gradient-to-r from-amber-500 via-yellow-500 to-orange-500'
-            : isTrailing
-              ? 'bg-gradient-to-r from-slate-700 via-slate-600 to-emerald-700'
-              : 'bg-gradient-to-r from-slate-700 to-slate-600'
+          isTrailing
+            ? 'bg-gradient-to-r from-slate-700 via-slate-600 to-emerald-700'
+            : 'bg-gradient-to-r from-slate-700 to-slate-600'
         }`}>
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15)_0%,transparent_60%)]" />
           <div className="relative flex items-start justify-between gap-4">
@@ -162,11 +160,6 @@ const DetailModal: React.FC<DetailModalProps> = ({ utilisateur, data, allStats, 
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-2xl font-extrabold text-white tracking-tight">{utilisateur}</h2>
-                  {isLeader && (
-                    <span className="flex items-center gap-1 bg-white/20 border border-white/30 rounded-full px-2.5 py-0.5 text-white text-xs font-bold">
-                      <Trophy className="w-3.5 h-3.5 text-white" /> En tête
-                    </span>
-                  )}
                   {isTrailing && otherStats && (
                     <span className="flex items-center gap-1 bg-white/15 border border-white/20 rounded-full px-2.5 py-0.5 text-white/90 text-xs font-semibold">
                       <Target className="w-3.5 h-3.5" /> {formatDT(ecart)} derrière {otherStats.utilisateur}
@@ -220,12 +213,6 @@ const DetailModal: React.FC<DetailModalProps> = ({ utilisateur, data, allStats, 
                   <span className="text-white/85 text-xs font-medium">{formatDT(stat.prime_ttc)}</span>
                 </div>
               ))}
-              {isLeader && otherStats && (
-                <div className="flex items-center gap-1.5 bg-white/20 border border-white/30 rounded-full px-3 py-1 backdrop-blur-sm ml-auto">
-                  <Trophy className="w-3 h-3 text-white" />
-                  <span className="text-white text-xs font-semibold">+{formatDT(ecart)} vs {otherStats.utilisateur}</span>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -386,20 +373,6 @@ const Productivite: React.FC = () => {
               <div className="text-3xl font-bold">{formatDT(totalPrimeTTC)}</div>
               <div className="text-white/60 text-xs uppercase tracking-wide">Prime TTC totale</div>
             </div>
-            {leader && (
-              <>
-                <div className="w-px h-12 bg-white/20" />
-                <div className="text-center">
-                  <div className="flex items-center gap-1 justify-center">
-                    <Trophy className="w-5 h-5 text-yellow-400" />
-                    <span className="text-xl font-bold text-yellow-300">{leader}</span>
-                  </div>
-                  <div className="text-white/60 text-xs uppercase tracking-wide">
-                    {stats.find(s => s.utilisateur === leader)?.total_contrats ?? 0} contrats
-                  </div>
-                </div>
-              </>
-            )}
           </div>
         </div>
       </div>
@@ -410,73 +383,6 @@ const Productivite: React.FC = () => {
         </div>
       ) : (
         <>
-          {/* Leader banner */}
-          {leader && (
-            (() => {
-              const leaderStats = stats.find(s => s.utilisateur === leader)!;
-              const otherStats = stats.find(s => s.utilisateur !== leader)!;
-              const ecart = Math.abs(leaderStats.prime_ttc_total - otherStats.prime_ttc_total);
-              return (
-                <div className="relative overflow-hidden rounded-2xl shadow-lg">
-                  {/* Background gradient */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-amber-500 via-yellow-500 to-orange-500" />
-                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.18)_0%,transparent_60%)]" />
-
-                  <div className="relative px-6 py-5">
-                    {/* Top row */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center shadow-inner">
-                          <Trophy className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                          <p className="text-white/70 text-xs font-semibold uppercase tracking-widest">En tête du challenge</p>
-                          <h2 className="text-2xl font-extrabold text-white tracking-tight">{leader}</h2>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-white/60 text-xs font-medium uppercase tracking-wide">Avance sur {otherStats.utilisateur}</p>
-                        <p className="text-white font-bold text-lg">{formatDT(ecart)}</p>
-                      </div>
-                    </div>
-
-                    {/* Stats row */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="bg-white/15 border border-white/20 rounded-xl px-4 py-3 text-center backdrop-blur-sm">
-                        <div className="text-3xl font-extrabold text-white">{leaderStats.total_contrats}</div>
-                        <div className="text-white/70 text-xs font-medium mt-0.5 uppercase tracking-wide">Contrats</div>
-                      </div>
-                      <div className="bg-white/15 border border-white/20 rounded-xl px-4 py-3 text-center backdrop-blur-sm">
-                        <div className="text-lg font-extrabold text-white leading-tight">{formatDT(leaderStats.prime_ttc_total)}</div>
-                        <div className="text-white/70 text-xs font-medium mt-0.5 uppercase tracking-wide">Prime TTC</div>
-                      </div>
-                      <div className="bg-white/15 border border-white/20 rounded-xl px-4 py-3 text-center backdrop-blur-sm">
-                        <div className="text-lg font-extrabold text-white leading-tight">{formatDT(leaderStats.bonus_total)}</div>
-                        <div className="text-white/70 text-xs font-medium mt-0.5 uppercase tracking-wide">Bonus estimé</div>
-                      </div>
-                    </div>
-
-                    {/* By type pills */}
-                    {Object.keys(leaderStats.by_type).length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        {Object.entries(leaderStats.by_type).map(([type, stat]) => (
-                          <div
-                            key={type}
-                            className="flex items-center gap-1.5 bg-white/15 border border-white/20 rounded-full px-3 py-1.5 backdrop-blur-sm"
-                          >
-                            <span className="text-white font-bold text-sm">{stat.count}</span>
-                            <span className="text-white/80 text-xs">{type}</span>
-                            <span className="text-white/50 text-xs">·</span>
-                            <span className="text-white/80 text-xs">{formatDT(stat.prime_ttc)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()
-          )}
           {!leader && totalContrats > 0 && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-3 flex items-center gap-3">
               <Star className="w-5 h-5 text-blue-500" />
@@ -489,9 +395,7 @@ const Productivite: React.FC = () => {
             {stats.map(s => (
               <div
                 key={s.utilisateur}
-                className={`bg-white rounded-2xl shadow-sm border p-6 transition-all hover:shadow-md ${
-                  leader === s.utilisateur ? 'border-yellow-300 ring-1 ring-yellow-200' : 'border-gray-100'
-                }`}
+                className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 transition-all hover:shadow-md"
               >
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -500,11 +404,6 @@ const Productivite: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="font-bold text-gray-900 text-lg">{s.utilisateur}</h3>
-                      {leader === s.utilisateur && (
-                        <span className="flex items-center gap-1 text-xs text-yellow-600 font-medium">
-                          <Trophy className="w-3 h-3" /> En tête
-                        </span>
-                      )}
                     </div>
                   </div>
                   <div className="text-right">
