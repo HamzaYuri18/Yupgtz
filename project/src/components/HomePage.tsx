@@ -1460,7 +1460,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
             onClick={() => setShowPromoBanner(false)}
           >
             <div
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col"
+              className="bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col"
               style={{ maxHeight: '90vh' }}
               onClick={(e) => e.stopPropagation()}
             >
