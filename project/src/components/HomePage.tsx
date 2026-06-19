@@ -1464,18 +1464,18 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
               style={{ maxHeight: '90vh' }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header — same style as credit/task modals */}
-              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-2xl flex items-center justify-between flex-shrink-0">
+              {/* Header — emerald to black gradient */}
+              <div className="bg-gradient-to-r from-emerald-500 to-gray-900 text-white p-6 rounded-t-2xl flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-3">
-                  <TrendingUp className="w-10 h-10" />
+                  <TrendingUp className="w-10 h-10 text-emerald-300" />
                   <div>
                     <h2 className="text-2xl font-bold">CHALLENGE PRODUCTIVITÉ</h2>
-                    <p className="text-green-100">Récompenses exclusives — Atteignez vos objectifs</p>
+                    <p className="text-emerald-200">Récompenses exclusives — Atteignez vos objectifs</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setShowPromoBanner(false)}
-                  className="p-2 hover:bg-green-700 rounded-lg transition-colors"
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
                 >
                   <X className="w-6 h-6" />
                 </button>
@@ -1484,7 +1484,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
               {/* Body */}
               <div className="flex flex-1 min-h-0 overflow-hidden">
                 {/* Left — full image, no crop */}
-                <div className="w-[55%] flex-shrink-0 bg-gray-50 border-r border-gray-200 flex flex-col items-center justify-center p-5">
+                <div className="w-[55%] flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col items-center justify-center p-5">
                   <img
                     src={`/images/image${promoImageIndex}.jpeg`}
                     alt="Promo"
@@ -1499,8 +1499,8 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                         onClick={(e) => { e.stopPropagation(); setPromoImageIndex(i); }}
                         className={`rounded-full transition-all duration-300 ${
                           i === promoImageIndex
-                            ? 'w-6 h-2 bg-green-500'
-                            : 'w-2 h-2 bg-gray-300 hover:bg-gray-400'
+                            ? 'w-6 h-2 bg-emerald-400'
+                            : 'w-2 h-2 bg-gray-600 hover:bg-gray-400'
                         }`}
                       />
                     ))}
@@ -1508,39 +1508,39 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                 </div>
 
                 {/* Right — rewards */}
-                <div className="flex-1 flex flex-col p-6 overflow-y-auto">
-                  <h3 className="text-lg font-bold text-gray-900 mb-1">Vos récompenses</h3>
-                  <p className="text-sm text-gray-500 mb-5">Réalisez vos objectifs pour débloquer :</p>
+                <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-gray-900">
+                  <h3 className="text-lg font-bold text-white mb-1">Vos récompenses</h3>
+                  <p className="text-sm text-emerald-400 mb-5">Réalisez vos objectifs pour débloquer :</p>
 
                   <div className="space-y-3 flex-1">
-                    <div className="rounded-xl p-4 bg-amber-50 border border-amber-200 flex items-start gap-3">
+                    <div className="rounded-xl p-4 bg-gray-800 border border-emerald-500/30 flex items-start gap-3 hover:border-emerald-400/60 transition-colors">
                       <span className="text-2xl flex-shrink-0">🏆</span>
                       <div>
-                        <p className="font-bold text-gray-900 text-sm">Cash Bonus</p>
-                        <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Pour toute réalisation Santé, Habitation et Transport</p>
+                        <p className="font-bold text-white text-sm">Cash Bonus</p>
+                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">Pour toute réalisation Santé, Habitation et Transport</p>
                       </div>
                     </div>
 
-                    <div className="rounded-xl p-4 bg-blue-50 border border-blue-200 flex items-start gap-3">
+                    <div className="rounded-xl p-4 bg-gray-800 border border-emerald-500/30 flex items-start gap-3 hover:border-emerald-400/60 transition-colors">
                       <span className="text-2xl flex-shrink-0">🏨</span>
                       <div>
-                        <p className="font-bold text-gray-900 text-sm">Séjour de Luxe à Tozeur</p>
-                        <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Séjour hebdomadaire dans un hôtel de luxe pour vos clients</p>
+                        <p className="font-bold text-white text-sm">Séjour de Luxe à Tozeur</p>
+                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">Séjour hebdomadaire dans un hôtel de luxe pour vos clients</p>
                       </div>
                     </div>
 
-                    <div className="rounded-xl p-4 bg-red-50 border border-red-200 flex items-start gap-3">
+                    <div className="rounded-xl p-4 bg-gray-800 border border-emerald-500/30 flex items-start gap-3 hover:border-emerald-400/60 transition-colors">
                       <span className="text-2xl flex-shrink-0">🔥</span>
                       <div>
-                        <p className="font-bold text-gray-900 text-sm">Détecteur de Fumée Offert</p>
-                        <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Formulaires sans obligation d'achat</p>
+                        <p className="font-bold text-white text-sm">Détecteur de Fumée Offert</p>
+                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">Formulaires sans obligation d'achat</p>
                       </div>
                     </div>
                   </div>
 
                   <button
                     onClick={() => setShowPromoBanner(false)}
-                    className="w-full mt-6 py-3 rounded-xl bg-green-600 text-white font-bold text-sm hover:bg-green-700 active:scale-[0.98] transition-all"
+                    className="w-full mt-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-gray-900 text-white font-bold text-sm hover:from-emerald-400 hover:to-gray-800 active:scale-[0.98] transition-all border border-emerald-500/50"
                   >
                     C'est parti !
                   </button>
