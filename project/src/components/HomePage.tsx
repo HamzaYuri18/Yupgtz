@@ -1460,7 +1460,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
             onClick={() => setShowPromoBanner(false)}
           >
             <div
-              className="bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col"
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col"
               style={{ maxHeight: '90vh' }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -1484,7 +1484,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
               {/* Body */}
               <div className="flex flex-1 min-h-0 overflow-hidden">
                 {/* Left — full image, no crop */}
-                <div className="w-[55%] flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col items-center justify-center p-5">
+                <div className="w-[55%] flex-shrink-0 bg-gray-50 border-r border-gray-200 flex flex-col items-center justify-center p-5">
                   <img
                     src={`/images/image${promoImageIndex}.jpeg`}
                     alt="Promo"
@@ -1499,8 +1499,8 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                         onClick={(e) => { e.stopPropagation(); setPromoImageIndex(i); }}
                         className={`rounded-full transition-all duration-300 ${
                           i === promoImageIndex
-                            ? 'w-6 h-2 bg-emerald-400'
-                            : 'w-2 h-2 bg-gray-600 hover:bg-gray-400'
+                            ? 'w-6 h-2 bg-emerald-500'
+                            : 'w-2 h-2 bg-gray-300 hover:bg-gray-400'
                         }`}
                       />
                     ))}
@@ -1508,32 +1508,32 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                 </div>
 
                 {/* Right — rewards */}
-                <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-gray-900">
-                  <h3 className="text-lg font-bold text-white mb-1">Vos récompenses</h3>
-                  <p className="text-sm text-emerald-400 mb-5">Réalisez vos objectifs pour débloquer :</p>
+                <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-white">
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">Vos récompenses</h3>
+                  <p className="text-sm text-emerald-600 mb-5">Réalisez vos objectifs pour débloquer :</p>
 
                   <div className="space-y-3 flex-1">
-                    <div className="rounded-xl p-4 bg-gray-800 border border-emerald-500/30 flex items-start gap-3 hover:border-emerald-400/60 transition-colors">
+                    <div className="rounded-xl p-4 bg-white border border-emerald-200 flex items-start gap-3 hover:border-emerald-400 hover:bg-emerald-50 transition-colors">
                       <span className="text-2xl flex-shrink-0">🏆</span>
                       <div>
-                        <p className="font-bold text-white text-sm">Cash Bonus</p>
-                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">Pour toute réalisation Santé, Habitation et Transport</p>
+                        <p className="font-bold text-gray-900 text-sm">Cash Bonus</p>
+                        <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Pour toute réalisation Santé, Habitation et Transport</p>
                       </div>
                     </div>
 
-                    <div className="rounded-xl p-4 bg-gray-800 border border-emerald-500/30 flex items-start gap-3 hover:border-emerald-400/60 transition-colors">
+                    <div className="rounded-xl p-4 bg-white border border-emerald-200 flex items-start gap-3 hover:border-emerald-400 hover:bg-emerald-50 transition-colors">
                       <span className="text-2xl flex-shrink-0">🏨</span>
                       <div>
-                        <p className="font-bold text-white text-sm">Séjour de Luxe à Tozeur</p>
-                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">Séjour hebdomadaire dans un hôtel de luxe pour vos clients</p>
+                        <p className="font-bold text-gray-900 text-sm">Séjour de Luxe à Tozeur</p>
+                        <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Séjour hebdomadaire dans un hôtel de luxe pour vos clients</p>
                       </div>
                     </div>
 
-                    <div className="rounded-xl p-4 bg-gray-800 border border-emerald-500/30 flex items-start gap-3 hover:border-emerald-400/60 transition-colors">
+                    <div className="rounded-xl p-4 bg-white border border-emerald-200 flex items-start gap-3 hover:border-emerald-400 hover:bg-emerald-50 transition-colors">
                       <span className="text-2xl flex-shrink-0">🔥</span>
                       <div>
-                        <p className="font-bold text-white text-sm">Détecteur de Fumée Offert</p>
-                        <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">Formulaires sans obligation d'achat</p>
+                        <p className="font-bold text-gray-900 text-sm">Détecteur de Fumée Offert</p>
+                        <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Formulaires sans obligation d'achat</p>
                       </div>
                     </div>
                   </div>
