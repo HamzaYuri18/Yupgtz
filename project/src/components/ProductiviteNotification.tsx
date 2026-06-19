@@ -154,9 +154,6 @@ const ProductiviteNotification: React.FC<ProductiviteNotificationProps> = ({ use
   if ((!isTracked && !isHamza) || dismissed || loading) return null;
   if (data.length === 0) return null;
 
-  const leader = data.find(b => b.isLeader) ?? null;
-  const trailing = data.find(b => !b.isLeader) ?? null;
-  const ecart = leader && trailing ? leader.cumul.prime_ttc - trailing.cumul.prime_ttc : 0;
   const totalCumulPrimeTTC = data.reduce((s, b) => s + b.cumul.prime_ttc, 0);
   const totalBonusCumul = data.reduce((s, b) => s + b.cumul.bonus_total, 0);
 
@@ -198,50 +195,6 @@ const ProductiviteNotification: React.FC<ProductiviteNotificationProps> = ({ use
           </div>
         </div>
 
-        {/* Leader highlight — always visible */}
-        {leader && data.length === 2 && (
-          <div className="relative overflow-hidden bg-gradient-to-r from-amber-500 via-yellow-500 to-orange-400 px-4 py-3">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_right,rgba(255,255,255,0.15)_0%,transparent_65%)]" />
-            <div className="relative flex items-center justify-between gap-2">
-              {/* Identity */}
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-white/25 border border-white/30 flex items-center justify-center text-white font-extrabold text-base shadow-inner flex-shrink-0">
-                  {leader.name[0]}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <Trophy className="w-3.5 h-3.5 text-white flex-shrink-0" />
-                    <span className="text-white font-extrabold text-base leading-tight truncate">{leader.name}</span>
-                  </div>
-                  <p className="text-white/75 text-xs leading-tight">En tête · {leader.cumul.count} contrat{leader.cumul.count > 1 ? 's' : ''}</p>
-                </div>
-              </div>
-              {/* KPIs */}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <div className="text-right">
-                  <div className="text-white font-bold text-sm leading-tight">{fmt(leader.cumul.prime_ttc)}</div>
-                  <div className="text-white/65 text-xs">Prime TTC</div>
-                </div>
-                {ecart > 0 && (
-                  <div className="bg-white/20 border border-white/30 rounded-lg px-2 py-1 text-center backdrop-blur-sm">
-                    <div className="text-white font-bold text-xs leading-tight">+{fmt(ecart)}</div>
-                    <div className="text-white/65 text-[10px]">avance</div>
-                  </div>
-                )}
-              </div>
-            </div>
-            {/* Type pills */}
-            {Object.keys(leader.cumul.by_type).length > 0 && (
-              <div className="relative flex flex-wrap gap-1.5 mt-2">
-                {Object.entries(leader.cumul.by_type).map(([type, stat]) => (
-                  <span key={type} className="inline-flex items-center gap-1 bg-white/20 border border-white/25 rounded-full px-2 py-0.5 text-white text-xs font-medium backdrop-blur-sm">
-                    <span className="font-bold">{stat.count}×</span> {type}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Summary row */}
         <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100">

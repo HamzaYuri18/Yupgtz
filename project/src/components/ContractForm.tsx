@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Save, FileText, DollarSign, Calendar, Search, CreditCard, User, Hash, Building, RotateCcw } from 'lucide-react';
 import { Contract } from '../types';
 import { saveContract, generateContractId, getXMLContracts } from '../utils/storage';
@@ -39,6 +39,7 @@ const determineBrancheForAffaire = (contractNumber: string): 'Auto' | 'Vie' | 'S
 
 const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const isHamza = username.toLowerCase() === 'hamza';
+  const isSubmittingRef = useRef(false);
 
   const [formData, setFormData] = useState({
     type: 'Affaire' as 'Terme' | 'Affaire' | 'Avenant changement de véhicule' | 'Encaissement pour autre code',
@@ -711,6 +712,10 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
+    try {
     // Nettoyer uniquement le numéro de contrat avant validation
     const cleanedFormData = {
       ...formData,
@@ -947,6 +952,9 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
     // Toutes les validations sont passées, procéder à l'enregistrement
     await performContractSave(cleanedFormData);
+    } finally {
+      isSubmittingRef.current = false;
+    }
   };
 
   return (
