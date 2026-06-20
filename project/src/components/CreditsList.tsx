@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, User, Download, MessageSquare, BarChart3, Trash2 } from 'lucide-react';
+import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, User, Download, MessageSquare, BarChart3, Trash2, X } from 'lucide-react';
 import { getCredits, updateCreditStatus, deleteCredit } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
 import * as XLSX from 'xlsx';
@@ -22,7 +22,8 @@ const CreditsList: React.FC = () => {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'mois' | 'tous'>('mois');
-  const [activeFilter, setActiveFilter] = useState<'none' | 'echeances' | 'retard'>('none');
+  const [activeFilter, setActiveFilter] = useState<'none' | 'echeances' | 'retard' | 'calendrier'>('none');
+  const [calendarDate, setCalendarDate] = useState<string>('');
   const [isExporting, setIsExporting] = useState(false);
   const [hoveredCredit, setHoveredCredit] = useState<any | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
@@ -50,7 +51,7 @@ const CreditsList: React.FC = () => {
 
   useEffect(() => {
     applyFilters();
-  }, [filters, credits, viewMode, activeFilter]);
+  }, [filters, credits, viewMode, activeFilter, calendarDate]);
 
   const loadCredits = async () => {
     try {
@@ -276,6 +277,12 @@ const CreditsList: React.FC = () => {
       filtered = getCreditsDueIn7Days();
     } else if (activeFilter === 'retard') {
       filtered = getOverdueCredits();
+    } else if (activeFilter === 'calendrier' && calendarDate) {
+      filtered = credits.filter(c => {
+        if (!c.date_paiement_prevue) return false;
+        if (c.statut === 'Payé' || c.statut === 'Payé en total') return false;
+        return c.date_paiement_prevue.slice(0, 10) === calendarDate;
+      });
     } else {
       filtered = filtered.filter(credit => {
         const creditDate = credit.date_credit ? new Date(credit.date_credit) : new Date();
@@ -353,6 +360,19 @@ const CreditsList: React.FC = () => {
     }
   };
 
+  const handleCalendarDateChange = (date: string) => {
+    setCalendarDate(date);
+    if (date) {
+      setActiveFilter('calendrier');
+      setViewMode('tous');
+      setTimeout(() => {
+        document.getElementById('credits-table')?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } else {
+      setActiveFilter('none');
+    }
+  };
+
   const showDueIn7Days = () => {
     setActiveFilter('echeances');
     setViewMode('tous');
@@ -422,6 +442,7 @@ const CreditsList: React.FC = () => {
 
   const clearFilters = () => {
     setActiveFilter('none');
+    setCalendarDate('');
     setFilters({
       statut: 'all',
       branche: 'all',
@@ -479,6 +500,7 @@ const CreditsList: React.FC = () => {
   const handleViewModeChange = (mode: 'mois' | 'tous') => {
     setViewMode(mode);
     setActiveFilter('none');
+    setCalendarDate('');
     if (mode === 'tous') {
       setFilters(prev => ({
         ...prev,
@@ -546,27 +568,33 @@ const CreditsList: React.FC = () => {
           <div className="flex items-center space-x-3">
             <CreditCard className="w-6 h-6 text-blue-600" />
             <h2 className="text-2xl font-bold text-gray-900">
-              {activeFilter === 'echeances' 
-                ? 'Échéances dans 7 jours' 
-                : activeFilter === 'retard' 
-                ? 'Crédits en Retard' 
-                : viewMode === 'mois' 
-                ? `Crédits du ${getMonthName(filters.mois)}` 
+              {activeFilter === 'echeances'
+                ? 'Échéances dans 7 jours'
+                : activeFilter === 'retard'
+                ? 'Crédits en Retard'
+                : activeFilter === 'calendrier' && calendarDate
+                ? `Échéances du ${new Date(calendarDate + 'T00:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}`
+                : viewMode === 'mois'
+                ? `Crédits du ${getMonthName(filters.mois)}`
                 : 'Tous les Crédits'}
             </h2>
             <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${
-              activeFilter === 'echeances' 
+              activeFilter === 'echeances'
                 ? 'bg-yellow-100 text-yellow-800 border border-yellow-300'
                 : activeFilter === 'retard'
                 ? 'bg-red-100 text-red-800 border border-red-300'
+                : activeFilter === 'calendrier'
+                ? 'bg-blue-100 text-blue-800 border border-blue-300'
                 : 'bg-blue-100 text-blue-800 border border-blue-300'
             }`}>
-              {activeFilter === 'echeances' 
-                ? `${filteredCredits.length} échéances` 
+              {activeFilter === 'echeances'
+                ? `${filteredCredits.length} échéances`
                 : activeFilter === 'retard'
                 ? `${filteredCredits.length} en retard`
-                : viewMode === 'mois' 
-                ? `${filteredCredits.length} crédits ce mois` 
+                : activeFilter === 'calendrier'
+                ? `${filteredCredits.length} crédit${filteredCredits.length !== 1 ? 's' : ''}`
+                : viewMode === 'mois'
+                ? `${filteredCredits.length} crédits ce mois`
                 : `${filteredCredits.length} crédits au total`}
             </span>
           </div>
@@ -600,7 +628,7 @@ const CreditsList: React.FC = () => {
               >
                 Tous les Crédits
               </button>
-              {(activeFilter === 'echeances' || activeFilter === 'retard') && (
+              {(activeFilter === 'echeances' || activeFilter === 'retard' || activeFilter === 'calendrier') && (
                 <button
                   onClick={clearFilters}
                   className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
@@ -685,6 +713,45 @@ const CreditsList: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Filtre calendrier — date d'échéance précise */}
+        <div className="flex flex-wrap items-center gap-3 mb-5 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
+              <Calendar className="w-4.5 h-4.5 text-indigo-600" />
+            </div>
+            <span className="text-sm font-semibold text-indigo-800 whitespace-nowrap">
+              Filtrer par date d'échéance :
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-1 flex-wrap">
+            <input
+              type="date"
+              value={calendarDate}
+              onChange={(e) => handleCalendarDateChange(e.target.value)}
+              className="px-3 py-2 border border-indigo-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white shadow-sm cursor-pointer"
+            />
+            {calendarDate && (
+              <button
+                onClick={() => handleCalendarDateChange('')}
+                className="flex items-center gap-1.5 px-3 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-sm font-medium transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+                Effacer
+              </button>
+            )}
+          </div>
+          {activeFilter === 'calendrier' && (
+            <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
+              <span className="px-3 py-1 bg-indigo-600 text-white rounded-full text-xs font-bold">
+                {filteredCredits.length} crédit{filteredCredits.length !== 1 ? 's' : ''} à échéance
+              </span>
+              {filteredCredits.length === 0 && (
+                <span className="text-xs text-indigo-500 italic">Aucun crédit non payé à cette date</span>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Statistiques Détaillées */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -1056,7 +1123,7 @@ const CreditsList: React.FC = () => {
                           {new Date(credit.date_paiement_prevue).toLocaleDateString('fr-FR')}
                         </span>
                         {isOverdue && <span className="neon-overdue-badge">⚠ RETARD</span>}
-                        {isDueSoon && <span className="neon-due-soon-badge">⏰ J-5</span>}
+                        {isDueSoon && <span className="neon-due-soon-badge">⏰ PROCHE</span>}
                       </div>
                     ) : <span className="text-xs text-gray-400">-</span>}
                   </td>
