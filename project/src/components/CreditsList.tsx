@@ -521,19 +521,23 @@ const CreditsList: React.FC = () => {
         }
         .neon-overdue-badge {
           animation: neon-slide 1.4s ease-in-out infinite;
-          display: inline-flex;
-          align-items: center;
-          gap: 3px;
-          padding: 1px 6px;
-          border-radius: 4px;
-          font-size: 10px;
-          font-weight: 800;
-          color: #fff;
-          background: #dc2626;
-          border: 1px solid #ef4444;
-          letter-spacing: 0.05em;
-          text-transform: uppercase;
-          white-space: nowrap;
+          display: inline-flex; align-items: center; gap: 3px;
+          padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;
+          color: #fff; background: #dc2626; border: 1px solid #ef4444;
+          letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;
+        }
+        @keyframes neon-slide-yellow {
+          0%   { transform: translateX(0px);  box-shadow: 0 0 4px 1px rgba(234,179,8,0.9), 0 0 10px 3px rgba(234,179,8,0.5); }
+          30%  { transform: translateX(4px);  box-shadow: 0 0 8px 2px rgba(234,179,8,1),   0 0 18px 6px rgba(234,179,8,0.7); }
+          60%  { transform: translateX(-4px); box-shadow: 0 0 8px 2px rgba(234,179,8,1),   0 0 18px 6px rgba(234,179,8,0.7); }
+          100% { transform: translateX(0px);  box-shadow: 0 0 4px 1px rgba(234,179,8,0.9), 0 0 10px 3px rgba(234,179,8,0.5); }
+        }
+        .neon-due-soon-badge {
+          animation: neon-slide-yellow 1.4s ease-in-out infinite;
+          display: inline-flex; align-items: center; gap: 3px;
+          padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;
+          color: #713f12; background: #fef08a; border: 1px solid #eab308;
+          letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;
         }
       `}</style>
       <div className="bg-white rounded-lg shadow-lg p-4 lg:p-6">
@@ -929,9 +933,8 @@ const CreditsList: React.FC = () => {
         )}
 
         {/* Liste des crédits */}
-        <div id="credits-table" className="-mx-4 lg:-mx-6 overflow-x-auto">
-          <div className="inline-block min-w-full align-middle px-4 lg:px-6">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
+        <div id="credits-table" className="overflow-x-auto rounded-lg border border-gray-100 mt-2">
+          <table className="divide-y divide-gray-200 text-sm" style={{ minWidth: '1320px', width: '100%' }}>
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
@@ -986,12 +989,18 @@ const CreditsList: React.FC = () => {
                   : isPartial
                   ? 'bg-orange-50 hover:bg-orange-100'
                   : 'bg-red-50 hover:bg-red-100';
+                const todayMidnight = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
                 const isOverdue = !isPaid && !!credit.date_paiement_prevue && (() => {
                   const due = new Date(credit.date_paiement_prevue);
                   due.setHours(0, 0, 0, 0);
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  return due < today;
+                  return due < todayMidnight;
+                })();
+                const isDueSoon = !isPaid && !isOverdue && !!credit.date_paiement_prevue && (() => {
+                  const due = new Date(credit.date_paiement_prevue);
+                  due.setHours(0, 0, 0, 0);
+                  const in5 = new Date(todayMidnight);
+                  in5.setDate(todayMidnight.getDate() + 5);
+                  return due >= todayMidnight && due <= in5;
                 })();
                 return (
                 <tr
@@ -1008,7 +1017,7 @@ const CreditsList: React.FC = () => {
                   <td className="px-3 py-2.5 whitespace-nowrap font-medium text-gray-900">
                     {credit.numero_contrat}
                   </td>
-                  <td className="px-3 py-2.5 text-gray-900 max-w-[160px] truncate" title={credit.assure}>
+                  <td className="px-3 py-2.5 whitespace-nowrap text-gray-900">
                     {credit.assure}
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
@@ -1055,14 +1064,15 @@ const CreditsList: React.FC = () => {
                   <td className="px-3 py-2.5 whitespace-nowrap">
                     {credit.date_paiement_prevue ? (
                       <div className="flex items-center gap-2">
-                        <span className={isOverdue ? 'font-semibold text-red-700' : 'text-gray-700'}>
+                        <span className={
+                          isOverdue ? 'font-semibold text-red-700' :
+                          isDueSoon ? 'font-semibold text-yellow-700' :
+                          'text-gray-700'
+                        }>
                           {new Date(credit.date_paiement_prevue).toLocaleDateString('fr-FR')}
                         </span>
-                        {isOverdue && (
-                          <span className="neon-overdue-badge">
-                            ⚠ RETARD
-                          </span>
-                        )}
+                        {isOverdue && <span className="neon-overdue-badge">⚠ RETARD</span>}
+                        {isDueSoon && <span className="neon-due-soon-badge">⏰ J-5</span>}
                       </div>
                     ) : '-'}
                   </td>
@@ -1116,7 +1126,6 @@ const CreditsList: React.FC = () => {
               })}
             </tbody>
           </table>
-          </div>
 
           {filteredCredits.length === 0 && (
             <div className="text-center py-8 text-gray-500">
