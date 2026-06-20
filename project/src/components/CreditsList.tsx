@@ -933,51 +933,38 @@ const CreditsList: React.FC = () => {
         )}
 
         {/* Liste des crédits */}
-        <div id="credits-table" className="overflow-x-auto rounded-lg border border-gray-100 mt-2">
-          <table className="divide-y divide-gray-200 text-sm" style={{ minWidth: '1320px', width: '100%' }}>
+        <div id="credits-table" className="overflow-x-auto rounded-lg border border-gray-100 mt-2 w-full">
+          <table className="w-full divide-y divide-gray-200 text-sm" style={{ tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: '108px' }} />  {/* N° Contrat */}
+              <col />                              {/* Assuré — prend l'espace restant */}
+              <col style={{ width: '62px' }} />   {/* Branche */}
+              <col style={{ width: '66px' }} />   {/* Prime */}
+              <col style={{ width: '66px' }} />   {/* Crédit */}
+              <col style={{ width: '66px' }} />   {/* Paiement */}
+              <col style={{ width: '80px' }} />   {/* Solde */}
+              <col style={{ width: '80px' }} />   {/* Date Crédit */}
+              <col style={{ width: '118px' }} />  {/* Échéance */}
+              <col style={{ width: '100px' }} />  {/* Statut */}
+              <col style={{ width: '82px' }} />   {/* Paiement Effectif */}
+              <col style={{ width: '66px' }} />   {/* Créé par */}
+              {isHamza && <col style={{ width: '64px' }} />}  {/* Actions */}
+            </colgroup>
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  N° Contrat
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Assuré
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Branche
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Prime
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Crédit
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Paiement
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Solde
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Date Crédit
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Échéance
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Statut
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Paiement Effectif
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Créé par
-                </th>
-                {isHamza && (
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                    Actions
-                  </th>
-                )}
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">N° Contrat</th>
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Assuré</th>
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Branche</th>
+                <th className="px-2 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">Prime</th>
+                <th className="px-2 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">Crédit</th>
+                <th className="px-2 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">Paiem.</th>
+                <th className="px-2 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">Solde</th>
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Dt Crédit</th>
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Échéance</th>
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Statut</th>
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Dt Paiement</th>
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Créé par</th>
+                {isHamza && <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Actions</th>}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
@@ -1014,92 +1001,89 @@ const CreditsList: React.FC = () => {
                   }}
                   onMouseLeave={() => setHoveredCredit(null)}
                 >
-                  <td className="px-3 py-2.5 whitespace-nowrap font-medium text-gray-900">
+                  <td className="px-2 py-2.5 font-medium text-gray-900 truncate" title={credit.numero_contrat}>
                     {credit.numero_contrat}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-gray-900">
+                  <td className="px-2 py-2.5 text-gray-900 truncate" title={credit.assure}>
                     {credit.assure}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
-                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                  <td className="px-2 py-2.5 truncate">
+                    <span className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
                       {credit.branche}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-right text-gray-700 tabular-nums">
+                  <td className="px-2 py-2.5 text-right text-gray-700 tabular-nums whitespace-nowrap overflow-hidden">
                     {(credit.prime || 0).toLocaleString('fr-FR')}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-right font-semibold text-blue-700 tabular-nums">
+                  <td className="px-2 py-2.5 text-right font-semibold text-blue-700 tabular-nums whitespace-nowrap overflow-hidden">
                     {(credit.montant_credit || 0).toLocaleString('fr-FR')}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-right text-gray-700 tabular-nums">
+                  <td className="px-2 py-2.5 text-right text-gray-700 tabular-nums whitespace-nowrap overflow-hidden">
                     {(credit.paiement || 0).toLocaleString('fr-FR')}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-right tabular-nums">
+                  <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap overflow-hidden">
                     {(credit.solde !== null && credit.solde !== undefined && credit.solde !== 0) ? (
-                      <div className="flex items-center justify-end space-x-1.5">
-                        <span className={`font-bold ${credit.solde > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      <div className="flex items-center justify-end gap-1">
+                        <span className={`font-bold text-xs ${credit.solde > 0 ? 'text-red-600' : 'text-green-600'}`}>
                           {credit.solde.toLocaleString('fr-FR')}
                         </span>
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedCreditForSMS(credit);
-                          }}
-                          className="p-1 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 hover:text-blue-700 transition-all hover:scale-110 flex-shrink-0"
+                          onClick={(e) => { e.stopPropagation(); setSelectedCreditForSMS(credit); }}
+                          className="p-0.5 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 hover:text-blue-700 transition-all flex-shrink-0"
                           title="Envoyer un SMS de rappel"
                         >
-                          <MessageSquare className="w-3.5 h-3.5" />
+                          <MessageSquare className="w-3 h-3" />
                         </button>
                       </div>
                     ) : (
-                      <span className="font-semibold text-gray-400">
+                      <span className="font-semibold text-xs text-gray-400">
                         {(credit.solde || 0).toLocaleString('fr-FR')}
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
+                  <td className="px-2 py-2.5 text-gray-700 whitespace-nowrap overflow-hidden text-xs">
                     {credit.date_credit ? new Date(credit.date_credit).toLocaleDateString('fr-FR') : '-'}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">
+                  <td className="px-2 py-2.5 overflow-hidden">
                     {credit.date_paiement_prevue ? (
-                      <div className="flex items-center gap-2">
-                        <span className={
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-xs whitespace-nowrap ${
                           isOverdue ? 'font-semibold text-red-700' :
                           isDueSoon ? 'font-semibold text-yellow-700' :
                           'text-gray-700'
-                        }>
+                        }`}>
                           {new Date(credit.date_paiement_prevue).toLocaleDateString('fr-FR')}
                         </span>
                         {isOverdue && <span className="neon-overdue-badge">⚠ RETARD</span>}
                         {isDueSoon && <span className="neon-due-soon-badge">⏰ J-5</span>}
                       </div>
-                    ) : '-'}
+                    ) : <span className="text-xs text-gray-400">-</span>}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">
-                    <div className="flex items-center space-x-1.5">
+                  <td className="px-2 py-2.5 overflow-hidden">
+                    <div className="flex items-center gap-1">
                       {getStatusIcon(credit.statut)}
-                      <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusColor(credit.statut)}`}>
+                      <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full whitespace-nowrap ${getStatusColor(credit.statut)}`}>
                         {credit.statut}
                       </span>
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
+                  <td className="px-2 py-2.5 text-gray-700 whitespace-nowrap overflow-hidden text-xs">
                     {credit.date_paiement_effectif ? new Date(credit.date_paiement_effectif).toLocaleDateString('fr-FR') : '-'}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
+                  <td className="px-2 py-2.5 text-gray-700 truncate text-xs" title={credit.cree_par}>
                     {credit.cree_par}
                   </td>
                   {isHamza && (
-                    <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center space-x-1.5">
+                    <td className="px-2 py-2.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-0.5">
                         {credit.statut !== 'Payé' && credit.statut !== 'Payé en total' && (
                           <button
                             onClick={() => handleStatusUpdate(credit.id, 'Payé')}
                             className="p-1 rounded text-green-600 hover:text-green-800 hover:bg-green-100 transition-colors"
                             title="Marquer comme payé"
                           >
-                            <CheckCircle className="w-4 h-4" />
+                            <CheckCircle className="w-3.5 h-3.5" />
                           </button>
                         )}
                         {credit.statut === 'Non payé' && (
@@ -1108,7 +1092,7 @@ const CreditsList: React.FC = () => {
                             className="p-1 rounded text-orange-500 hover:text-orange-700 hover:bg-orange-100 transition-colors"
                             title="Marquer en retard"
                           >
-                            <XCircle className="w-4 h-4" />
+                            <XCircle className="w-3.5 h-3.5" />
                           </button>
                         )}
                         <button
@@ -1116,7 +1100,7 @@ const CreditsList: React.FC = () => {
                           className="p-1 rounded text-red-500 hover:text-red-700 hover:bg-red-100 transition-colors"
                           title="Supprimer ce crédit"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>
