@@ -23,6 +23,7 @@ import GestionAcces from './GestionAcces';
 import SMSingHistory from './SMSingHistory';
 import Productivite from './Productivite';
 import ProductiviteNotification from './ProductiviteNotification';
+import MemoireReglementNotification from './MemoireReglementNotification';
 import { getUserPermissions, UserPermissions, DEFAULT_PERMISSIONS } from '../utils/permissionsService';
 
 type TabId =
@@ -225,6 +226,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
       )}
 
       <ProductiviteNotification username={username} onNavigateToProductivite={() => setActiveTab('productivite')} />
+      <MemoireReglementNotification />
     </div>
   );
 };
