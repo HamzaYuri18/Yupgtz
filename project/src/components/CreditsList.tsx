@@ -512,6 +512,30 @@ const CreditsList: React.FC = () => {
 
   return (
     <div className="w-full">
+      <style>{`
+        @keyframes neon-slide {
+          0%   { transform: translateX(0px);  box-shadow: 0 0 4px 1px rgba(239,68,68,0.9), 0 0 10px 3px rgba(239,68,68,0.5); }
+          30%  { transform: translateX(4px);  box-shadow: 0 0 8px 2px rgba(239,68,68,1),   0 0 18px 6px rgba(239,68,68,0.7); }
+          60%  { transform: translateX(-4px); box-shadow: 0 0 8px 2px rgba(239,68,68,1),   0 0 18px 6px rgba(239,68,68,0.7); }
+          100% { transform: translateX(0px);  box-shadow: 0 0 4px 1px rgba(239,68,68,0.9), 0 0 10px 3px rgba(239,68,68,0.5); }
+        }
+        .neon-overdue-badge {
+          animation: neon-slide 1.4s ease-in-out infinite;
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          padding: 1px 6px;
+          border-radius: 4px;
+          font-size: 10px;
+          font-weight: 800;
+          color: #fff;
+          background: #dc2626;
+          border: 1px solid #ef4444;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          white-space: nowrap;
+        }
+      `}</style>
       <div className="bg-white rounded-lg shadow-lg p-4 lg:p-6">
         {/* En-tête avec informations utilisateur */}
         <div className="flex items-center justify-between mb-6">
@@ -962,6 +986,13 @@ const CreditsList: React.FC = () => {
                   : isPartial
                   ? 'bg-orange-50 hover:bg-orange-100'
                   : 'bg-red-50 hover:bg-red-100';
+                const isOverdue = !isPaid && !!credit.date_paiement_prevue && (() => {
+                  const due = new Date(credit.date_paiement_prevue);
+                  due.setHours(0, 0, 0, 0);
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  return due < today;
+                })();
                 return (
                 <tr
                   key={credit.id}
@@ -1021,8 +1052,19 @@ const CreditsList: React.FC = () => {
                   <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
                     {credit.date_credit ? new Date(credit.date_credit).toLocaleDateString('fr-FR') : '-'}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
-                    {credit.date_paiement_prevue ? new Date(credit.date_paiement_prevue).toLocaleDateString('fr-FR') : '-'}
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    {credit.date_paiement_prevue ? (
+                      <div className="flex items-center gap-2">
+                        <span className={isOverdue ? 'font-semibold text-red-700' : 'text-gray-700'}>
+                          {new Date(credit.date_paiement_prevue).toLocaleDateString('fr-FR')}
+                        </span>
+                        {isOverdue && (
+                          <span className="neon-overdue-badge">
+                            ⚠ RETARD
+                          </span>
+                        )}
+                      </div>
+                    ) : '-'}
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap">
                     <div className="flex items-center space-x-1.5">
