@@ -2507,6 +2507,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
   const loadSinistrePDF = async (page = 1, _dateFrom = '', _dateTo = '') => {
     setSinistrePDFLoading(true);
     try {
+      // Requête paginée pour l'affichage
       const from = (page - 1) * 10;
       const { data, error, count } = await supabase
         .from('SinistrPDF')
@@ -2519,15 +2520,20 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       setSinistrePDFTotal(count || 0);
       setSinistrePDFPage(page);
 
-      const [paidResult, unpaidResult] = await Promise.all([
-        supabase.from('SinistrPDF').select('MontantSinistre', { count: 'exact' }).eq('Statut de paiement', 'Payé'),
-        supabase.from('SinistrPDF').select('MontantSinistre', { count: 'exact' }).neq('Statut de paiement', 'Payé')
-      ]);
+      // Stats : récupérer tous les enregistrements (MontantSinistre + Statut)
+      // neq() exclut les NULL en Supabase — on fetch tout et on filtre côté client
+      const { data: allStats } = await supabase
+        .from('SinistrPDF')
+        .select('MontantSinistre, "Statut de paiement"');
 
-      setSinistrePDFPaidCount(paidResult.count || 0);
-      setSinistrePDFUnpaidCount(unpaidResult.count || 0);
-      setSinistrePDFPaidAmount((paidResult.data || []).reduce((s: number, r: any) => s + (Number(r.MontantSinistre) || 0), 0));
-      setSinistrePDFUnpaidAmount((unpaidResult.data || []).reduce((s: number, r: any) => s + (Number(r.MontantSinistre) || 0), 0));
+      const allRows = allStats || [];
+      const paidRows   = allRows.filter(r => r['Statut de paiement'] === 'Payé');
+      const unpaidRows = allRows.filter(r => r['Statut de paiement'] !== 'Payé');
+
+      setSinistrePDFPaidCount(paidRows.length);
+      setSinistrePDFUnpaidCount(unpaidRows.length);
+      setSinistrePDFPaidAmount(paidRows.reduce((s: number, r: any) => s + (Number(r.MontantSinistre) || 0), 0));
+      setSinistrePDFUnpaidAmount(unpaidRows.reduce((s: number, r: any) => s + (Number(r.MontantSinistre) || 0), 0));
     } catch (e) {
       console.error('Erreur chargement SinistrPDF:', e);
     }
