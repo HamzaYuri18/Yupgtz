@@ -937,7 +937,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         await supabase
           .from('SinistrPDF')
           .update({
-            'Modede paiement': newSinistre.type_paiement,
+            'Mode de paiement': newSinistre.type_paiement,
             'Date de paiement': newSinistre.date_paiement_sinistre,
             'Statut de paiement': 'Payé'
           })
@@ -2011,119 +2011,132 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         </div>
       )}
 
-      {/* Formulaire de saisie */}
-      <div className="bg-white rounded-lg p-4 mb-6 border border-orange-200">
-        <div className="flex items-center justify-between mb-4">
-          <h4 className="font-medium text-orange-700">Nouveau Sinistre</h4>
-          <button
-            onClick={() => setShowSinistreSearch(true)}
-            className="flex items-center space-x-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
-          >
-            <Search className="w-4 h-4" />
-            <span>Rechercher un sinistre</span>
-          </button>
-        </div>
+      {/* Bouton de recherche — toujours visible */}
+      <div className="mb-4 flex">
+        <button
+          onClick={() => setShowSinistreSearch(true)}
+          className="flex items-center space-x-2 px-5 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium shadow-sm"
+        >
+          <Search className="w-4 h-4" />
+          <span>Rechercher un sinistre</span>
+        </button>
+      </div>
 
-        {/* Modal de recherche sinistre */}
-        {showSinistreSearch && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
-              <h3 className="text-lg font-semibold text-orange-800 mb-4">Rechercher un Sinistre</h3>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Numéro de sinistre</label>
-                <input
-                  type="text"
-                  value={sinistreSearchNumero}
-                  onChange={(e) => setSinistreSearchNumero(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearchSinistre()}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  placeholder="Saisir le numéro de sinistre"
-                  autoFocus
-                />
-              </div>
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => { setShowSinistreSearch(false); setSinistreSearchNumero(''); }}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                >
-                  Annuler
-                </button>
-                <button
-                  onClick={handleSearchSinistre}
-                  disabled={sinistreSearching}
-                  className="flex items-center space-x-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50"
-                >
-                  <Search className="w-4 h-4" />
-                  <span>{sinistreSearching ? 'Recherche...' : 'Rechercher'}</span>
-                </button>
-              </div>
+      {/* Modal de recherche sinistre */}
+      {showSinistreSearch && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+            <h3 className="text-lg font-semibold text-orange-800 mb-4">Rechercher un Sinistre</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Numéro de sinistre</label>
+              <input
+                type="text"
+                value={sinistreSearchNumero}
+                onChange={(e) => setSinistreSearchNumero(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearchSinistre()}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                placeholder="Saisir le numéro de sinistre"
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => { setShowSinistreSearch(false); setSinistreSearchNumero(''); }}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleSearchSinistre}
+                disabled={sinistreSearching}
+                className="flex items-center space-x-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50"
+              >
+                <Search className="w-4 h-4" />
+                <span>{sinistreSearching ? 'Recherche...' : 'Rechercher'}</span>
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {sinistreFieldsLocked && (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Numéro du sinistre</label>
-                <input
-                  type="text"
-                  value={newSinistre.numero_sinistre}
-                  readOnly
-                  className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Client</label>
-                <input
-                  type="text"
-                  value={newSinistre.client}
-                  readOnly
-                  className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Montant (DT)</label>
-                <input
-                  type="number"
-                  value={newSinistre.montant}
-                  readOnly
-                  className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Date de paiement</label>
-                <input
-                  type="date"
-                  value={newSinistre.date_paiement_sinistre}
-                  readOnly
-                  className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Type de paiement</label>
-                <select
-                  value={newSinistre.type_paiement}
-                  onChange={(e) => setNewSinistre({...newSinistre, type_paiement: e.target.value as 'Espece' | 'Cheque' | 'Banque'})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                >
-                  <option value="Espece">Espèce</option>
-                  <option value="Cheque">Chèque</option>
-                  <option value="Banque">Banque</option>
-                </select>
-              </div>
+      {/* Formulaire — visible seulement après retour de la recherche */}
+      {sinistreFieldsLocked && (
+        <div className="bg-white rounded-lg p-5 mb-6 border border-orange-300 shadow-sm">
+          <h4 className="font-semibold text-orange-700 mb-4 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4" />
+            Enregistrement du paiement
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Numéro du sinistre</label>
+              <input
+                type="text"
+                value={newSinistre.numero_sinistre}
+                readOnly
+                className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed font-mono"
+              />
             </div>
-
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Client</label>
+              <input
+                type="text"
+                value={newSinistre.client}
+                readOnly
+                className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Montant (DT)</label>
+              <input
+                type="text"
+                value={Number(newSinistre.montant).toLocaleString('fr-FR')}
+                readOnly
+                className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed font-semibold text-orange-700"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date de paiement</label>
+              <input
+                type="date"
+                value={newSinistre.date_paiement_sinistre}
+                readOnly
+                className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Type de paiement</label>
+              <select
+                value={newSinistre.type_paiement}
+                onChange={(e) => setNewSinistre({...newSinistre, type_paiement: e.target.value as 'Espece' | 'Cheque' | 'Banque'})}
+                className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              >
+                <option value="Espece">Espèce</option>
+                <option value="Cheque">Chèque</option>
+                <option value="Banque">Banque</option>
+              </select>
+            </div>
+          </div>
+          <div className="mt-4 flex gap-3">
             <button
               onClick={handleSaveSinistre}
-              className="mt-4 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2"
+              className="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center space-x-2 shadow-sm"
             >
               <Save className="w-4 h-4" />
               <span>Enregistrer</span>
             </button>
-          </>
-        )}
-      </div>
+            <button
+              onClick={() => {
+                setSinistreFieldsLocked(false);
+                setFoundSinistrePDFId(null);
+                setNewSinistre({ numero_sinistre: '', montant: '', client: '', date_sinistre: new Date().toISOString().split('T')[0], date_paiement_sinistre: getSessionDate(), type_paiement: 'Espece' });
+              }}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2.5 px-4 rounded-lg transition-colors"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Liste des sinistres */}
       <div className="bg-white rounded-lg border border-orange-200">
@@ -2314,7 +2327,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                                 {row['Statut de paiement'] || 'Non payé'}
                               </span>
                             </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-gray-900">{row['Modede paiement'] || '-'}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-gray-900">{row['Mode de paiement'] || '-'}</td>
                             <td className="px-4 py-3 whitespace-nowrap text-gray-900">
                               {row['Date de paiement'] ? new Date(row['Date de paiement']).toLocaleDateString('fr-FR') : '-'}
                             </td>
@@ -2497,7 +2510,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       const from = (page - 1) * 10;
       const { data, error, count } = await supabase
         .from('SinistrPDF')
-        .select('id, NumSinistre, souscripteur, MontantSinistre, "Statut de paiement", "Modede paiement", "Date de paiement"', { count: 'exact' })
+        .select('id, NumSinistre, souscripteur, MontantSinistre, "Statut de paiement", "Mode de paiement", "Date de paiement"', { count: 'exact' })
         .order('id', { ascending: false })
         .range(from, from + 9);
 
@@ -2525,7 +2538,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     try {
       const { data, error } = await supabase
         .from('SinistrPDF')
-        .select('NumSinistre, souscripteur, MontantSinistre, "Statut de paiement", "Modede paiement", "Date de paiement"')
+        .select('NumSinistre, souscripteur, MontantSinistre, "Statut de paiement", "Mode de paiement", "Date de paiement"')
         .order('id', { ascending: false });
       if (error) throw error;
 
