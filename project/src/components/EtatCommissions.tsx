@@ -605,26 +605,35 @@ const EtatCommissions: React.FC = () => {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase whitespace-nowrap">Période</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-sky-600 uppercase whitespace-nowrap">Commission</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-pink-600 uppercase whitespace-nowrap">Comm. Vie</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-violet-600 uppercase whitespace-nowrap">Comm. Libérée</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-red-600 uppercase whitespace-nowrap">Charges</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-amber-600 uppercase whitespace-nowrap">Dépenses</th>
-                <th className="px-3 py-3 text-right text-xs font-semibold text-emerald-700 uppercase whitespace-nowrap">Comm. Nette</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Statut</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Liquidation</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Remarques</th>
-                <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Actions</th>
+            <thead>
+              <tr className="bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-900">
+                <th className="px-3 py-4 text-left text-[11px] font-bold text-white/70 uppercase tracking-wider whitespace-nowrap">Période</th>
+                <th className="px-3 py-4 text-right text-[11px] font-bold text-sky-300 uppercase tracking-wider whitespace-nowrap">Commission</th>
+                <th className="px-3 py-4 text-right text-[11px] font-bold text-pink-300 uppercase tracking-wider whitespace-nowrap">Comm. Vie</th>
+                <th className="px-3 py-4 text-right text-[11px] font-bold text-violet-300 uppercase tracking-wider whitespace-nowrap">Comm. Libérée</th>
+                <th className="px-3 py-4 text-right text-[11px] font-bold text-red-300 uppercase tracking-wider whitespace-nowrap">Charges</th>
+                <th className="px-3 py-4 text-right text-[11px] font-bold text-amber-300 uppercase tracking-wider whitespace-nowrap">Dépenses</th>
+                <th className="px-3 py-4 text-right text-[11px] font-bold text-emerald-300 uppercase tracking-wider whitespace-nowrap">Comm. Nette</th>
+                <th className="px-3 py-4 text-left text-[11px] font-bold text-white/70 uppercase tracking-wider">Statut</th>
+                <th className="px-3 py-4 text-left text-[11px] font-bold text-white/70 uppercase tracking-wider">Liquidation</th>
+                <th className="px-3 py-4 text-left text-[11px] font-bold text-white/70 uppercase tracking-wider">Remarques</th>
+                <th className="px-3 py-4 text-center text-[11px] font-bold text-white/70 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filteredQuinzaines.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((quinzaine) => {
+            <tbody className="divide-y divide-gray-100/60">
+              {filteredQuinzaines.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((quinzaine, rowIdx) => {
                 const editing = isEditing(quinzaine);
                 return (
-                  <tr key={`${quinzaine.annee}-${quinzaine.mois}-${quinzaine.quinzaine}`} className="hover:bg-gray-50">
+                  <tr
+                    key={`${quinzaine.annee}-${quinzaine.mois}-${quinzaine.quinzaine}`}
+                    className={`border-l-4 transition-all duration-200 ${
+                      editing
+                        ? 'bg-sky-50 border-l-sky-500 ring-1 ring-inset ring-sky-200'
+                        : quinzaine.statut === 'Liquidée'
+                          ? `${rowIdx % 2 === 0 ? 'bg-emerald-50/40' : 'bg-white'} border-l-emerald-500 hover:bg-emerald-100/50`
+                          : `${rowIdx % 2 === 0 ? 'bg-white' : 'bg-amber-50/20'} border-l-amber-400 hover:bg-amber-50/60`
+                    }`}
+                  >
                     {/* Période */}
                     <td className="px-3 py-3">
                       <div className="font-medium text-gray-900 whitespace-nowrap">

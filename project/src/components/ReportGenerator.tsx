@@ -431,16 +431,16 @@ const ReportGenerator: React.FC = () => {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
+              <thead>
+                <tr className="bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-800">
                   {['Numéro','Branche','Assuré','Prime (DT)','Échéance','Date Paiement',''].map((h, i) => (
-                    <th key={i} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                    <th key={i} className="px-5 py-4 text-left text-[11px] font-bold text-white/80 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
-                {sessionTermeContracts.map(c => (
-                  <tr key={c.id} className="hover:bg-blue-50/30 transition-colors">
+              <tbody className="divide-y divide-blue-50">
+                {sessionTermeContracts.map((c, idx) => (
+                  <tr key={c.id} className={`border-l-4 border-l-blue-400 transition-all duration-200 ${idx % 2 === 0 ? 'bg-white' : 'bg-blue-50/25'} hover:bg-blue-50/60 hover:shadow-sm`}>
                     <td className="px-5 py-3 font-medium text-gray-900">{c.numero_contrat}</td>
                     <td className="px-5 py-3">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${branchColors[c.branche] || 'bg-gray-100 text-gray-600'}`}>{c.branche}</span>
@@ -481,16 +481,16 @@ const ReportGenerator: React.FC = () => {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
+              <thead>
+                <tr className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-800">
                   {['Numéro','Branche','Assuré','Prime (DT)','Paiement','Créé par','Date',''].map((h, i) => (
-                    <th key={i} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                    <th key={i} className="px-5 py-4 text-left text-[11px] font-bold text-white/80 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
-                {(showSessionData ? sessionAffaireContracts : affaireContracts).map(c => (
-                  <tr key={c.id} className="hover:bg-emerald-50/30 transition-colors">
+              <tbody className="divide-y divide-emerald-50">
+                {(showSessionData ? sessionAffaireContracts : affaireContracts).map((c, idx) => (
+                  <tr key={c.id} className={`border-l-4 border-l-emerald-400 transition-all duration-200 ${idx % 2 === 0 ? 'bg-white' : 'bg-emerald-50/25'} hover:bg-emerald-50/60 hover:shadow-sm`}>
                     <td className="px-5 py-3 font-medium text-gray-900">{c.numero_contrat}</td>
                     <td className="px-5 py-3">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${branchColors[c.branche] || 'bg-gray-100 text-gray-600'}`}>{c.branche}</span>
@@ -536,14 +536,14 @@ const ReportGenerator: React.FC = () => {
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
+            <thead>
+              <tr className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-900">
                 {['N° Contrat','Type','Branche','Assuré','Prime','Montant','Mode Paiement','Type Paiement','Montant Crédit','Date Prévu','Échéance','Créé par','Date',''].map((h, i) => (
-                  <th key={i} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  <th key={i} className="px-4 py-4 text-left text-[11px] font-bold text-white/80 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-gray-100/70">
               {filteredContracts.length === 0 ? (
                 <tr>
                   <td colSpan={14} className="px-6 py-16 text-center">
@@ -554,8 +554,10 @@ const ReportGenerator: React.FC = () => {
                     </div>
                   </td>
                 </tr>
-              ) : filteredContracts.map(c => (
-                <tr key={c.id} className="hover:bg-gray-50/70 transition-colors">
+              ) : filteredContracts.map((c, idx) => (
+                <tr key={c.id} className={`border-l-4 transition-all duration-200 ${
+                  idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'
+                } ${(c.montant || 0) >= 0 ? 'border-l-emerald-400 hover:bg-emerald-50/30' : 'border-l-red-400 hover:bg-red-50/20'}`}>
                   <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{c.numero_contrat}</td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
