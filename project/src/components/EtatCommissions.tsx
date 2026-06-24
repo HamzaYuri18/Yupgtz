@@ -34,7 +34,7 @@ const EtatCommissions: React.FC = () => {
   const [commissionLibInput, setCommissionLibInput] = useState<string>('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [filterAnnee, setFilterAnnee] = useState<string>('all');
+  const [filterAnnee, setFilterAnnee] = useState<string>(String(new Date().getFullYear()));
   const [filterQuinzaine, setFilterQuinzaine] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
