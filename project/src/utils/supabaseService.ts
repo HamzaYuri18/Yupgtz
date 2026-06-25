@@ -2502,7 +2502,7 @@ export const syncMissingCredits = async (): Promise<number> => {
     // Chercher avec les deux graphies possibles (accent ou non)
     const { data: rapportCredits, error: rapportError } = await supabase
       .from('rapport')
-      .select('numero_contrat, prime, assure, branche, montant_credit, date_paiement_prevue, cree_par, type_paiement')
+      .select('numero_contrat, prime, assure, branche, montant_credit, date_paiement_prevue, cree_par, type_paiement, created_at')
       .or('type_paiement.eq.Crédit,type_paiement.eq.Credit,type_paiement.ilike.cr%dit');
 
     if (rapportError) {
@@ -2538,14 +2538,17 @@ export const syncMissingCredits = async (): Promise<number> => {
     for (const [num, row] of uniqueByContract) {
       if (!existingNums.has(num)) {
         const montantCredit = row.montant_credit || row.prime;
-        console.log(`➕ À insérer: ${num} (montant: ${montantCredit})`);
+        // Utiliser date_paiement_prevue si disponible, sinon la date de création dans rapport
+        const datePrevue = row.date_paiement_prevue
+          || (row.created_at ? row.created_at.split('T')[0] : null);
+        console.log(`➕ À insérer: ${num} (montant: ${montantCredit}, date: ${datePrevue})`);
         toInsert.push({
           numero_contrat: num,
           prime: row.prime,
           assure: row.assure,
           branche: row.branche,
           montant_credit: montantCredit,
-          date_paiement_prevue: row.date_paiement_prevue,
+          date_paiement_prevue: datePrevue,
           cree_par: row.cree_par || 'Système',
           statut: 'Non payé',
           solde: montantCredit,
@@ -2554,19 +2557,57 @@ export const syncMissingCredits = async (): Promise<number> => {
       }
     }
 
-    if (!toInsert.length) {
-      console.log('✅ syncMissingCredits: aucun crédit manquant');
+    let fixed = 0;
+
+    // Corriger les dates erronées pour les crédits déjà présents dans liste_credits
+    // (cas où date_paiement_prevue = null → Supabase a mis la date du jour par défaut)
+    const today = new Date().toISOString().split('T')[0];
+    for (const [num, row] of uniqueByContract) {
+      if (existingNums.has(num)) {
+        const correctDate = row.date_paiement_prevue
+          || (row.created_at ? row.created_at.split('T')[0] : null);
+        if (!correctDate || correctDate === today) continue;
+
+        // Récupérer la date actuelle dans liste_credits pour comparer
+        const { data: existing } = await supabase
+          .from('liste_credits')
+          .select('id, date_paiement_prevue')
+          .eq('numero_contrat', num)
+          .maybeSingle();
+
+        if (existing && existing.date_paiement_prevue === today) {
+          // La date est aujourd'hui (valeur par défaut erronée) → corriger
+          const { error: updateErr } = await supabase
+            .from('liste_credits')
+            .update({ date_paiement_prevue: correctDate })
+            .eq('id', existing.id);
+
+          if (!updateErr) {
+            console.log(`🔧 Date corrigée pour ${num}: ${today} → ${correctDate}`);
+            fixed++;
+          }
+        }
+      }
+    }
+
+    if (!toInsert.length && fixed === 0) {
+      console.log('✅ syncMissingCredits: aucun crédit manquant ni date à corriger');
       return 0;
     }
 
-    const { error: insertError } = await supabase.from('liste_credits').insert(toInsert);
-    if (insertError) {
-      console.error('❌ Erreur sync crédits manquants:', insertError);
-      return 0;
+    let inserted = 0;
+    if (toInsert.length) {
+      const { error: insertError } = await supabase.from('liste_credits').insert(toInsert);
+      if (insertError) {
+        console.error('❌ Erreur sync crédits manquants:', insertError);
+      } else {
+        inserted = toInsert.length;
+      }
     }
 
-    console.log(`✅ ${toInsert.length} crédit(s) synchronisé(s) dans liste_credits`);
-    return toInsert.length;
+    const total = inserted + fixed;
+    console.log(`✅ syncMissingCredits: ${inserted} inséré(s), ${fixed} date(s) corrigée(s)`);
+    return total;
   } catch (error) {
     console.error('❌ Erreur syncMissingCredits:', error);
     return 0;
