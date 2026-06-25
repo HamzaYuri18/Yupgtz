@@ -25,6 +25,7 @@ import Productivite from './Productivite';
 import ProductiviteNotification from './ProductiviteNotification';
 import MemoireReglementNotification from './MemoireReglementNotification';
 import { getUserPermissions, UserPermissions, DEFAULT_PERMISSIONS } from '../utils/permissionsService';
+import { syncMissingCredits } from '../utils/supabaseService';
 
 type TabId =
   | 'home' | 'contract' | 'xml' | 'reports' | 'credits' | 'financial'
@@ -50,6 +51,14 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
     const session = getSession();
     if (session) {
       setSessionInfo(session);
+    }
+
+    // Synchroniser les crédits manquants au montage du dashboard
+    console.log('📋 Dashboard monté — lancement syncMissingCredits');
+    try {
+      syncMissingCredits().catch((e) => console.error('syncMissingCredits rejet:', e));
+    } catch (e) {
+      console.error('syncMissingCredits appel échoué:', e);
     }
 
     const handleBeforeUnload = () => {

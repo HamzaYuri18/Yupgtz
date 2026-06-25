@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, User, Download, MessageSquare, BarChart3, Trash2, X } from 'lucide-react';
-import { getCredits, updateCreditStatus, deleteCredit } from '../utils/supabaseService';
+import { getCredits, updateCreditStatus, deleteCredit, syncMissingCredits } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
 import * as XLSX from 'xlsx';
 import SMSModal from './SMSModal';
@@ -40,6 +40,8 @@ const CreditsList: React.FC = () => {
 
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const isHamza = currentUser === 'Hamza';
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     const session = getSession();
@@ -47,7 +49,27 @@ const CreditsList: React.FC = () => {
       setCurrentUser(session.username);
     }
     loadCredits();
+    // Synchroniser automatiquement les crédits manquants au chargement
+    handleSync(true);
   }, []);
+
+  const handleSync = async (silent = false) => {
+    setSyncing(true);
+    try {
+      const count = await syncMissingCredits();
+      if (count > 0) {
+        setSyncMsg(`✅ ${count} crédit(s) manquant(s) ajouté(s) à la liste`);
+        await loadCredits();
+      } else if (!silent) {
+        setSyncMsg('✅ Tous les crédits sont déjà synchronisés');
+      }
+    } catch (e) {
+      if (!silent) setSyncMsg('❌ Erreur lors de la synchronisation');
+    } finally {
+      setSyncing(false);
+      if (!silent) setTimeout(() => setSyncMsg(null), 4000);
+    }
+  };
 
   useEffect(() => {
     applyFilters();
@@ -600,6 +622,22 @@ const CreditsList: React.FC = () => {
           </div>
           
           <div className="flex items-center space-x-4">
+            {syncMsg && (
+              <span className="text-sm font-medium px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg">
+                {syncMsg}
+              </span>
+            )}
+            <button
+              onClick={() => handleSync(false)}
+              disabled={syncing}
+              title="Synchroniser les crédits manquants depuis le rapport"
+              className="flex items-center gap-1.5 px-3 py-2 bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-sm font-medium hover:bg-amber-200 transition-colors disabled:opacity-60"
+            >
+              <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {syncing ? 'Sync...' : 'Synchroniser'}
+            </button>
             <div className="flex items-center space-x-2 bg-gray-100 rounded-lg px-3 py-2">
               <User className="w-4 h-4 text-gray-600" />
               <span className="text-sm font-medium text-gray-700">

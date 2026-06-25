@@ -396,6 +396,18 @@ export const saveCreditContract = async (contractData: ContractData): Promise<bo
       creditAmountValue = primeValue;
     }
 
+    // Vérifier si le crédit existe déjà pour éviter les doublons
+    const { data: existingCredit } = await supabase
+      .from('liste_credits')
+      .select('id')
+      .eq('numero_contrat', contractData.contractNumber || '')
+      .maybeSingle();
+
+    if (existingCredit) {
+      console.log('⚠️ Crédit déjà dans liste_credits, ignoré');
+      return true;
+    }
+
     const { data, error } = await supabase
       .from('liste_credits')
       .insert([{
@@ -847,6 +859,20 @@ export const saveAffaireContract = async (contractData: ContractData): Promise<b
 
     await saveSuivieRealisation(contractData);
 
+    // Sauvegarder automatiquement dans liste_credits si type Crédit
+    if (contractData.paymentType === 'Crédit') {
+      await saveCreditContract({
+        contractNumber: contractData.contractNumber,
+        insuredName: contractData.insuredName,
+        premiumAmount: contractData.premiumAmount,
+        creditAmount: montantCreditValue ?? (contractData.premiumAmount || 0),
+        paymentDate: contractData.paymentDate || '',
+        branch: contractData.branch,
+        createdBy: contractData.createdBy,
+        telephone: contractData.telephone
+      });
+    }
+
     return true;
   } catch (error) {
     console.error('❌ Erreur générale lors de la sauvegarde Affaire:', error);
@@ -1033,7 +1059,20 @@ export const saveTermeContract = async (
       const monthName = dateObj.toLocaleString('fr-FR', { month: 'long' }).toLowerCase();
       const year = dateObj.getFullYear().toString();
 
-      await updateTermeStatus(contractData.contractNumber, monthName, year, 'payé');
+      await updateTermeStatus(contractData.contractNumber || '', monthName, year, 'payé');
+    }
+
+    // Sauvegarder automatiquement dans liste_credits si type Crédit
+    if (contractData.paymentType === 'Crédit' && contractData.creditAmount) {
+      await saveCreditContract({
+        contractNumber: contractData.contractNumber,
+        insuredName: contractData.insuredName,
+        premiumAmount: contractData.premiumAmount,
+        creditAmount: Number(contractData.creditAmount),
+        paymentDate: contractData.paymentDate || echeanceISO || '',
+        branch: contractData.branch,
+        createdBy: contractData.createdBy,
+      });
     }
 
     return true;
@@ -2455,7 +2494,84 @@ export const saveSuivieRealisation = async (contractData: ContractData): Promise
   }
 };
 
-// Mettez à jour l'export default à la fin du fichier pour inclure toutes les nouvelles fonctions :
+// Synchronise les contrats Crédit présents dans rapport mais absents de liste_credits
+export const syncMissingCredits = async (): Promise<number> => {
+  try {
+    console.log('🔄 syncMissingCredits: démarrage...');
+
+    // Chercher avec les deux graphies possibles (accent ou non)
+    const { data: rapportCredits, error: rapportError } = await supabase
+      .from('rapport')
+      .select('numero_contrat, prime, assure, branche, montant_credit, date_paiement_prevue, cree_par, type_paiement')
+      .or('type_paiement.eq.Crédit,type_paiement.eq.Credit,type_paiement.ilike.cr%dit');
+
+    if (rapportError) {
+      console.error('❌ syncMissingCredits: erreur lecture rapport:', rapportError);
+      return 0;
+    }
+
+    console.log(`🔄 syncMissingCredits: ${rapportCredits?.length ?? 0} ligne(s) Crédit dans rapport`);
+
+    if (!rapportCredits?.length) return 0;
+
+    // Dédupliquer par numero_contrat (garder la première occurrence)
+    const uniqueByContract = new Map<string, any>();
+    for (const row of rapportCredits) {
+      if (row.numero_contrat && !uniqueByContract.has(row.numero_contrat)) {
+        uniqueByContract.set(row.numero_contrat, row);
+      }
+    }
+
+    const { data: existingCredits, error: creditsError } = await supabase
+      .from('liste_credits')
+      .select('numero_contrat');
+
+    if (creditsError) {
+      console.error('❌ syncMissingCredits: erreur lecture liste_credits:', creditsError);
+      return 0;
+    }
+
+    const existingNums = new Set((existingCredits || []).map((c: any) => c.numero_contrat));
+    console.log(`🔄 syncMissingCredits: ${existingNums.size} crédit(s) déjà dans liste_credits`);
+
+    const toInsert: any[] = [];
+    for (const [num, row] of uniqueByContract) {
+      if (!existingNums.has(num)) {
+        const montantCredit = row.montant_credit || row.prime;
+        console.log(`➕ À insérer: ${num} (montant: ${montantCredit})`);
+        toInsert.push({
+          numero_contrat: num,
+          prime: row.prime,
+          assure: row.assure,
+          branche: row.branche,
+          montant_credit: montantCredit,
+          date_paiement_prevue: row.date_paiement_prevue,
+          cree_par: row.cree_par || 'Système',
+          statut: 'Non payé',
+          solde: montantCredit,
+          paiement: 0,
+        });
+      }
+    }
+
+    if (!toInsert.length) {
+      console.log('✅ syncMissingCredits: aucun crédit manquant');
+      return 0;
+    }
+
+    const { error: insertError } = await supabase.from('liste_credits').insert(toInsert);
+    if (insertError) {
+      console.error('❌ Erreur sync crédits manquants:', insertError);
+      return 0;
+    }
+
+    console.log(`✅ ${toInsert.length} crédit(s) synchronisé(s) dans liste_credits`);
+    return toInsert.length;
+  } catch (error) {
+    console.error('❌ Erreur syncMissingCredits:', error);
+    return 0;
+  }
+};
 
 export default {
   saveContractToRapport,
@@ -2496,7 +2612,8 @@ export default {
   getUpcomingTermes,
   getTotalTermesByMonth,
   syncTermeStatusesWithMainTable,
-  verifyTermeStatusWithEcheance
+  verifyTermeStatusWithEcheance,
+  syncMissingCredits
 };
 
 export interface RemarqueMonthStats {
