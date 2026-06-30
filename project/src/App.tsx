@@ -102,6 +102,7 @@ function App() {
 
   useEffect(() => {
     const init = async () => {
+      const startTime = Date.now();
       // 1. Vérifier la connectivité d'abord
       const online = await runConnectivityCheck();
       if (!online) {
@@ -136,9 +137,13 @@ function App() {
         }
       }
       setIsLoading(false);
-      // Masquer le splash avec animation
-      setSplashVisible(false);
-      setTimeout(() => setSplashDone(true), 750);
+      // Masquer le splash avec animation — minimum 3 secondes d'affichage
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, 3000 - elapsed);
+      setTimeout(() => {
+        setSplashVisible(false);
+        setTimeout(() => setSplashDone(true), 750);
+      }, remaining);
     };
 
     init();

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   TrendingUp, Award, Target, ChevronDown, ChevronUp,
-  Download, Filter, X, Star, Zap, BarChart2, CheckCircle, Clock
+  Download, Filter, X, Star, Zap, BarChart2, CheckCircle, Clock, Edit2, Save
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getSession } from '../utils/auth';
 import * as XLSX from 'xlsx';
 
 interface Realisation {
@@ -47,16 +48,11 @@ const TYPE_COLORS: Record<string, string> = {
 
 const CHALLENGE_MONTHS = ['2026-06', '2026-07', '2026-08'];
 
-function getLiquidationStatus(mois: string): { statut: 'Liquidé' | 'En attente'; date: string } {
-  const [year, month] = mois.split('-').map(Number);
-  const lastDayDate = new Date(year, month, 0); // dernier jour du mois
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dateFmt = lastDayDate.toLocaleDateString('fr-FR');
-  if (today > lastDayDate) {
-    return { statut: 'Liquidé', date: dateFmt };
-  }
-  return { statut: 'En attente', date: dateFmt };
+interface LiquidationRow {
+  mois: string;
+  statut: 'En attente' | 'Liquidé';
+  date_liquidation: string | null;
+  updated_by: string | null;
 }
 
 const formatDT = (n: number) =>
@@ -276,6 +272,13 @@ const Productivite: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [modalUser, setModalUser] = useState<string | null>(null);
   const [expandedBonus, setExpandedBonus] = useState<Record<string, boolean>>({});
+  const [liquidations, setLiquidations] = useState<LiquidationRow[]>([]);
+  const [editingMois, setEditingMois] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState('');
+  const [savingLiq, setSavingLiq] = useState(false);
+
+  const currentUser = getSession()?.username || '';
+  const isHamza = currentUser.toLowerCase() === 'hamza';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -287,14 +290,33 @@ const Productivite: React.FC = () => {
     setLoading(false);
   }, []);
 
+  const loadLiquidations = useCallback(async () => {
+    const { data: rows } = await supabase
+      .from('bonus_liquidation')
+      .select('mois, statut, date_liquidation, updated_by');
+    if (rows) setLiquidations(rows as LiquidationRow[]);
+  }, []);
+
+  const saveLiquidation = async (mois: string, statut: 'Liquidé' | 'En attente', date: string | null) => {
+    setSavingLiq(true);
+    await supabase.from('bonus_liquidation').upsert(
+      [{ mois, statut, date_liquidation: date || null, updated_by: currentUser }],
+      { onConflict: 'mois' }
+    );
+    await loadLiquidations();
+    setEditingMois(null);
+    setSavingLiq(false);
+  };
+
   useEffect(() => {
     load();
+    loadLiquidations();
     const channel = supabase
       .channel('suivie_realisations_productivite')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'suivie_realisations' }, () => { load(); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [load]);
+  }, [load, loadLiquidations]);
 
   const stats = computeStats(data);
   const [ahlem, rouae] = stats;
@@ -493,29 +515,87 @@ const Productivite: React.FC = () => {
               </table>
             </div>
 
-            {/* Liquidation par mois */}
+            {/* Liquidation par mois — gérée par Hamza */}
             <div className="mt-5">
               <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 text-emerald-600" />
                 Liquidation des bonus par mois
+                {isHamza && <span className="text-xs font-normal text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">Vous pouvez modifier</span>}
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {CHALLENGE_MONTHS.map(mois => {
-                  const { statut, date } = getLiquidationStatus(mois);
-                  const label = new Date(mois + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+                  const row = liquidations.find(l => l.mois === mois);
+                  const statut = row?.statut ?? 'En attente';
+                  const dateLiq = row?.date_liquidation ?? null;
                   const isLiquidé = statut === 'Liquidé';
+                  const label = new Date(mois + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+                  const isEditing = editingMois === mois;
+
                   return (
-                    <div key={mois} className={`rounded-xl border p-4 ${isLiquidé ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-gray-200'}`}>
+                    <div key={mois} className={`rounded-xl border p-4 transition-colors ${isLiquidé ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-gray-200'}`}>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-semibold text-gray-700 capitalize">{label}</span>
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${isLiquidé ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {isLiquidé ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                          {statut}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${isLiquidé ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {isLiquidé ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                            {statut}
+                          </span>
+                          {isHamza && !isEditing && (
+                            <button
+                              onClick={() => { setEditingMois(mois); setEditDate(dateLiq ?? ''); }}
+                              className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600 transition-colors"
+                              title="Modifier"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-xs text-gray-500 mb-2">
-                        {isLiquidé ? 'Liquidé le' : 'Date prévue :'} <span className="font-semibold text-gray-700">{date}</span>
-                      </p>
+
+                      {/* Affichage de la date */}
+                      {!isEditing && (
+                        <p className="text-xs text-gray-500 mb-2">
+                          {isLiquidé
+                            ? <>Liquidé le <span className="font-semibold text-emerald-700">{dateLiq ? new Date(dateLiq).toLocaleDateString('fr-FR') : '—'}</span></>
+                            : <span className="text-amber-600">Date non encore fixée</span>
+                          }
+                        </p>
+                      )}
+
+                      {/* Formulaire Hamza */}
+                      {isEditing && (
+                        <div className="mb-3 space-y-2">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => saveLiquidation(mois, 'Liquidé', editDate)}
+                              disabled={savingLiq || !editDate}
+                              className="flex-1 py-1.5 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                            >
+                              Marquer Liquidé
+                            </button>
+                            <button
+                              onClick={() => saveLiquidation(mois, 'En attente', null)}
+                              disabled={savingLiq}
+                              className="flex-1 py-1.5 text-xs font-semibold bg-amber-100 text-amber-800 rounded-lg hover:bg-amber-200 disabled:opacity-50 transition-colors"
+                            >
+                              En attente
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="date"
+                              value={editDate}
+                              onChange={e => setEditDate(e.target.value)}
+                              className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                            />
+                            <button onClick={() => setEditingMois(null)} className="text-gray-400 hover:text-gray-600">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Bonus par utilisateur */}
                       <div className="space-y-1">
                         {stats.map(s => {
                           const mb = computeMonthlyBonus(data, s.utilisateur, mois);
@@ -529,6 +609,10 @@ const Productivite: React.FC = () => {
                           );
                         })}
                       </div>
+
+                      {row?.updated_by && (
+                        <p className="text-[10px] text-gray-400 mt-2">Mis à jour par {row.updated_by}</p>
+                      )}
                     </div>
                   );
                 })}
