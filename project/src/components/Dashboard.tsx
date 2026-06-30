@@ -24,6 +24,7 @@ import SMSingHistory from './SMSingHistory';
 import Productivite from './Productivite';
 import ProductiviteNotification from './ProductiviteNotification';
 import MemoireReglementNotification from './MemoireReglementNotification';
+import ProlongationExceptionnelle from './ProlongationExceptionnelle';
 import { getUserPermissions, UserPermissions, DEFAULT_PERMISSIONS } from '../utils/permissionsService';
 import { syncMissingCredits } from '../utils/supabaseService';
 
@@ -31,7 +32,8 @@ type TabId =
   | 'home' | 'contract' | 'xml' | 'reports' | 'credits' | 'financial'
   | 'terme' | 'transactions' | 'cheques' | 'versement'
   | 'encaissement' | 'commissions' | 'statistics' | 'salaires'
-  | 'attestations' | 'reporting' | 'gestion_acces' | 'smsing' | 'productivite';
+  | 'attestations' | 'reporting' | 'gestion_acces' | 'smsing' | 'productivite'
+  | 'prolongation';
 
 interface DashboardProps {
   username: string;
@@ -199,6 +201,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
             {(isHamza || canAccess('smsing')) && navBtn('smsing', 'SMSing', <MessageSquare className="w-4 h-4" />)}
             {(isHamza || canAccess('productivite')) && navBtn('productivite', 'Productivite', <Activity className="w-4 h-4" />)}
             {isHamza && navBtn('gestion_acces', 'Gestion Acces', <Shield className="w-4 h-4" />)}
+            {navBtn('prolongation', 'Prolongation', <FileText className="w-4 h-4" />)}
           </div>
         </div>
       </nav>
@@ -224,6 +227,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
         {activeTab === 'smsing' && (isHamza || canAccess('smsing')) && <SMSingHistory />}
         {activeTab === 'productivite' && (isHamza || canAccess('productivite')) && <Productivite />}
         {activeTab === 'gestion_acces' && isHamza && <GestionAcces currentUser={username} />}
+        {activeTab === 'prolongation' && <ProlongationExceptionnelle />}
       </main>
 
       {showLogoutConfirmation && (
