@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
-  Search, AlertTriangle, CheckCircle, Send, Download,
-  FileText, Clock, Car, User, MapPin, Calendar,
+  Search, AlertTriangle, CheckCircle, Download,
+  FileText, Car, MapPin, Calendar,
   RotateCcw, Shield
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -13,13 +13,7 @@ const MOIS_TABLE: Record<number, string> = {
   6: 'juillet', 7: 'aout', 8: 'septembre', 9: 'octobre', 10: 'novembre', 11: 'decembre'
 };
 
-const MOIS_DISPLAY: Record<number, string> = {
-  0: 'Janvier', 1: 'Février', 2: 'Mars', 3: 'Avril', 4: 'Mai', 5: 'Juin',
-  6: 'Juillet', 7: 'Août', 8: 'Septembre', 9: 'Octobre', 10: 'Novembre', 11: 'Décembre'
-};
 
-const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN || '';
-const TELEGRAM_CHAT_ID   = import.meta.env.VITE_TELEGRAM_HAMZA_CHAT_ID || '';
 
 interface ProlongForm {
   numero_contrat: string;
@@ -206,46 +200,6 @@ const generateProlongationPDF = (f: ProlongForm) => {
   doc.save(`prolongation_${f.numero_contrat.replace(/\//g, '-')}.pdf`);
 };
 
-// ── Envoi Telegram ────────────────────────────────────────────────────────────
-
-const sendTelegramToHamza = async (f: ProlongForm): Promise<{ ok: boolean; msg: string }> => {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-    return { ok: false, msg: 'Telegram non configuré (variables VITE_TELEGRAM_BOT_TOKEN / VITE_TELEGRAM_HAMZA_CHAT_ID manquantes)' };
-  }
-  const now = new Date();
-  const text = [
-    '🔔 *DEMANDE DE PROLONGATION EXCEPTIONNELLE*',
-    '',
-    `📋 *Contrat :* \`${f.numero_contrat}\``,
-    `👤 *Assuré :* ${f.assure}`,
-    `🏢 *Pour le compte de :* ${f.pour_le_compte || '—'}`,
-    `🏷️ *Classe :* ${f.classe || '—'}`,
-    `📅 *Date effet :* ${formatDateFR(f.date_effet)}`,
-    `📅 *Date échéance :* ${formatDateFR(f.date_echeance)}`,
-    `📅 *Date fin prolongation :* ${formatDateFR(f.date_fin_prolongation)}`,
-    `🚗 *Marque :* ${f.marque || '—'}`,
-    `⚡ *Puissance :* ${f.puissance || '—'}`,
-    `🔢 *Immatriculation :* ${f.immatriculation || '—'}`,
-    `🛣️ *Usage :* ${f.usage || '—'}`,
-    `🏠 *Adresse :* ${f.adresse || '—'}`,
-    `💰 *Prime :* ${f.prime} DT`,
-    '',
-    `_Demande envoyée le ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}_`,
-  ].join('\n');
-
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text, parse_mode: 'Markdown' }),
-    });
-    if (res.ok) return { ok: true, msg: 'Message Telegram envoyé à Hamza.' };
-    const body = await res.json();
-    return { ok: false, msg: `Telegram erreur: ${body?.description || res.statusText}` };
-  } catch (err: any) {
-    return { ok: false, msg: `Telegram inaccessible: ${err.message}` };
-  }
-};
 
 // ── Sauvegarde Supabase ───────────────────────────────────────────────────────
 
@@ -283,7 +237,6 @@ const ProlongationExceptionnelle: React.FC = () => {
   const [error, setError]         = useState<string | null>(null);
   const [form, setForm]           = useState<ProlongForm | null>(null);
   const [sending, setSending]     = useState(false);
-  const [telegramResult, setTelegramResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [finErr, setFinErr]       = useState<string | null>(null);
 
   // ── Step 1 : Recherche ──────────────────────────────────────────────────────
@@ -387,8 +340,6 @@ const ProlongationExceptionnelle: React.FC = () => {
 
     try {
       await saveProlongation(form);
-      const tgResult = await sendTelegramToHamza(form);
-      setTelegramResult(tgResult);
       setStep('done');
     } catch (err: any) {
       setError(`Erreur lors de l'enregistrement : ${err.message}`);
@@ -407,7 +358,6 @@ const ProlongationExceptionnelle: React.FC = () => {
     setForm(null);
     setError(null);
     setFinErr(null);
-    setTelegramResult(null);
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -653,9 +603,9 @@ const ProlongationExceptionnelle: React.FC = () => {
               className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-semibold px-8 py-3 rounded-xl hover:from-violet-700 hover:to-indigo-700 transition-all disabled:opacity-60 shadow-lg"
             >
               {sending ? (
-                <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Envoi en cours…</>
+                <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Enregistrement…</>
               ) : (
-                <><Send className="w-4 h-4" />Demander autorisation</>
+                <><CheckCircle className="w-4 h-4" />Enregistrer la prolongation</>
               )}
             </button>
           </div>
@@ -672,20 +622,6 @@ const ProlongationExceptionnelle: React.FC = () => {
             <h2 className="text-xl font-bold text-slate-800">Demande enregistrée</h2>
             <p className="text-slate-500 mt-1">La prolongation a été sauvegardée dans Supabase.</p>
           </div>
-
-          {/* Résultat Telegram */}
-          {telegramResult && (
-            <div className={`flex items-center gap-3 rounded-xl p-4 text-sm font-medium mx-auto max-w-md ${
-              telegramResult.ok
-                ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
-                : 'bg-amber-50 border border-amber-200 text-amber-700'
-            }`}>
-              {telegramResult.ok
-                ? <CheckCircle className="w-5 h-5 shrink-0" />
-                : <AlertTriangle className="w-5 h-5 shrink-0" />}
-              <span>{telegramResult.msg}</span>
-            </div>
-          )}
 
           {/* Récap */}
           <div className="bg-slate-50 rounded-xl p-5 text-left max-w-lg mx-auto space-y-2">
