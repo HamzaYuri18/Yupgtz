@@ -42,6 +42,9 @@ const CreditsList: React.FC = () => {
   const isHamza = currentUser === 'Hamza';
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [paidRangeFrom, setPaidRangeFrom] = useState('');
+  const [paidRangeTo, setPaidRangeTo] = useState('');
+  const [showPaidDetails, setShowPaidDetails] = useState(false);
 
   useEffect(() => {
     const session = getSession();
@@ -532,6 +535,19 @@ const CreditsList: React.FC = () => {
   };
 
   const stats = calculateDetailedStats();
+
+  const paidInRange = (paidRangeFrom || paidRangeTo)
+    ? credits.filter(c => {
+        const isPaid = c.statut === 'Payé' || c.statut === 'Payé en total' || c.statut === 'Payé partiellement';
+        if (!isPaid || !c.date_paiement_effectif) return false;
+        const d = new Date(c.date_paiement_effectif);
+        d.setHours(0, 0, 0, 0);
+        if (paidRangeFrom) { const f = new Date(paidRangeFrom); f.setHours(0, 0, 0, 0); if (d < f) return false; }
+        if (paidRangeTo)   { const t = new Date(paidRangeTo);   t.setHours(23, 59, 59, 999); if (d > t) return false; }
+        return true;
+      })
+    : [];
+
   const uniqueUsers = [...new Set(credits.map(c => c.cree_par).filter(Boolean))];
   const uniqueMonths = [...new Set(credits
     .map(c => c.date_credit ? c.date_credit.slice(0, 7) : null)
@@ -915,6 +931,141 @@ const CreditsList: React.FC = () => {
             <BarChart3 className="w-6 h-6" />
             <span className="text-lg">Evolution P/C - Analyse 15 Derniers Jours</span>
           </button>
+        </div>
+
+        {/* Section: Crédits Payés par Période */}
+        <div className="mb-6 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <CheckCircle className="w-5 h-5 text-green-600" />
+            <h3 className="text-base font-bold text-green-900">Crédits Payés — Par Période</h3>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <span className="text-sm text-green-700 font-medium whitespace-nowrap">Du</span>
+            <input
+              type="date"
+              value={paidRangeFrom}
+              onChange={e => { setPaidRangeFrom(e.target.value); setShowPaidDetails(false); }}
+              className="px-3 py-1.5 border border-green-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white shadow-sm"
+            />
+            <span className="text-sm text-green-700 font-medium whitespace-nowrap">au</span>
+            <input
+              type="date"
+              value={paidRangeTo}
+              onChange={e => { setPaidRangeTo(e.target.value); setShowPaidDetails(false); }}
+              className="px-3 py-1.5 border border-green-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white shadow-sm"
+            />
+            {(paidRangeFrom || paidRangeTo) && (
+              <button
+                onClick={() => { setPaidRangeFrom(''); setPaidRangeTo(''); setShowPaidDetails(false); }}
+                className="text-xs text-red-500 hover:text-red-700 font-medium underline"
+              >
+                Effacer
+              </button>
+            )}
+          </div>
+
+          {(paidRangeFrom || paidRangeTo) && (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                <div className="bg-white rounded-xl p-3 shadow-sm border border-green-100 text-center">
+                  <p className="text-3xl font-bold text-green-700">{paidInRange.length}</p>
+                  <p className="text-xs text-gray-500 font-medium mt-1">Crédits payés</p>
+                </div>
+                <div className="bg-white rounded-xl p-3 shadow-sm border border-green-100 text-center">
+                  <p className="text-xl font-bold text-green-700 tabular-nums">
+                    {paidInRange.reduce((a, c) => a + (c.paiement || 0), 0).toLocaleString('fr-FR')} DT
+                  </p>
+                  <p className="text-xs text-gray-500 font-medium mt-1">Montant encaissé</p>
+                </div>
+                <div className="bg-white rounded-xl p-3 shadow-sm border border-blue-100 text-center">
+                  <p className="text-xl font-bold text-blue-700 tabular-nums">
+                    {paidInRange.reduce((a, c) => a + (c.montant_credit || 0), 0).toLocaleString('fr-FR')} DT
+                  </p>
+                  <p className="text-xs text-gray-500 font-medium mt-1">Total crédits</p>
+                </div>
+              </div>
+
+              {paidInRange.length === 0 ? (
+                <p className="text-sm text-gray-500 italic">Aucun crédit payé dans cette période.</p>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setShowPaidDetails(v => !v)}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-green-700 hover:text-green-900 transition-colors mb-3"
+                  >
+                    {showPaidDetails ? '▲ Masquer' : '▼ Voir'} les détails ({paidInRange.length} crédit{paidInRange.length > 1 ? 's' : ''})
+                  </button>
+
+                  {showPaidDetails && (
+                    <div className="overflow-x-auto rounded-lg border border-green-200">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-green-100 border-b border-green-200">
+                            <th className="px-3 py-2 text-left font-semibold text-green-800">N° Contrat</th>
+                            <th className="px-3 py-2 text-left font-semibold text-green-800">Assuré</th>
+                            <th className="px-3 py-2 text-left font-semibold text-green-800">Branche</th>
+                            <th className="px-3 py-2 text-right font-semibold text-green-800">Crédit (DT)</th>
+                            <th className="px-3 py-2 text-right font-semibold text-green-800">Payé (DT)</th>
+                            <th className="px-3 py-2 text-right font-semibold text-green-800">Solde (DT)</th>
+                            <th className="px-3 py-2 text-left font-semibold text-green-800">Date Paiement</th>
+                            <th className="px-3 py-2 text-left font-semibold text-green-800">Statut</th>
+                            <th className="px-3 py-2 text-left font-semibold text-green-800">Créé par</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-green-50 bg-white">
+                          {paidInRange.map(c => (
+                            <tr key={c.id} className="hover:bg-green-50 transition-colors">
+                              <td className="px-3 py-2 font-medium text-gray-900">{c.numero_contrat}</td>
+                              <td className="px-3 py-2 text-gray-700">{c.assure}</td>
+                              <td className="px-3 py-2">
+                                <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-700">{c.branche}</span>
+                              </td>
+                              <td className="px-3 py-2 text-right font-semibold text-blue-700 tabular-nums">
+                                {(c.montant_credit || 0).toLocaleString('fr-FR')}
+                              </td>
+                              <td className="px-3 py-2 text-right font-semibold text-green-700 tabular-nums">
+                                {(c.paiement || 0).toLocaleString('fr-FR')}
+                              </td>
+                              <td className="px-3 py-2 text-right tabular-nums text-gray-500">
+                                {(c.solde || 0).toLocaleString('fr-FR')}
+                              </td>
+                              <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
+                                {c.date_paiement_effectif
+                                  ? new Date(c.date_paiement_effectif).toLocaleDateString('fr-FR')
+                                  : '-'}
+                              </td>
+                              <td className="px-3 py-2">
+                                <span className={`px-1.5 py-0.5 rounded-full font-semibold ${getStatusColor(c.statut)}`}>
+                                  {c.statut}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-gray-600">{c.cree_par}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-green-50 border-t border-green-200 font-semibold text-green-900">
+                            <td colSpan={3} className="px-3 py-2">Total</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-blue-800">
+                              {paidInRange.reduce((a, c) => a + (c.montant_credit || 0), 0).toLocaleString('fr-FR')}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums text-green-800">
+                              {paidInRange.reduce((a, c) => a + (c.paiement || 0), 0).toLocaleString('fr-FR')}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums text-gray-600">
+                              {paidInRange.reduce((a, c) => a + (c.solde || 0), 0).toLocaleString('fr-FR')}
+                            </td>
+                            <td colSpan={3} />
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
         </div>
 
         {/* Filtres (masqués quand un filtre spécial est actif) */}
