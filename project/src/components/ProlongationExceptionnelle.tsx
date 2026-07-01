@@ -51,151 +51,104 @@ const daysDiff = (isoA: string, isoB: string): number => {
   return Math.round((b - a) / 86400000);
 };
 
-// ── Génération PDF (deux coupons sur une page A4) ─────────────────────────────
+// ── Génération PDF — reproduit fidèlement la mise en page du template ──────────
 
 const generateProlongationPDF = (f: ProlongForm) => {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const W = doc.internal.pageSize.getWidth();
   const now = new Date();
   const dateStr = now.toLocaleDateString('fr-FR');
   const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
-  const drawCoupon = (yOffset: number, withAdresse: boolean) => {
-    const lx = 15;
-    const rx = 118;
-    let y = yOffset;
-
-    // Cadre coupon
-    doc.setDrawColor(100, 100, 120);
-    doc.setLineWidth(0.4);
-    doc.rect(10, yOffset - 4, W - 20, 76);
-
-    // Code compagnie
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'bold');
-    doc.text('503', lx, y);
-
-    // Ligne séparatrice verticale
-    doc.setLineWidth(0.2);
-    doc.line(rx - 5, yOffset - 4, rx - 5, yOffset + 72);
-
-    // ── Colonne gauche ───────────────────────────────────
-    y += 9;
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Numéro Contrat :', lx, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(f.numero_contrat, lx + 38, y);
-
-    y += 7;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Classe :', lx, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(f.classe, lx + 20, y);
-
-    y += 7;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Date effet :', lx, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(formatDateFR(f.date_effet), lx + 27, y);
-
-    y += 7;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Date fin prolongation :', lx, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(formatDateFR(f.date_fin_prolongation), lx + 51, y);
-
-    y += 7;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Assuré :', lx, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(f.assure, lx + 20, y);
-
-    y += 7;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Pour le compte de :', lx, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(f.pour_le_compte || '—', lx + 45, y);
-
-    if (withAdresse && f.adresse) {
-      y += 7;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Adresse :', lx, y);
-      doc.setFont('helvetica', 'normal');
-      const lines = doc.splitTextToSize(f.adresse, 95);
-      doc.text(lines, lx + 24, y);
-    }
-
-    // ── Colonne droite ───────────────────────────────────
-    let ry = yOffset + 9;
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('Marque :', rx, ry);
-    doc.setFont('helvetica', 'normal');
-    doc.text(f.marque, rx + 22, ry);
-
-    ry += 7;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Puissance :', rx, ry);
-    doc.setFont('helvetica', 'normal');
-    doc.text(f.puissance, rx + 28, ry);
-
-    ry += 7;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Immatriculation :', rx, ry);
-    doc.setFont('helvetica', 'normal');
-    doc.text(f.immatriculation, rx + 40, ry);
-
-    ry += 7;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Usage :', rx, ry);
-    doc.setFont('helvetica', 'normal');
-    doc.text(f.usage, rx + 18, ry);
-
-    ry += 7;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Date :', rx, ry);
-    doc.setFont('helvetica', 'normal');
-    doc.text(dateStr, rx + 16, ry);
-
-    ry += 7;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Heure :', rx, ry);
-    doc.setFont('helvetica', 'normal');
-    doc.text(timeStr, rx + 19, ry);
+  // Helpers : label (normal) et valeur (bold) à la position exacte
+  const L = (text: string, x: number, y: number, sz = 8) => {
+    doc.setFontSize(sz); doc.setFont('helvetica', 'normal'); doc.text(text, x, y);
+  };
+  const V = (text: string, x: number, y: number, sz = 8) => {
+    doc.setFontSize(sz); doc.setFont('helvetica', 'bold'); doc.text(text || '', x, y);
   };
 
-  // Coupon 1 (haut de page)
-  drawCoupon(18, false);
-  // Coupon 2 (milieu)
-  drawCoupon(105, true);
-
-  // ── Bloc récapitulatif bas de page ───────────────────────────────────────────
-  doc.setDrawColor(60, 60, 80);
-  doc.setFillColor(240, 240, 248);
-  doc.setLineWidth(0.5);
-  doc.rect(10, 192, W - 20, 48, 'FD');
-
-  doc.setFontSize(13);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(40, 40, 80);
-  doc.text('Date fin prolongation :', W / 2, 204, { align: 'center' });
-
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text(formatDateFR(f.date_fin_prolongation), W / 2, 215, { align: 'center' });
-
-  doc.setLineWidth(0.3);
-  doc.line(20, 221, W - 20, 221);
-
-  doc.setFontSize(13);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Immatriculation :', W / 2, 231, { align: 'center' });
-
-  doc.setFontSize(16);
-  doc.text(f.immatriculation, W / 2, 242, { align: 'center' });
-
   doc.setTextColor(0, 0, 0);
+
+  // ══════════════════════════════════════════════════════
+  //  COUPON 1  (calqué sur la moitié haute du template)
+  // ══════════════════════════════════════════════════════
+
+  doc.setDrawColor(160); doc.setLineWidth(0.3);
+  doc.line(10, 8, 200, 8);          // trait supérieur
+
+  // Code compagnie 503 (centre-gauche)
+  L('503', 63, 16, 9);
+
+  // ── Bloc centre-gauche : infos contrat ──────────────
+  L('Numero Contrat', 45, 23);   V(f.numero_contrat,    83, 23);
+  L('Classe',         57, 30);   V(f.classe,            74, 30);
+  L('Date effet',     45, 37);   V(formatDateFR(f.date_effet), 68, 37);
+  // "Date  fin" sur une ligne, "prolongation" sur la suivante
+  L('Date',           45, 44);
+  L('fin',            56, 44);   V(formatDateFR(f.date_fin_prolongation), 67, 44);
+  L('prolongation',   45, 50);
+
+  // ── Bloc bas-gauche : assuré ─────────────────────────
+  L('Assuré',               10, 63);   V(f.assure,                  27, 63);
+  L('Pour le compte de :',  10, 70);   V(f.pour_le_compte || '',    56, 70);
+
+  // ── Bloc droite : infos véhicule ────────────────────
+  L('Marque',          133, 16);   V(f.marque,          152, 16);
+  L('Puissance',       133, 30);   V(f.puissance,       154, 30);
+  L('Immatriculation', 133, 44);   V(f.immatriculation, 163, 44);
+  L('Usage',           133, 55);   V(f.usage,           146, 55);
+  L('Date',            133, 66);   V(dateStr,           141, 66);
+  L('Time',            133, 72);   V(timeStr,           141, 72);
+
+  // Trait de séparation entre les deux coupons
+  doc.setDrawColor(160); doc.setLineWidth(0.3);
+  doc.line(10, 85, 200, 85);
+
+  // ══════════════════════════════════════════════════════
+  //  COUPON 2  (calqué sur la moitié basse du template)
+  // ══════════════════════════════════════════════════════
+
+  // 503 (à gauche, comme dans le template)
+  L('503', 50, 97, 9);
+
+  // ── Bloc centre : infos contrat ─────────────────────
+  L('Numero Contrat', 95, 97);    V(f.numero_contrat,    128, 97);
+  L('ate effet',      95, 109);   V(formatDateFR(f.date_effet), 116, 109);
+  L('Date',           95, 119);
+  L('fin',           105, 119);   V(formatDateFR(f.date_fin_prolongation), 116, 119);
+  L('prolongation',   95, 125);
+
+  // ── Bloc gauche : assuré / adresse ──────────────────
+  L('Assuré',              10, 140);   V(f.assure,                  28, 140);
+  L('Pour le compte de :', 10, 151);   V(f.pour_le_compte || '',    56, 151);
+  L('Assuré',             100, 151);   // "Assuré" répété comme dans le template
+  L('Addresse',            10, 166);   V(f.adresse || '',           32, 166);
+
+  // Date / Time (bas du coupon 2, centre-gauche)
+  L('Date', 50, 192);   V(dateStr, 62, 192);
+  L('Time', 50, 198);   V(timeStr, 62, 198);
+
+  // ── Bloc droite coupon 2 : véhicule ─────────────────
+  L('Marque',          141, 119);   V(f.marque,          157, 119);
+  L('Puissance',       141, 140);   V(f.puissance,       161, 140);
+  L('Immatriculation', 141, 153);   V(f.immatriculation, 169, 153);
+  L('Usage',           141, 166);   V(f.usage,           153, 166);
+
+  // Trait de séparation après coupon 2
+  doc.setDrawColor(160); doc.setLineWidth(0.3);
+  doc.line(10, 212, 200, 212);
+
+  // ══════════════════════════════════════════════════════
+  //  SECTION BAS — grande étiquette détachable
+  // ══════════════════════════════════════════════════════
+
+  // "Date fin prolongation" + valeur  (grande police, centrés)
+  L('Date fin prolongation', 68, 245, 13);
+  V(formatDateFR(f.date_fin_prolongation), 152, 245, 13);
+
+  // "Immatricullation" + valeur  (encore plus grande)
+  L('Immatricullation', 68, 268, 15);
+  V(f.immatriculation,  136, 268, 15);
 
   doc.save(`prolongation_${f.numero_contrat.replace(/\//g, '-')}.pdf`);
 };
