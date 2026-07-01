@@ -16,6 +16,29 @@ export interface SalaireLoyer {
   moisDisplay?: string;
 }
 
+export const getAllSalairesLoyers = async (): Promise<SalaireLoyer[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('salaires_loyer')
+      .select('*')
+      .order('annee', { ascending: false })
+      .order('mois', { ascending: false });
+
+    if (error) {
+      console.error('Erreur lors de la récupération de tous les salaires/loyers:', error);
+      return [];
+    }
+
+    return (data || []).map(d => ({
+      ...d,
+      moisDisplay: `${d.annee}-${d.mois.toString().padStart(2, '0')}`
+    }));
+  } catch (error) {
+    console.error('Erreur générale:', error);
+    return [];
+  }
+};
+
 export const getSalairesLoyers = async (startYear: number, startMois: number, endYear: number, endMois: number): Promise<SalaireLoyer[]> => {
   try {
     const { data, error } = await supabase

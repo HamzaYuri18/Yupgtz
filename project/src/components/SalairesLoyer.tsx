@@ -1,87 +1,86 @@
-import React, { useState, useEffect } from 'react';
-import { DollarSign, ChevronLeft, ChevronRight, Check, X, Save, Briefcase, Home as HomeIcon } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { DollarSign, Check, X, Save, Briefcase, Home as HomeIcon, Filter } from 'lucide-react';
 import {
   SalaireLoyer,
-  getSalairesLoyers,
+  getAllSalairesLoyers,
   upsertSalaireLoyer,
-  generateMonthsList,
   formatMonthDisplay,
-  initializeMissingMonths
+  initializeMissingMonths,
+  generateMonthsList
 } from '../utils/salairesService';
 
 type EditType = 'salaires' | 'loyer';
 
+const MONTH_NAMES = [
+  'Tous les mois', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+];
+
 export default function SalairesLoyer() {
-  const [salaires, setSalaires] = useState<SalaireLoyer[]>([]);
+  const [allSalaires, setAllSalaires] = useState<SalaireLoyer[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editType, setEditType] = useState<EditType | null>(null);
   const [editData, setEditData] = useState<Partial<SalaireLoyer>>({});
-  const [currentPage, setCurrentPage] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [filterMonth, setFilterMonth] = useState(0);
+  const [filterYear, setFilterYear] = useState(0);
 
-  const MONTHS_PER_PAGE = 6;
-  const START_MONTH = '2025-06';
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
 
-  const loadSalaires = async () => {
+  const load = async () => {
     setLoading(true);
     try {
-      const startIndex = currentPage * MONTHS_PER_PAGE;
-      const monthsList = generateMonthsList(START_MONTH, startIndex + MONTHS_PER_PAGE);
-      const displayMonths = monthsList.slice(startIndex, startIndex + MONTHS_PER_PAGE);
-
-      await initializeMissingMonths(displayMonths);
-
-      const firstMonth = displayMonths[0].split('-');
-      const lastMonth = displayMonths[displayMonths.length - 1].split('-');
-
-      const startYear = parseInt(firstMonth[0]);
-      const startMois = parseInt(firstMonth[1]);
-      const endYear = parseInt(lastMonth[0]);
-      const endMois = parseInt(lastMonth[1]);
-
-      const data = await getSalairesLoyers(startYear, startMois, endYear, endMois);
-
-      const sortedData = displayMonths.map(monthStr => {
-        const [annee, mois] = monthStr.split('-').map(Number);
-        const found = data.find(s => s.annee === annee && s.mois === mois);
-        return found || {
-          mois,
-          annee,
-          moisDisplay: monthStr,
-          montant_salaires: 0,
-          statut_salaires: false,
-          mode_liquidation_salaires: null,
-          date_liquidation_salaires: null,
-          montant_loyer: 0,
-          statut_loyer: false,
-          mode_liquidation_loyer: null,
-          date_liquidation_loyer: null
-        };
-      }).reverse();
-
-      setSalaires(sortedData);
-    } catch (error) {
-      console.error('Erreur lors du chargement des salaires:', error);
+      const monthsList = generateMonthsList('2025-06', 36);
+      const upToCurrent = monthsList.filter(m => {
+        const [y, mo] = m.split('-').map(Number);
+        return y < currentYear || (y === currentYear && mo <= currentMonth);
+      });
+      await initializeMissingMonths(upToCurrent);
+      const data = await getAllSalairesLoyers();
+      setAllSalaires(data);
+    } catch (err) {
+      console.error('Erreur chargement salaires:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadSalaires();
-  }, [currentPage]);
+  useEffect(() => { load(); }, []);
+
+  const filtered = useMemo(() =>
+    allSalaires.filter(s => {
+      if (filterMonth > 0 && s.mois !== filterMonth) return false;
+      if (filterYear > 0 && s.annee !== filterYear) return false;
+      return true;
+    }),
+    [allSalaires, filterMonth, filterYear]
+  );
+
+  const stats = useMemo(() => ({
+    salairesPayes: allSalaires.filter(s => s.statut_salaires).length,
+    salairesNonPayes: allSalaires.filter(s => !s.statut_salaires).length,
+    totalSalairesPayes: allSalaires.filter(s => s.statut_salaires).reduce((a, s) => a + s.montant_salaires, 0),
+    totalSalairesNonPayes: allSalaires.filter(s => !s.statut_salaires).reduce((a, s) => a + s.montant_salaires, 0),
+    loyerPayes: allSalaires.filter(s => s.statut_loyer).length,
+    loyerNonPayes: allSalaires.filter(s => !s.statut_loyer).length,
+    totalLoyerPayes: allSalaires.filter(s => s.statut_loyer).reduce((a, s) => a + s.montant_loyer, 0),
+    totalLoyerNonPayes: allSalaires.filter(s => !s.statut_loyer).reduce((a, s) => a + s.montant_loyer, 0),
+  }), [allSalaires]);
 
   const handleEdit = (salaire: SalaireLoyer, type: EditType) => {
-    const uniqueKey = salaire.id || `${salaire.annee}-${salaire.mois}`;
-    setEditingId(uniqueKey);
-    setEditType(type);
-    setEditData({ ...salaire });
+    const key = `${salaire.annee}-${salaire.mois}`;
+    if (editingKey === key && editType === type) {
+      setEditingKey(null); setEditType(null); setEditData({});
+    } else {
+      setEditingKey(key); setEditType(type); setEditData({ ...salaire });
+    }
   };
 
   const handleSave = async () => {
     if (!editData.mois || !editData.annee) return;
-
     setSaving(true);
     try {
       const success = await upsertSalaireLoyer({
@@ -97,385 +96,364 @@ export default function SalairesLoyer() {
         mode_liquidation_loyer: editData.statut_loyer ? editData.mode_liquidation_loyer || null : null,
         date_liquidation_loyer: editData.statut_loyer ? editData.date_liquidation_loyer || null : null
       });
-
       if (success) {
-        setEditingId(null);
-        setEditType(null);
-        setEditData({});
-        await loadSalaires();
+        setEditingKey(null); setEditType(null); setEditData({});
+        await load();
       }
-    } catch (error) {
-      console.error('Erreur lors de la sauvegarde:', error);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleCancel = () => {
-    setEditingId(null);
-    setEditType(null);
-    setEditData({});
-  };
+  const handleCancel = () => { setEditingKey(null); setEditType(null); setEditData({}); };
 
-  const handlePrevPage = () => {
-    if (currentPage > 0) {
-      setCurrentPage(currentPage - 1);
-    }
-  };
+  const yearOptions: number[] = [];
+  for (let y = currentYear + 1; y >= 2025; y--) yearOptions.push(y);
 
-  const handleNextPage = () => {
-    setCurrentPage(currentPage + 1);
-  };
+  const moisDisplay = (s: SalaireLoyer) =>
+    formatMonthDisplay(s.moisDisplay || `${s.annee}-${s.mois.toString().padStart(2, '0')}`);
 
-  if (loading) {
-    return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        </div>
+  if (loading) return (
+    <div className="bg-white rounded-lg shadow p-6">
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow">
+    <div className="space-y-5">
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl shadow p-4 border-l-4 border-green-500">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Salaires Payés</span>
+            <Briefcase className="w-4 h-4 text-green-500" />
+          </div>
+          <p className="text-3xl font-bold text-green-600">{stats.salairesPayes}</p>
+          <p className="text-xs text-gray-500 mt-1 font-medium">{stats.totalSalairesPayes.toFixed(3)} TND</p>
+        </div>
+
+        <div className="bg-white rounded-xl shadow p-4 border-l-4 border-red-400">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Salaires Non Payés</span>
+            <Briefcase className="w-4 h-4 text-red-400" />
+          </div>
+          <p className="text-3xl font-bold text-red-500">{stats.salairesNonPayes}</p>
+          <p className="text-xs text-gray-500 mt-1 font-medium">{stats.totalSalairesNonPayes.toFixed(3)} TND</p>
+        </div>
+
+        <div className="bg-white rounded-xl shadow p-4 border-l-4 border-blue-500">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Loyer Payé</span>
+            <HomeIcon className="w-4 h-4 text-blue-500" />
+          </div>
+          <p className="text-3xl font-bold text-blue-600">{stats.loyerPayes}</p>
+          <p className="text-xs text-gray-500 mt-1 font-medium">{stats.totalLoyerPayes.toFixed(3)} TND</p>
+        </div>
+
+        <div className="bg-white rounded-xl shadow p-4 border-l-4 border-orange-400">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Loyer Non Payé</span>
+            <HomeIcon className="w-4 h-4 text-orange-400" />
+          </div>
+          <p className="text-3xl font-bold text-orange-500">{stats.loyerNonPayes}</p>
+          <p className="text-xs text-gray-500 mt-1 font-medium">{stats.totalLoyerNonPayes.toFixed(3)} TND</p>
+        </div>
+      </div>
+
+      {/* Table Card */}
+      <div className="bg-white rounded-xl shadow">
+        {/* Header + Filters */}
         <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center space-x-3">
               <DollarSign className="w-6 h-6 text-blue-600" />
               <h2 className="text-xl font-bold text-gray-800">Salaires et Loyer</h2>
+              <span className="text-sm text-gray-400">({filtered.length} période{filtered.length > 1 ? 's' : ''})</span>
             </div>
             <div className="flex items-center space-x-2">
-              <button
-                onClick={handlePrevPage}
-                disabled={currentPage === 0}
-                className={`p-2 rounded-lg transition-colors ${
-                  currentPage === 0
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
-                }`}
+              <Filter className="w-4 h-4 text-gray-400 shrink-0" />
+              <select
+                value={filterMonth}
+                onChange={e => setFilterMonth(Number(e.target.value))}
+                className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <span className="text-sm text-gray-600 px-3">
-                Page {currentPage + 1}
-              </span>
-              <button
-                onClick={handleNextPage}
-                className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                {MONTH_NAMES.map((m, i) => (
+                  <option key={i} value={i}>{m}</option>
+                ))}
+              </select>
+              <select
+                value={filterYear}
+                onChange={e => setFilterYear(Number(e.target.value))}
+                className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <ChevronRight className="w-5 h-5" />
-              </button>
+                <option value={0}>Toutes années</option>
+                {yearOptions.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+              {(filterMonth > 0 || filterYear > 0) && (
+                <button
+                  onClick={() => { setFilterMonth(0); setFilterYear(0); }}
+                  className="text-xs text-red-500 hover:text-red-700 font-medium underline whitespace-nowrap"
+                >
+                  Effacer
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border border-blue-200">
-              <div className="flex items-center space-x-2 mb-4">
-                <Briefcase className="w-5 h-5 text-blue-700" />
-                <h3 className="text-lg font-bold text-blue-900">Salaires</h3>
-              </div>
-              <div className="space-y-3">
-                {salaires.map((salaire) => {
-                  const uniqueKey = salaire.id || `${salaire.annee}-${salaire.mois}`;
-                  const isEditing = editingId === uniqueKey && editType === 'salaires';
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
+                <th className="px-4 py-3 text-left font-semibold">Période</th>
+                <th className="px-4 py-3 text-right font-semibold">
+                  <div className="flex items-center justify-end space-x-1">
+                    <Briefcase className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Salaires</span>
+                  </div>
+                </th>
+                <th className="px-4 py-3 text-center font-semibold">Statut Salaires</th>
+                <th className="px-4 py-3 text-right font-semibold">
+                  <div className="flex items-center justify-end space-x-1">
+                    <HomeIcon className="w-3.5 h-3.5 text-green-600" />
+                    <span>Loyer</span>
+                  </div>
+                </th>
+                <th className="px-4 py-3 text-center font-semibold">Statut Loyer</th>
+                <th className="px-4 py-3 text-center font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filtered.map((salaire) => {
+                const key = `${salaire.annee}-${salaire.mois}`;
+                const isEditingSalaires = editingKey === key && editType === 'salaires';
+                const isEditingLoyer = editingKey === key && editType === 'loyer';
+                const isEditing = isEditingSalaires || isEditingLoyer;
+                const isSalairesPaid = salaire.statut_salaires;
+                const isLoyerPaid = salaire.statut_loyer;
 
-                  return (
-                    <div key={`salaires-${uniqueKey}`} className="bg-white rounded-lg p-4 shadow-sm">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm font-semibold text-gray-700">
-                          {formatMonthDisplay(salaire.moisDisplay || `${salaire.annee}-${salaire.mois.toString().padStart(2, '0')}`)}
+                return (
+                  <React.Fragment key={key}>
+                    <tr className={`transition-colors ${isEditing ? 'bg-blue-50/60' : 'hover:bg-gray-50'}`}>
+                      <td className="px-4 py-3 font-semibold text-gray-800">{moisDisplay(salaire)}</td>
+
+                      <td className="px-4 py-3 text-right">
+                        <span className="font-semibold text-gray-900">
+                          {salaire.montant_salaires.toFixed(3)}
+                          <span className="text-xs font-normal text-gray-400 ml-1">TND</span>
                         </span>
-                        {isEditing ? (
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                              editData.statut_salaires
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}
-                          >
-                            {editData.statut_salaires ? 'Liquidé' : 'Non liquidé'}
-                          </span>
-                        ) : (
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                              salaire.statut_salaires
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}
-                          >
-                            {salaire.statut_salaires ? (
-                              <>
-                                <Check className="w-3 h-3 mr-1" />
-                                Liquidé
-                              </>
-                            ) : (
-                              <>
-                                <X className="w-3 h-3 mr-1" />
-                                Non liquidé
-                              </>
-                            )}
-                          </span>
+                        {isSalairesPaid && salaire.mode_liquidation_salaires && (
+                          <p className="text-xs text-gray-400">{salaire.mode_liquidation_salaires}</p>
                         )}
-                      </div>
+                      </td>
 
-                      {isEditing ? (
-                        <div className="space-y-3">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Montant</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={editData.montant_salaires || 0}
-                              onChange={(e) => setEditData({ ...editData, montant_salaires: parseFloat(e.target.value) || 0 })}
-                              className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Statut</label>
-                            <select
-                              value={editData.statut_salaires ? 'true' : 'false'}
-                              onChange={(e) => setEditData({ ...editData, statut_salaires: e.target.value === 'true' })}
-                              className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            >
-                              <option value="false">Non liquidé</option>
-                              <option value="true">Liquidé</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Mode de Liquidation</label>
-                            <select
-                              value={editData.mode_liquidation_salaires || ''}
-                              onChange={(e) => setEditData({ ...editData, mode_liquidation_salaires: e.target.value || null })}
-                              disabled={!editData.statut_salaires}
-                              className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                            >
-                              <option value="">Sélectionner...</option>
-                              <option value="Compensation sur commission">Compensation sur commission</option>
-                              <option value="Virement">Virement</option>
-                              <option value="Cheque">Chèque</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Date de Liquidation</label>
-                            <input
-                              type="date"
-                              value={editData.date_liquidation_salaires || ''}
-                              onChange={(e) => setEditData({ ...editData, date_liquidation_salaires: e.target.value || null })}
-                              disabled={!editData.statut_salaires}
-                              className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                            />
-                          </div>
-                          <div className="flex space-x-2 pt-2">
-                            <button
-                              onClick={handleSave}
-                              disabled={saving}
-                              className="flex-1 inline-flex items-center justify-center px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                            >
-                              <Save className="w-4 h-4 mr-1" />
-                              Enregistrer
-                            </button>
-                            <button
-                              onClick={handleCancel}
-                              disabled={saving}
-                              className="flex-1 inline-flex items-center justify-center px-3 py-1.5 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
-                            >
-                              <X className="w-4 h-4 mr-1" />
-                              Annuler
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-500">Montant:</span>
-                            <span className="text-sm font-medium text-gray-900">{salaire.montant_salaires.toFixed(2)} TND</span>
-                          </div>
-                          {salaire.statut_salaires && (
-                            <>
-                              <div className="flex justify-between items-center">
-                                <span className="text-xs text-gray-500">Mode:</span>
-                                <span className="text-xs text-gray-700">{salaire.mode_liquidation_salaires || '-'}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-xs text-gray-500">Date:</span>
-                                <span className="text-xs text-gray-700">
-                                  {salaire.date_liquidation_salaires
-                                    ? new Date(salaire.date_liquidation_salaires).toLocaleDateString('fr-FR')
-                                    : '-'}
-                                </span>
-                              </div>
-                            </>
-                          )}
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          isSalairesPaid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {isSalairesPaid
+                            ? <><Check className="w-3 h-3" />Liquidé</>
+                            : <><X className="w-3 h-3" />Non liquidé</>
+                          }
+                        </span>
+                        {isSalairesPaid && salaire.date_liquidation_salaires && (
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {new Date(salaire.date_liquidation_salaires).toLocaleDateString('fr-FR')}
+                          </p>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3 text-right">
+                        <span className="font-semibold text-gray-900">
+                          {salaire.montant_loyer.toFixed(3)}
+                          <span className="text-xs font-normal text-gray-400 ml-1">TND</span>
+                        </span>
+                        {isLoyerPaid && salaire.mode_liquidation_loyer && (
+                          <p className="text-xs text-gray-400">{salaire.mode_liquidation_loyer}</p>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          isLoyerPaid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {isLoyerPaid
+                            ? <><Check className="w-3 h-3" />Liquidé</>
+                            : <><X className="w-3 h-3" />Non liquidé</>
+                          }
+                        </span>
+                        {isLoyerPaid && salaire.date_liquidation_loyer && (
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {new Date(salaire.date_liquidation_loyer).toLocaleDateString('fr-FR')}
+                          </p>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
                           <button
                             onClick={() => handleEdit(salaire, 'salaires')}
-                            className="w-full mt-2 text-blue-600 hover:text-blue-800 text-xs font-medium transition-colors"
+                            className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                              isEditingSalaires
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                            }`}
                           >
-                            Modifier
+                            {isEditingSalaires ? '▲' : '▼'} Salaires
                           </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border border-green-200">
-              <div className="flex items-center space-x-2 mb-4">
-                <HomeIcon className="w-5 h-5 text-green-700" />
-                <h3 className="text-lg font-bold text-green-900">Loyer</h3>
-              </div>
-              <div className="space-y-3">
-                {salaires.map((salaire) => {
-                  const uniqueKey = salaire.id || `${salaire.annee}-${salaire.mois}`;
-                  const isEditing = editingId === uniqueKey && editType === 'loyer';
-
-                  return (
-                    <div key={`loyer-${uniqueKey}`} className="bg-white rounded-lg p-4 shadow-sm">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm font-semibold text-gray-700">
-                          {formatMonthDisplay(salaire.moisDisplay || `${salaire.annee}-${salaire.mois.toString().padStart(2, '0')}`)}
-                        </span>
-                        {isEditing ? (
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                              editData.statut_loyer
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}
-                          >
-                            {editData.statut_loyer ? 'Liquidé' : 'Non liquidé'}
-                          </span>
-                        ) : (
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                              salaire.statut_loyer
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}
-                          >
-                            {salaire.statut_loyer ? (
-                              <>
-                                <Check className="w-3 h-3 mr-1" />
-                                Liquidé
-                              </>
-                            ) : (
-                              <>
-                                <X className="w-3 h-3 mr-1" />
-                                Non liquidé
-                              </>
-                            )}
-                          </span>
-                        )}
-                      </div>
-
-                      {isEditing ? (
-                        <div className="space-y-3">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Montant</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={editData.montant_loyer || 0}
-                              onChange={(e) => setEditData({ ...editData, montant_loyer: parseFloat(e.target.value) || 0 })}
-                              className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Statut</label>
-                            <select
-                              value={editData.statut_loyer ? 'true' : 'false'}
-                              onChange={(e) => setEditData({ ...editData, statut_loyer: e.target.value === 'true' })}
-                              className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                            >
-                              <option value="false">Non liquidé</option>
-                              <option value="true">Liquidé</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Mode de Liquidation</label>
-                            <select
-                              value={editData.mode_liquidation_loyer || ''}
-                              onChange={(e) => setEditData({ ...editData, mode_liquidation_loyer: e.target.value || null })}
-                              disabled={!editData.statut_loyer}
-                              className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                            >
-                              <option value="">Sélectionner...</option>
-                              <option value="Compensation sur commission">Compensation sur commission</option>
-                              <option value="Virement">Virement</option>
-                              <option value="Cheque">Chèque</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Date de Liquidation</label>
-                            <input
-                              type="date"
-                              value={editData.date_liquidation_loyer || ''}
-                              onChange={(e) => setEditData({ ...editData, date_liquidation_loyer: e.target.value || null })}
-                              disabled={!editData.statut_loyer}
-                              className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                            />
-                          </div>
-                          <div className="flex space-x-2 pt-2">
-                            <button
-                              onClick={handleSave}
-                              disabled={saving}
-                              className="flex-1 inline-flex items-center justify-center px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                            >
-                              <Save className="w-4 h-4 mr-1" />
-                              Enregistrer
-                            </button>
-                            <button
-                              onClick={handleCancel}
-                              disabled={saving}
-                              className="flex-1 inline-flex items-center justify-center px-3 py-1.5 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
-                            >
-                              <X className="w-4 h-4 mr-1" />
-                              Annuler
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-500">Montant:</span>
-                            <span className="text-sm font-medium text-gray-900">{salaire.montant_loyer.toFixed(2)} TND</span>
-                          </div>
-                          {salaire.statut_loyer && (
-                            <>
-                              <div className="flex justify-between items-center">
-                                <span className="text-xs text-gray-500">Mode:</span>
-                                <span className="text-xs text-gray-700">{salaire.mode_liquidation_loyer || '-'}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-xs text-gray-500">Date:</span>
-                                <span className="text-xs text-gray-700">
-                                  {salaire.date_liquidation_loyer
-                                    ? new Date(salaire.date_liquidation_loyer).toLocaleDateString('fr-FR')
-                                    : '-'}
-                                </span>
-                              </div>
-                            </>
-                          )}
                           <button
                             onClick={() => handleEdit(salaire, 'loyer')}
-                            className="w-full mt-2 text-green-600 hover:text-green-800 text-xs font-medium transition-colors"
+                            className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                              isEditingLoyer
+                                ? 'bg-emerald-600 text-white shadow-sm'
+                                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                            }`}
                           >
-                            Modifier
+                            {isEditingLoyer ? '▲' : '▼'} Loyer
                           </button>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+                      </td>
+                    </tr>
+
+                    {/* Inline edit panel */}
+                    {isEditing && (
+                      <tr>
+                        <td colSpan={6} className="px-4 pb-4 bg-blue-50/40">
+                          <div className="bg-white rounded-xl p-4 shadow-sm border border-blue-200 mt-1">
+                            <h4 className="font-semibold text-gray-700 mb-3 text-sm flex items-center gap-2">
+                              {editType === 'salaires'
+                                ? <Briefcase className="w-4 h-4 text-blue-600" />
+                                : <HomeIcon className="w-4 h-4 text-emerald-600" />
+                              }
+                              Modifier {editType === 'salaires' ? 'Salaires' : 'Loyer'} — {moisDisplay(salaire)}
+                            </h4>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Montant (TND)</label>
+                                <input
+                                  type="number"
+                                  step="0.001"
+                                  min="0"
+                                  value={editType === 'salaires' ? (editData.montant_salaires ?? 0) : (editData.montant_loyer ?? 0)}
+                                  onChange={e => {
+                                    const val = parseFloat(e.target.value) || 0;
+                                    setEditData(editType === 'salaires'
+                                      ? { ...editData, montant_salaires: val }
+                                      : { ...editData, montant_loyer: val });
+                                  }}
+                                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Statut</label>
+                                <select
+                                  value={editType === 'salaires'
+                                    ? (editData.statut_salaires ? 'true' : 'false')
+                                    : (editData.statut_loyer ? 'true' : 'false')}
+                                  onChange={e => {
+                                    const val = e.target.value === 'true';
+                                    setEditData(editType === 'salaires'
+                                      ? { ...editData, statut_salaires: val }
+                                      : { ...editData, statut_loyer: val });
+                                  }}
+                                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                  <option value="false">Non liquidé</option>
+                                  <option value="true">Liquidé</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Mode liquidation</label>
+                                <select
+                                  value={editType === 'salaires'
+                                    ? (editData.mode_liquidation_salaires || '')
+                                    : (editData.mode_liquidation_loyer || '')}
+                                  onChange={e => {
+                                    const val = e.target.value || null;
+                                    setEditData(editType === 'salaires'
+                                      ? { ...editData, mode_liquidation_salaires: val }
+                                      : { ...editData, mode_liquidation_loyer: val });
+                                  }}
+                                  disabled={editType === 'salaires' ? !editData.statut_salaires : !editData.statut_loyer}
+                                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                >
+                                  <option value="">Sélectionner...</option>
+                                  <option value="Compensation sur commission">Compensation sur commission</option>
+                                  <option value="Virement">Virement</option>
+                                  <option value="Cheque">Chèque</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Date liquidation</label>
+                                <input
+                                  type="date"
+                                  value={editType === 'salaires'
+                                    ? (editData.date_liquidation_salaires || '')
+                                    : (editData.date_liquidation_loyer || '')}
+                                  onChange={e => {
+                                    const val = e.target.value || null;
+                                    setEditData(editType === 'salaires'
+                                      ? { ...editData, date_liquidation_salaires: val }
+                                      : { ...editData, date_liquidation_loyer: val });
+                                  }}
+                                  disabled={editType === 'salaires' ? !editData.statut_salaires : !editData.statut_loyer}
+                                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex gap-2 mt-3">
+                              <button
+                                onClick={handleSave}
+                                disabled={saving}
+                                className="inline-flex items-center px-4 py-1.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                              >
+                                <Save className="w-4 h-4 mr-1.5" />
+                                {saving ? 'Enregistrement...' : 'Enregistrer'}
+                              </button>
+                              <button
+                                onClick={handleCancel}
+                                disabled={saving}
+                                className="inline-flex items-center px-4 py-1.5 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+                              >
+                                <X className="w-4 h-4 mr-1.5" />
+                                Annuler
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">
+                    Aucune période trouvée pour les filtres sélectionnés.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
+
+        {filtered.length > 0 && (
+          <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex justify-between items-center text-xs text-gray-500">
+            <span>{filtered.length} période{filtered.length > 1 ? 's' : ''} affichée{filtered.length > 1 ? 's' : ''} · Du plus récent au plus ancien</span>
+            <span>
+              Total affiché — Salaires: <strong>{filtered.reduce((a, s) => a + s.montant_salaires, 0).toFixed(3)} TND</strong>
+              &nbsp;|&nbsp;
+              Loyer: <strong>{filtered.reduce((a, s) => a + s.montant_loyer, 0).toFixed(3)} TND</strong>
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
