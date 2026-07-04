@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Download, TrendingUp, DollarSign, FileText, CreditCard, Trash2, X, Search, ChevronRight, ChartBar as BarChart3, Layers, Wallet, Receipt, CircleAlert as AlertCircle, CircleArrowDown as ArrowDownCircle, RefreshCw, Tag } from 'lucide-react';
+import { Calendar, Download, TrendingUp, DollarSign, FileText, CreditCard, Trash2, X, Search, ChevronRight, BarChart2, Filter, Receipt, AlertCircle, ArrowDownCircle, RefreshCw, Tag } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getSession, getSessionDate } from '../utils/auth';
 import * as XLSX from 'xlsx';
@@ -206,8 +206,8 @@ const DetailModal: React.FC<DetailModalProps> = ({
 };
 
 const TransactionReport: React.FC = () => {
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [loading, setLoading] = useState(false);
@@ -579,7 +579,7 @@ const TransactionReport: React.FC = () => {
   const statCards = statistics ? [
     {
       label: 'Total Transactions', value: statistics.totalTransactions, sub: null,
-      icon: <Layers className="w-5 h-5" />, color: 'from-blue-500 to-blue-600', textColor: 'text-blue-100',
+      icon: <Filter className="w-5 h-5" />, color: 'from-blue-500 to-blue-600', textColor: 'text-blue-100',
       filter: () => transactions, accent: 'bg-blue-600', isCount: true
     },
     {
@@ -599,7 +599,7 @@ const TransactionReport: React.FC = () => {
     },
     {
       label: 'Espèces Net', value: formatCurrency(statistics.totalEspecesNet), sub: `${statistics.countEspeces} opérations`,
-      icon: <Wallet className="w-5 h-5" />, color: 'from-teal-500 to-teal-600', textColor: 'text-teal-100',
+      icon: <DollarSign className="w-5 h-5" />, color: 'from-teal-500 to-teal-600', textColor: 'text-teal-100',
       filter: () => transactions.filter(t => t.mode_paiement === 'Espece' && t.montant > 0), accent: 'bg-teal-600', isCount: false
     },
     {
@@ -629,7 +629,7 @@ const TransactionReport: React.FC = () => {
     },
     {
       label: 'Total Recettes', value: formatCurrency(statistics.totalRecettes), sub: `${statistics.countRecettes} recettes`,
-      icon: <BarChart3 className="w-5 h-5" />, color: 'from-sky-500 to-sky-600', textColor: 'text-sky-100',
+      icon: <BarChart2 className="w-5 h-5" />, color: 'from-sky-500 to-sky-600', textColor: 'text-sky-100',
       filter: () => transactions.filter(t => t.type === 'Recette' || t.type === 'Recette Exceptionnelle'), accent: 'bg-sky-600', isCount: false
     },
   ] : [];
@@ -640,7 +640,7 @@ const TransactionReport: React.FC = () => {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-sm">
-            <BarChart3 className="w-5 h-5 text-white" />
+            <BarChart2 className="w-5 h-5 text-white" />
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-900">Rapport de Transactions</h2>
