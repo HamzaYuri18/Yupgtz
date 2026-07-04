@@ -91,6 +91,11 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     libere_le: string;
   }>>([]);
   const [useAttestationDisponible, setUseAttestationDisponible] = useState(false);
+  const [fraisInfo, setFraisInfo] = useState<{
+    montant: 5 | 15;
+    type: string;
+    jours: number;
+  } | null>(null);
 
   React.useEffect(() => {
     loadAvailableMonths();
@@ -174,6 +179,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const searchInXML = async () => {
     // Réinitialiser les résultats précédents
     setXmlSearchResult(null);
+    setFraisInfo(null);
     setMessage('');
 
     // Nettoyer le numéro de contrat avant la recherche
@@ -215,6 +221,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           premiumAmount: supabaseResult.prime.toString(),
           insuredName: supabaseResult.assure
         }));
+        if (supabaseResult.echeance) detectFraisFromEcheance(supabaseResult.echeance);
         setMessage(`✅ Contrat trouvé dans la table Supabase "${selectedMonth}"`);
         setIsLoading(false);
         return;
@@ -231,9 +238,11 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           premiumAmount: result.premium.toString(),
           insuredName: result.insured
         }));
+        if (result.maturity) detectFraisFromEcheance(result.maturity);
         setMessage('✅ Contrat trouvé dans les données XLSX locales');
       } else {
         setXmlSearchResult(null);
+        setFraisInfo(null);
         setFormData(prev => ({
           ...prev,
           premiumAmount: '',
@@ -299,6 +308,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     setOriginalPremiumAmount('');
     setShowAutreCodeMessage(false);
     setUseAttestationDisponible(false);
+    setFraisInfo(null);
     setMessage('');
 
     const inputs = document.querySelectorAll('input');
@@ -307,6 +317,22 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     });
 
     loadAttestationsDisponibles();
+  };
+
+  const detectFraisFromEcheance = (echeance: string) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const echeanceDate = new Date(echeance);
+    echeanceDate.setHours(0, 0, 0, 0);
+    const joursRetard = Math.floor((today.getTime() - echeanceDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (joursRetard > 50) {
+      setFraisInfo({ montant: 15, type: 'Frais MD et NR', jours: joursRetard });
+    } else if (joursRetard > 30) {
+      setFraisInfo({ montant: 5, type: 'Frais Mise en demeure', jours: joursRetard });
+    } else {
+      setFraisInfo(null);
+    }
   };
 
   // Fonction pour déterminer si les champs doivent être verrouillés
@@ -561,6 +587,29 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               successMessage += ` - Montant: ${contract.premiumAmount} DT`;
             }
             setMessage(successMessage);
+
+            // Enregistrer les frais (Mise en demeure ou MD+NR) si applicable
+            if (fraisInfo) {
+              try {
+                const sessionDate = getSessionDate();
+                await supabase.from('rapport').insert([{
+                  type: fraisInfo.type,
+                  branche: contract.branch,
+                  numero_contrat: contract.contractNumber,
+                  prime: fraisInfo.montant,
+                  montant: fraisInfo.montant,
+                  montant_recu: fraisInfo.montant,
+                  assure: contract.insuredName,
+                  mode_paiement: contract.paymentMode,
+                  type_paiement: 'Au comptant',
+                  cree_par: username,
+                  date_operation: sessionDate
+                }]);
+                console.log(`✅ ${fraisInfo.type} (${fraisInfo.montant} DT) enregistré dans rapport`);
+              } catch (fraisError) {
+                console.error('Erreur enregistrement frais:', fraisError);
+              }
+            }
           } else {
             setMessage('❌ Erreur lors de la sauvegarde du contrat Terme');
             setIsLoading(false);
@@ -989,6 +1038,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     setSelectedYear('');
                     setSelectedMonth('');
                     setXmlSearchResult(null);
+                    setFraisInfo(null);
                   }
                   setFormData(prev => ({
                     ...prev,
@@ -1184,6 +1234,37 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               {selectedMonth && (
                 <p className="text-xs text-green-600 mt-2">Source: Table Supabase "{selectedMonth}"</p>
               )}
+            </div>
+          )}
+
+          {/* Alerte frais de mise en demeure */}
+          {fraisInfo && formData.type === 'Terme' && (
+            <div className={`rounded-lg border p-4 flex items-start gap-3 ${
+              fraisInfo.montant === 15
+                ? 'bg-red-50 border-red-300'
+                : 'bg-amber-50 border-amber-300'
+            }`}>
+              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                fraisInfo.montant === 15 ? 'bg-red-100' : 'bg-amber-100'
+              }`}>
+                <span className="text-lg">{fraisInfo.montant === 15 ? '🚨' : '⚠️'}</span>
+              </div>
+              <div>
+                <p className={`font-semibold text-sm ${fraisInfo.montant === 15 ? 'text-red-800' : 'text-amber-800'}`}>
+                  {fraisInfo.montant === 15
+                    ? `Frais MD et NR — ${fraisInfo.montant} DT`
+                    : `Frais postal de mise en demeure (télégramme) — ${fraisInfo.montant} DT`}
+                </p>
+                <p className={`text-sm mt-1 ${fraisInfo.montant === 15 ? 'text-red-700' : 'text-amber-700'}`}>
+                  Ce contrat est en retard de <strong>{fraisInfo.jours} jours</strong>.{' '}
+                  {fraisInfo.montant === 15
+                    ? 'Des frais de mise en demeure + non-règlement de 15 DT sont applicables.'
+                    : "Des frais d'envoi de télégramme de mise en demeure de 5 DT sont applicables."}
+                </p>
+                <p className={`text-xs font-medium mt-1.5 ${fraisInfo.montant === 15 ? 'text-red-600' : 'text-amber-600'}`}>
+                  Veuillez encaisser <strong>{fraisInfo.montant} DT</strong> du client — une opération <em>"{fraisInfo.type}"</em> sera automatiquement enregistrée.
+                </p>
+              </div>
             </div>
           )}
 
