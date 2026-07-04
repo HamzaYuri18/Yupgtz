@@ -1470,26 +1470,24 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                   />
                 </div>
 
-                {isHamza && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                      <Calendar className="w-4 h-4 mr-2" />
-                      Date de paiement prévue *
-                    </label>
-                    <input
-                      type="date"
-                      name="paymentDate"
-                      value={formData.paymentDate}
-                      onChange={handleInputChange}
-                      min={new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
-                      className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 bg-white"
-                      required
-                    />
-                    <p className="text-xs text-orange-600 mt-1">
-                      Date minimum: {new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR')}
-                    </p>
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Date de paiement prévue {isHamza ? '*' : ''}
+                  </label>
+                  <input
+                    type="date"
+                    name="paymentDate"
+                    value={formData.paymentDate}
+                    onChange={handleInputChange}
+                    min={new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                    className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 bg-white"
+                    required={isHamza}
+                  />
+                  <p className="text-xs text-orange-600 mt-1">
+                    Date minimum: {new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR')}
+                  </p>
+                </div>
               </div>
               
               {/* Récapitulatif du crédit */}
