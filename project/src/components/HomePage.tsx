@@ -1456,93 +1456,102 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
         {showPromoBanner && (
           <div
-            className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[9999] p-4"
+            className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[9999] p-4"
             onClick={() => setShowPromoBanner(false)}
           >
             <div
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col"
-              style={{ maxHeight: '90vh' }}
+              className="relative w-full max-w-4xl rounded-3xl overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.85)] flex"
+              style={{ maxHeight: '86vh', minHeight: '460px' }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header — emerald to black gradient */}
-              <div className="bg-gradient-to-r from-emerald-500 to-gray-900 text-white p-6 rounded-t-2xl flex items-center justify-between flex-shrink-0">
-                <div className="flex items-center gap-3">
-                  <TrendingUp className="w-10 h-10 text-emerald-300" />
-                  <div>
-                    <h2 className="text-2xl font-bold">CHALLENGE PRODUCTIVITÉ</h2>
-                    <p className="text-emerald-200">Récompenses exclusives — Atteignez vos objectifs</p>
+              {/* Left — image carousel */}
+              <div className="relative w-[42%] flex-shrink-0 min-h-full">
+                <img
+                  src={`/images/image${promoImageIndex}.jpeg`}
+                  alt="Promo"
+                  className="absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-500"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/25 pointer-events-none" />
+
+                {/* Badge top-left */}
+                <div className="absolute top-4 left-4">
+                  <div className="inline-flex items-center gap-1.5 bg-black/50 backdrop-blur-sm border border-white/20 rounded-full px-3 py-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="text-white text-[11px] font-bold tracking-widest uppercase">Challenge</span>
                   </div>
                 </div>
-                <button
-                  onClick={() => setShowPromoBanner(false)}
-                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                >
-                  <X className="w-6 h-6" />
-                </button>
+
+                {/* Dot nav */}
+                <div className="absolute bottom-5 inset-x-0 flex justify-center gap-2">
+                  {[0, 1, 2].map(i => (
+                    <button
+                      key={i}
+                      onClick={(e) => { e.stopPropagation(); setPromoImageIndex(i); }}
+                      className={`rounded-full transition-all duration-300 ${
+                        i === promoImageIndex
+                          ? 'w-7 h-2.5 bg-white shadow-sm'
+                          : 'w-2.5 h-2.5 bg-white/45 hover:bg-white/70'
+                      }`}
+                    />
+                  ))}
+                </div>
               </div>
 
-              {/* Body */}
-              <div className="flex flex-1 min-h-0 overflow-hidden">
-                {/* Left — full image, no crop */}
-                <div className="w-[55%] flex-shrink-0 bg-gray-50 border-r border-gray-200 flex flex-col items-center justify-center p-5">
-                  <img
-                    src={`/images/image${promoImageIndex}.jpeg`}
-                    alt="Promo"
-                    className="w-full h-full object-contain rounded-xl"
-                    style={{ maxHeight: '420px' }}
-                  />
-                  {/* Dot nav */}
-                  <div className="flex justify-center gap-2 mt-4 flex-shrink-0">
-                    {[0, 1, 2].map(i => (
-                      <button
-                        key={i}
-                        onClick={(e) => { e.stopPropagation(); setPromoImageIndex(i); }}
-                        className={`rounded-full transition-all duration-300 ${
-                          i === promoImageIndex
-                            ? 'w-6 h-2 bg-emerald-500'
-                            : 'w-2 h-2 bg-gray-300 hover:bg-gray-400'
-                        }`}
-                      />
-                    ))}
+              {/* Right — content */}
+              <div className="flex-1 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+
+                {/* Header */}
+                <div className="flex items-start justify-between px-7 pt-7 pb-5 border-b border-white/8">
+                  <div>
+                    <p className="text-amber-400 text-xs font-bold tracking-widest uppercase mb-2">Récompenses exclusives</p>
+                    <h2 className="text-3xl font-black text-white leading-tight tracking-tight">
+                      Productivité<br />
+                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">& Performance</span>
+                    </h2>
+                    <p className="text-white/45 text-sm mt-2">Atteignez vos objectifs, débloquez vos primes</p>
+                  </div>
+                  <button
+                    onClick={() => setShowPromoBanner(false)}
+                    className="w-9 h-9 rounded-full bg-white/8 border border-white/15 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/18 transition-all flex-shrink-0 ml-4"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Rewards list */}
+                <div className="flex-1 px-7 py-5 space-y-3 overflow-y-auto">
+                  <div className="rounded-2xl p-4 bg-gradient-to-r from-amber-500/15 to-yellow-600/8 border border-amber-400/25 flex items-start gap-4 hover:border-amber-400/45 transition-colors">
+                    <div className="w-10 h-10 rounded-xl bg-amber-400/20 flex items-center justify-center text-xl flex-shrink-0">🏆</div>
+                    <div>
+                      <p className="text-white font-bold text-sm mb-1">Cash Bonus</p>
+                      <p className="text-white/55 text-xs leading-relaxed">Pour toute réalisation Santé, Habitation et Transport</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl p-4 bg-gradient-to-r from-sky-500/15 to-blue-600/8 border border-sky-400/25 flex items-start gap-4 hover:border-sky-400/45 transition-colors">
+                    <div className="w-10 h-10 rounded-xl bg-sky-400/20 flex items-center justify-center text-xl flex-shrink-0">🏨</div>
+                    <div>
+                      <p className="text-white font-bold text-sm mb-1">Séjour de Luxe à Tozeur</p>
+                      <p className="text-white/55 text-xs leading-relaxed">Séjour hebdomadaire dans un hôtel de luxe pour vos clients</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl p-4 bg-gradient-to-r from-rose-500/15 to-orange-600/8 border border-rose-400/25 flex items-start gap-4 hover:border-rose-400/45 transition-colors">
+                    <div className="w-10 h-10 rounded-xl bg-rose-400/20 flex items-center justify-center text-xl flex-shrink-0">🔥</div>
+                    <div>
+                      <p className="text-white font-bold text-sm mb-1">Détecteur de Fumée Offert</p>
+                      <p className="text-white/55 text-xs leading-relaxed">Formulaires sans obligation d'achat</p>
+                    </div>
                   </div>
                 </div>
 
-                {/* Right — rewards */}
-                <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-white">
-                  <h3 className="text-lg font-bold text-gray-900 mb-1">Vos récompenses</h3>
-                  <p className="text-sm text-emerald-600 mb-5">Réalisez vos objectifs pour débloquer :</p>
-
-                  <div className="space-y-3 flex-1">
-                    <div className="rounded-xl p-4 bg-white border border-emerald-200 flex items-start gap-3 hover:border-emerald-400 hover:bg-emerald-50 transition-colors">
-                      <span className="text-2xl flex-shrink-0">🏆</span>
-                      <div>
-                        <p className="font-bold text-gray-900 text-sm">Cash Bonus</p>
-                        <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Pour toute réalisation Santé, Habitation et Transport</p>
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl p-4 bg-white border border-emerald-200 flex items-start gap-3 hover:border-emerald-400 hover:bg-emerald-50 transition-colors">
-                      <span className="text-2xl flex-shrink-0">🏨</span>
-                      <div>
-                        <p className="font-bold text-gray-900 text-sm">Séjour de Luxe à Tozeur</p>
-                        <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Séjour hebdomadaire dans un hôtel de luxe pour vos clients</p>
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl p-4 bg-white border border-emerald-200 flex items-start gap-3 hover:border-emerald-400 hover:bg-emerald-50 transition-colors">
-                      <span className="text-2xl flex-shrink-0">🔥</span>
-                      <div>
-                        <p className="font-bold text-gray-900 text-sm">Détecteur de Fumée Offert</p>
-                        <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Formulaires sans obligation d'achat</p>
-                      </div>
-                    </div>
-                  </div>
-
+                {/* CTA */}
+                <div className="px-7 pb-7 pt-4 border-t border-white/8">
                   <button
                     onClick={() => setShowPromoBanner(false)}
-                    className="w-full mt-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-gray-900 text-white font-bold text-sm hover:from-emerald-400 hover:to-gray-800 active:scale-[0.98] transition-all border border-emerald-500/50"
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-slate-900 font-black text-sm tracking-wide hover:from-amber-300 hover:to-orange-400 active:scale-[0.98] transition-all shadow-lg shadow-orange-500/25"
                   >
-                    C'est parti !
+                    C'est parti ! 🚀
                   </button>
                 </div>
               </div>

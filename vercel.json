@@ -1,5 +1,7 @@
 {
-  "buildCommand": "cd project && npm install && npm run build",
-  "outputDirectory": "project/dist",
-  "installCommand": "echo skip"
+  "buildCommand": "npm install && npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "echo skip",
+  "framework": "vite",
+  "rootDirectory": "project"
 }

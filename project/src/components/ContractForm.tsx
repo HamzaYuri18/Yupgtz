@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { Save, FileText, DollarSign, Calendar, Search, CreditCard, User, Hash, Building, RotateCcw } from 'lucide-react';
 import { Contract } from '../types';
 import { saveContract, generateContractId, getXMLContracts } from '../utils/storage';
@@ -38,9 +38,6 @@ const determineBrancheForAffaire = (contractNumber: string): 'Auto' | 'Vie' | 'S
 };
 
 const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
-  const isHamza = username.toLowerCase() === 'hamza';
-  const isSubmittingRef = useRef(false);
-
   const [formData, setFormData] = useState({
     type: 'Affaire' as 'Terme' | 'Affaire' | 'Avenant changement de véhicule' | 'Encaissement pour autre code',
     branch: 'Auto' as 'Auto' | 'Vie' | 'Santé' | 'IRDS',
@@ -51,7 +48,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     paymentType: 'Au comptant' as 'Au comptant' | 'Crédit',
     creditAmount: '',
     paymentDate: '',
-    customCreatedAt: '',
     numeroCheque: '',
     banque: '',
     dateEncaissementPrevue: '',
@@ -91,11 +87,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     libere_le: string;
   }>>([]);
   const [useAttestationDisponible, setUseAttestationDisponible] = useState(false);
-  const [fraisInfo, setFraisInfo] = useState<{
-    montant: 5 | 15;
-    type: string;
-    jours: number;
-  } | null>(null);
 
   React.useEffect(() => {
     loadAvailableMonths();
@@ -179,7 +170,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const searchInXML = async () => {
     // Réinitialiser les résultats précédents
     setXmlSearchResult(null);
-    setFraisInfo(null);
     setMessage('');
 
     // Nettoyer le numéro de contrat avant la recherche
@@ -221,7 +211,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           premiumAmount: supabaseResult.prime.toString(),
           insuredName: supabaseResult.assure
         }));
-        if (supabaseResult.echeance) detectFraisFromEcheance(supabaseResult.echeance);
         setMessage(`✅ Contrat trouvé dans la table Supabase "${selectedMonth}"`);
         setIsLoading(false);
         return;
@@ -238,11 +227,9 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           premiumAmount: result.premium.toString(),
           insuredName: result.insured
         }));
-        if (result.maturity) detectFraisFromEcheance(result.maturity);
         setMessage('✅ Contrat trouvé dans les données XLSX locales');
       } else {
         setXmlSearchResult(null);
-        setFraisInfo(null);
         setFormData(prev => ({
           ...prev,
           premiumAmount: '',
@@ -292,7 +279,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
       paymentType: 'Au comptant',
       creditAmount: '',
       paymentDate: '',
-      customCreatedAt: '',
       numeroCheque: '',
       banque: '',
       dateEncaissementPrevue: '',
@@ -308,7 +294,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     setOriginalPremiumAmount('');
     setShowAutreCodeMessage(false);
     setUseAttestationDisponible(false);
-    setFraisInfo(null);
     setMessage('');
 
     const inputs = document.querySelectorAll('input');
@@ -317,22 +302,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     });
 
     loadAttestationsDisponibles();
-  };
-
-  const detectFraisFromEcheance = (echeance: string) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const echeanceDate = new Date(echeance);
-    echeanceDate.setHours(0, 0, 0, 0);
-    const joursRetard = Math.floor((today.getTime() - echeanceDate.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (joursRetard > 50) {
-      setFraisInfo({ montant: 15, type: 'Frais MD et NR', jours: joursRetard });
-    } else if (joursRetard > 30) {
-      setFraisInfo({ montant: 5, type: 'Frais Mise en demeure', jours: joursRetard });
-    } else {
-      setFraisInfo(null);
-    }
   };
 
   // Fonction pour déterminer si les champs doivent être verrouillés
@@ -587,29 +556,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               successMessage += ` - Montant: ${contract.premiumAmount} DT`;
             }
             setMessage(successMessage);
-
-            // Enregistrer les frais (Mise en demeure ou MD+NR) si applicable
-            if (fraisInfo) {
-              try {
-                const sessionDate = getSessionDate();
-                await supabase.from('rapport').insert([{
-                  type: fraisInfo.type,
-                  branche: contract.branch,
-                  numero_contrat: contract.contractNumber,
-                  prime: fraisInfo.montant,
-                  montant: fraisInfo.montant,
-                  montant_recu: fraisInfo.montant,
-                  assure: contract.insuredName,
-                  mode_paiement: contract.paymentMode,
-                  type_paiement: 'Au comptant',
-                  cree_par: username,
-                  date_operation: sessionDate
-                }]);
-                console.log(`✅ ${fraisInfo.type} (${fraisInfo.montant} DT) enregistré dans rapport`);
-              } catch (fraisError) {
-                console.error('Erreur enregistrement frais:', fraisError);
-              }
-            }
           } else {
             setMessage('❌ Erreur lors de la sauvegarde du contrat Terme');
             setIsLoading(false);
@@ -633,7 +579,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             premiumAmount: contract.premiumAmount,
             creditAmount: contract.creditAmount,
             branch: contract.branch,
-            paymentDate: cleanedFormData.customCreatedAt || sessionDate,
+            paymentDate: sessionDate,
             paymentMode: contract.paymentMode,
             paymentType: contract.paymentType,
             createdBy: username,
@@ -761,10 +707,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (isSubmittingRef.current) return;
-    isSubmittingRef.current = true;
-
-    try {
     // Nettoyer uniquement le numéro de contrat avant validation
     const cleanedFormData = {
       ...formData,
@@ -792,6 +734,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
     // VALIDATION POUR NUMERO D'ATTESTATION (obligatoire pour branche Auto sauf Terme avec Retour Contentieux)
     const isRetourContentieuxTerme = cleanedFormData.type === 'Terme' && isRetourContentieuxMode;
+    const isHamza = username.toLowerCase() === 'hamza';
 
     if (cleanedFormData.branch === 'Auto' && !isRetourContentieuxTerme) {
       if (!cleanedFormData.numeroAttestation || cleanedFormData.numeroAttestation.trim() === '') {
@@ -975,19 +918,18 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
         return;
       }
       
-      // Validation de la date pour crédit — uniquement pour Hamza
-      if (isHamza) {
-        if (!cleanedFormData.paymentDate) {
-          setMessage('❌ Veuillez saisir une date de paiement prévue pour le crédit');
-          setTimeout(() => setMessage(''), 5000);
-          return;
-        }
-        const sessionDate = getSessionDate();
-        if (cleanedFormData.paymentDate <= sessionDate) {
-          setMessage('❌ La date de paiement prévue doit être postérieure à la date de session actuelle');
-          setTimeout(() => setMessage(''), 5000);
-          return;
-        }
+      // Validation de la date pour crédit
+      if (!cleanedFormData.paymentDate) {
+        setMessage('❌ Veuillez saisir une date de paiement prévue pour le crédit');
+        setTimeout(() => setMessage(''), 5000);
+        return;
+      }
+      
+      const sessionDate = getSessionDate();
+      if (cleanedFormData.paymentDate <= sessionDate) {
+        setMessage('❌ La date de paiement prévue doit être postérieure à la date de session actuelle');
+        setTimeout(() => setMessage(''), 5000);
+        return;
       }
     } else {
       // Validation pour paiement au comptant
@@ -1001,9 +943,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
     // Toutes les validations sont passées, procéder à l'enregistrement
     await performContractSave(cleanedFormData);
-    } finally {
-      isSubmittingRef.current = false;
-    }
   };
 
   return (
@@ -1038,7 +977,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     setSelectedYear('');
                     setSelectedMonth('');
                     setXmlSearchResult(null);
-                    setFraisInfo(null);
                   }
                   setFormData(prev => ({
                     ...prev,
@@ -1050,7 +988,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     paymentType: 'Au comptant',
                     creditAmount: '',
                     paymentDate: '',
-                    customCreatedAt: '',
                     numeroCheque: '',
                     banque: '',
                     dateEncaissementPrevue: '',
@@ -1234,37 +1171,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               {selectedMonth && (
                 <p className="text-xs text-green-600 mt-2">Source: Table Supabase "{selectedMonth}"</p>
               )}
-            </div>
-          )}
-
-          {/* Alerte frais de mise en demeure */}
-          {fraisInfo && formData.type === 'Terme' && (
-            <div className={`rounded-lg border p-4 flex items-start gap-3 ${
-              fraisInfo.montant === 15
-                ? 'bg-red-50 border-red-300'
-                : 'bg-amber-50 border-amber-300'
-            }`}>
-              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                fraisInfo.montant === 15 ? 'bg-red-100' : 'bg-amber-100'
-              }`}>
-                <span className="text-lg">{fraisInfo.montant === 15 ? '🚨' : '⚠️'}</span>
-              </div>
-              <div>
-                <p className={`font-semibold text-sm ${fraisInfo.montant === 15 ? 'text-red-800' : 'text-amber-800'}`}>
-                  {fraisInfo.montant === 15
-                    ? `Frais MD et NR — ${fraisInfo.montant} DT`
-                    : `Frais postal de mise en demeure (télégramme) — ${fraisInfo.montant} DT`}
-                </p>
-                <p className={`text-sm mt-1 ${fraisInfo.montant === 15 ? 'text-red-700' : 'text-amber-700'}`}>
-                  Ce contrat est en retard de <strong>{fraisInfo.jours} jours</strong>.{' '}
-                  {fraisInfo.montant === 15
-                    ? 'Des frais de mise en demeure + non-règlement de 15 DT sont applicables.'
-                    : "Des frais d'envoi de télégramme de mise en demeure de 5 DT sont applicables."}
-                </p>
-                <p className={`text-xs font-medium mt-1.5 ${fraisInfo.montant === 15 ? 'text-red-600' : 'text-amber-600'}`}>
-                  Veuillez encaisser <strong>{fraisInfo.montant} DT</strong> du client — une opération <em>"{fraisInfo.type}"</em> sera automatiquement enregistrée.
-                </p>
-              </div>
             </div>
           )}
 
@@ -1554,7 +1460,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
                     <Calendar className="w-4 h-4 mr-2" />
-                    Date de paiement prévue {isHamza ? '*' : ''}
+                    Date de paiement prévue *
                   </label>
                   <input
                     type="date"
@@ -1563,7 +1469,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     onChange={handleInputChange}
                     min={new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                     className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 bg-white"
-                    required={isHamza}
+                    required
                   />
                   <p className="text-xs text-orange-600 mt-1">
                     Date minimum: {new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR')}
@@ -1593,27 +1499,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                   </div>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Champ Date de création — Hamza uniquement */}
-          {isHamza && (
-            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
-              <label className="block text-sm font-medium text-purple-800 mb-2 flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                Date de création (created_at)
-                <span className="text-xs font-normal text-purple-600">— Hamza uniquement</span>
-              </label>
-              <input
-                type="date"
-                name="customCreatedAt"
-                value={formData.customCreatedAt}
-                onChange={handleInputChange}
-                className="w-full p-3 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 bg-white"
-              />
-              <p className="text-xs text-purple-600 mt-1">
-                Laisser vide pour utiliser la date de session automatique
-              </p>
             </div>
           )}
 

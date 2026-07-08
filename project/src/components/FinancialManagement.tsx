@@ -130,13 +130,6 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
   const [sinistrePDFPaidAmount, setSinistrePDFPaidAmount] = useState(0);
   const [sinistrePDFUnpaidAmount, setSinistrePDFUnpaidAmount] = useState(0);
 
-  // États pour la recherche SinistrPDF
-  const [showSinistreSearch, setShowSinistreSearch] = useState(false);
-  const [sinistreSearchNumero, setSinistreSearchNumero] = useState('');
-  const [sinistreSearching, setSinistreSearching] = useState(false);
-  const [foundSinistrePDFId, setFoundSinistrePDFId] = useState<number | null>(null);
-  const [sinistreFieldsLocked, setSinistreFieldsLocked] = useState(false);
-
   // États pour les recettes exceptionnelles - filtres de date
   const [recetteDateFilter, setRecetteDateFilter] = useState({
     dateFrom: getSessionDate(),
@@ -701,54 +694,6 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     setTimeout(() => setMessage(''), 3000);
   };
 
-  const handleSearchSinistre = async () => {
-    if (!sinistreSearchNumero) {
-      alert('Veuillez saisir un numéro de sinistre.');
-      return;
-    }
-
-    setSinistreSearching(true);
-    try {
-      const { data, error } = await supabase
-        .from('SinistrPDF')
-        .select('id, NumSinistre, souscripteur, MontantSinistre, "Statut de paiement", "Date de paiement"')
-        .eq('NumSinistre', sinistreSearchNumero)
-        .maybeSingle();
-
-      if (error) {
-        alert('Erreur lors de la recherche.');
-        return;
-      }
-
-      if (!data) {
-        alert('Aucun sinistre trouvé avec ce numéro.');
-        return;
-      }
-
-      const statut = data['Statut de paiement'];
-      if (statut && statut.toLowerCase() === 'payé') {
-        const datePaiement = data['Date de paiement']
-          ? new Date(data['Date de paiement']).toLocaleDateString('fr-FR')
-          : 'date inconnue';
-        alert(`Ce sinistre est déjà payé le ${datePaiement} — impossible de faire le paiement une deuxième fois`);
-        return;
-      }
-
-      setFoundSinistrePDFId(data.id);
-      setNewSinistre(prev => ({
-        ...prev,
-        numero_sinistre: data.NumSinistre || '',
-        client: data.souscripteur || '',
-        montant: data.MontantSinistre != null ? String(data.MontantSinistre) : '',
-      }));
-      setSinistreFieldsLocked(true);
-      setShowSinistreSearch(false);
-      setSinistreSearchNumero('');
-    } finally {
-      setSinistreSearching(false);
-    }
-  };
-
   const handleSearchRistourne = async () => {
     if (!ristourneSearchInput.numContrat || !ristourneSearchInput.date) {
       alert('Veuillez saisir le numéro de contrat et la date de ristourne.');
@@ -914,7 +859,9 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       return;
     }
 
+    // Vérifier l'existence
     const exists = await checkSinistreExists(newSinistre.numero_sinistre);
+
     if (exists) {
       setMessage('❌ Ce numéro de sinistre existe déjà');
       setTimeout(() => setMessage(''), 3000);
@@ -925,7 +872,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       numero_sinistre: newSinistre.numero_sinistre,
       montant: parseFloat(newSinistre.montant),
       client: newSinistre.client,
-      date_sinistre: new Date().toISOString().split('T')[0],
+      date_sinistre: newSinistre.date_sinistre,
       date_paiement_sinistre: newSinistre.date_paiement_sinistre,
       type_paiement: newSinistre.type_paiement,
       cree_par: username
@@ -933,17 +880,6 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
     const success = await saveSinistre(sinistre);
     if (success) {
-      if (foundSinistrePDFId !== null) {
-        await supabase
-          .from('SinistrPDF')
-          .update({
-            'Mode de paiement': newSinistre.type_paiement,
-            'Date de paiement': newSinistre.date_paiement_sinistre,
-            'Statut de paiement': 'Payé'
-          })
-          .eq('id', foundSinistrePDFId);
-      }
-
       setMessage('✅ Sinistre enregistré avec succès');
       setNewSinistre({
         numero_sinistre: '',
@@ -953,11 +889,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         date_paiement_sinistre: getSessionDate(),
         type_paiement: 'Espece'
       });
-      setFoundSinistrePDFId(null);
-      setSinistreFieldsLocked(false);
-      setSinistreSearchNumero('');
       loadData();
-      loadSinistrePDF(1, sinistrePDFDateFilter.dateFrom, sinistrePDFDateFilter.dateTo);
     } else {
       setMessage('❌ Erreur lors de l\'enregistrement du sinistre');
     }
@@ -2011,132 +1943,80 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         </div>
       )}
 
-      {/* Bouton de recherche — toujours visible */}
-      <div className="mb-4 flex">
+      {/* Formulaire de saisie */}
+      <div className="bg-white rounded-lg p-4 mb-6 border border-orange-200">
+        <h4 className="font-medium text-orange-700 mb-4">Nouveau Sinistre</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Numéro du sinistre</label>
+            <input
+              type="text"
+              value={newSinistre.numero_sinistre}
+              onChange={(e) => setNewSinistre({...newSinistre, numero_sinistre: e.target.value})}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              placeholder="Numéro du sinistre"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Client</label>
+            <input
+              type="text"
+              value={newSinistre.client}
+              onChange={(e) => setNewSinistre({...newSinistre, client: e.target.value})}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              placeholder="Nom du client"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Montant (DT)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={newSinistre.montant}
+              onChange={(e) => setNewSinistre({...newSinistre, montant: e.target.value})}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              placeholder="0.00"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date du sinistre</label>
+            <input
+              type="date"
+              value={newSinistre.date_sinistre}
+              onChange={(e) => setNewSinistre({...newSinistre, date_sinistre: e.target.value})}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date de paiement</label>
+            <input
+              type="date"
+              value={newSinistre.date_paiement_sinistre}
+              readOnly
+              className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Type de paiement</label>
+            <select
+              value={newSinistre.type_paiement}
+              onChange={(e) => setNewSinistre({...newSinistre, type_paiement: e.target.value as 'Espece' | 'Cheque' | 'Banque'})}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            >
+              <option value="Espece">Espèce</option>
+              <option value="Cheque">Chèque</option>
+              <option value="Banque">Banque</option>
+            </select>
+          </div>
+        </div>
         <button
-          onClick={() => setShowSinistreSearch(true)}
-          className="flex items-center space-x-2 px-5 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium shadow-sm"
+          onClick={handleSaveSinistre}
+          className="mt-4 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2"
         >
-          <Search className="w-4 h-4" />
-          <span>Rechercher un sinistre</span>
+          <Save className="w-4 h-4" />
+          <span>Enregistrer</span>
         </button>
       </div>
-
-      {/* Modal de recherche sinistre */}
-      {showSinistreSearch && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
-            <h3 className="text-lg font-semibold text-orange-800 mb-4">Rechercher un Sinistre</h3>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Numéro de sinistre</label>
-              <input
-                type="text"
-                value={sinistreSearchNumero}
-                onChange={(e) => setSinistreSearchNumero(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearchSinistre()}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                placeholder="Saisir le numéro de sinistre"
-                autoFocus
-              />
-            </div>
-            <div className="flex justify-end space-x-3 mt-6">
-              <button
-                onClick={() => { setShowSinistreSearch(false); setSinistreSearchNumero(''); }}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleSearchSinistre}
-                disabled={sinistreSearching}
-                className="flex items-center space-x-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50"
-              >
-                <Search className="w-4 h-4" />
-                <span>{sinistreSearching ? 'Recherche...' : 'Rechercher'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Formulaire — visible seulement après retour de la recherche */}
-      {sinistreFieldsLocked && (
-        <div className="bg-white rounded-lg p-5 mb-6 border border-orange-300 shadow-sm">
-          <h4 className="font-semibold text-orange-700 mb-4 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4" />
-            Enregistrement du paiement
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Numéro du sinistre</label>
-              <input
-                type="text"
-                value={newSinistre.numero_sinistre}
-                readOnly
-                className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed font-mono"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Client</label>
-              <input
-                type="text"
-                value={newSinistre.client}
-                readOnly
-                className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Montant (DT)</label>
-              <input
-                type="text"
-                value={Number(newSinistre.montant).toLocaleString('fr-FR')}
-                readOnly
-                className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed font-semibold text-orange-700"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Date de paiement</label>
-              <input
-                type="date"
-                value={newSinistre.date_paiement_sinistre}
-                readOnly
-                className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Type de paiement</label>
-              <select
-                value={newSinistre.type_paiement}
-                onChange={(e) => setNewSinistre({...newSinistre, type_paiement: e.target.value as 'Espece' | 'Cheque' | 'Banque'})}
-                className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-              >
-                <option value="Espece">Espèce</option>
-                <option value="Cheque">Chèque</option>
-                <option value="Banque">Banque</option>
-              </select>
-            </div>
-          </div>
-          <div className="mt-4 flex gap-3">
-            <button
-              onClick={handleSaveSinistre}
-              className="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center space-x-2 shadow-sm"
-            >
-              <Save className="w-4 h-4" />
-              <span>Enregistrer</span>
-            </button>
-            <button
-              onClick={() => {
-                setSinistreFieldsLocked(false);
-                setFoundSinistrePDFId(null);
-                setNewSinistre({ numero_sinistre: '', montant: '', client: '', date_sinistre: new Date().toISOString().split('T')[0], date_paiement_sinistre: getSessionDate(), type_paiement: 'Espece' });
-              }}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2.5 px-4 rounded-lg transition-colors"
-            >
-              Annuler
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Liste des sinistres */}
       <div className="bg-white rounded-lg border border-orange-200">
@@ -2301,9 +2181,10 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                   <table className="min-w-full divide-y divide-gray-200 text-sm">
                     <thead className="bg-orange-50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">N° Sinistre</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">Montant (DT)</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">N° Contrat</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">Prime Émise</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">Souscripteur</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">Date</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">Statut</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">Mode Paiement</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">Date Paiement</th>
@@ -2317,11 +2198,14 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                             key={row.id}
                             className={isPaid ? 'bg-green-50 hover:bg-green-100' : 'bg-red-50 hover:bg-red-100'}
                           >
-                            <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-900">{row.NumSinistre || '-'}</td>
+                            <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-900">{row.numContrat}</td>
                             <td className="px-4 py-3 whitespace-nowrap text-gray-900">
-                              {row.MontantSinistre != null ? Number(row.MontantSinistre).toLocaleString('fr-FR') : '-'}
+                              {row.primeEmise != null ? Number(row.primeEmise).toLocaleString('fr-FR') : '-'}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-gray-900">{row.souscripteur || '-'}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-gray-900">
+                              {row['Date'] ? new Date(row['Date']).toLocaleDateString('fr-FR') : '-'}
+                            </td>
                             <td className="px-4 py-3 whitespace-nowrap">
                               <span className={`px-2 py-1 rounded-full text-xs font-semibold ${isPaid ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
                                 {row['Statut de paiement'] || 'Non payé'}
@@ -2504,15 +2388,19 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     }
   };
 
-  const loadSinistrePDF = async (page = 1, _dateFrom = '', _dateTo = '') => {
+  const loadSinistrePDF = async (page = 1, dateFrom = '', dateTo = '') => {
     setSinistrePDFLoading(true);
     try {
-      // Requête paginée pour l'affichage
-      const from = (page - 1) * 10;
-      const { data, error, count } = await supabase
+      let query = supabase
         .from('SinistrPDF')
-        .select('id, NumSinistre, souscripteur, MontantSinistre, "Statut de paiement", "Mode de paiement", "Date de paiement"', { count: 'exact' })
-        .order('id', { ascending: false })
+        .select('id, numContrat, primeEmise, souscripteur, "Date", "Statut de paiement", "Mode de paiement", "Date de paiement"', { count: 'exact' });
+
+      if (dateFrom) query = query.gte('Date', dateFrom);
+      if (dateTo) query = query.lte('Date', dateTo);
+
+      const from = (page - 1) * 10;
+      const { data, error, count } = await query
+        .order('Date', { ascending: false })
         .range(from, from + 9);
 
       if (error) throw error;
@@ -2520,20 +2408,30 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       setSinistrePDFTotal(count || 0);
       setSinistrePDFPage(page);
 
-      // Stats : récupérer tous les enregistrements (MontantSinistre + Statut)
-      // neq() exclut les NULL en Supabase — on fetch tout et on filtre côté client
-      const { data: allStats } = await supabase
+      let statsQueryPaid = supabase
         .from('SinistrPDF')
-        .select('MontantSinistre, "Statut de paiement"');
+        .select('primeEmise', { count: 'exact' })
+        .eq('Statut de paiement', 'Payé');
+      let statsQueryUnpaid = supabase
+        .from('SinistrPDF')
+        .select('primeEmise', { count: 'exact' })
+        .neq('Statut de paiement', 'Payé');
 
-      const allRows = allStats || [];
-      const paidRows   = allRows.filter(r => r['Statut de paiement'] === 'Payé');
-      const unpaidRows = allRows.filter(r => r['Statut de paiement'] !== 'Payé');
+      if (dateFrom) {
+        statsQueryPaid = statsQueryPaid.gte('Date', dateFrom);
+        statsQueryUnpaid = statsQueryUnpaid.gte('Date', dateFrom);
+      }
+      if (dateTo) {
+        statsQueryPaid = statsQueryPaid.lte('Date', dateTo);
+        statsQueryUnpaid = statsQueryUnpaid.lte('Date', dateTo);
+      }
 
-      setSinistrePDFPaidCount(paidRows.length);
-      setSinistrePDFUnpaidCount(unpaidRows.length);
-      setSinistrePDFPaidAmount(paidRows.reduce((s: number, r: any) => s + (Number(r.MontantSinistre) || 0), 0));
-      setSinistrePDFUnpaidAmount(unpaidRows.reduce((s: number, r: any) => s + (Number(r.MontantSinistre) || 0), 0));
+      const [paidResult, unpaidResult] = await Promise.all([statsQueryPaid, statsQueryUnpaid]);
+
+      setSinistrePDFPaidCount(paidResult.count || 0);
+      setSinistrePDFUnpaidCount(unpaidResult.count || 0);
+      setSinistrePDFPaidAmount((paidResult.data || []).reduce((s: number, r: any) => s + (Number(r.primeEmise) || 0), 0));
+      setSinistrePDFUnpaidAmount((unpaidResult.data || []).reduce((s: number, r: any) => s + (Number(r.primeEmise) || 0), 0));
     } catch (e) {
       console.error('Erreur chargement SinistrPDF:', e);
     }
@@ -2542,18 +2440,23 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
   const exportSinistrePDF = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('SinistrPDF')
-        .select('NumSinistre, souscripteur, MontantSinistre, "Statut de paiement", "Mode de paiement", "Date de paiement"')
-        .order('id', { ascending: false });
+        .select('numContrat, primeEmise, souscripteur, "Date", "Statut de paiement", "Mode de paiement", "Date de paiement"');
+
+      if (sinistrePDFDateFilter.dateFrom) query = query.gte('Date', sinistrePDFDateFilter.dateFrom);
+      if (sinistrePDFDateFilter.dateTo) query = query.lte('Date', sinistrePDFDateFilter.dateTo);
+
+      const { data, error } = await query.order('Date', { ascending: false });
       if (error) throw error;
 
       const dataToExport = (data || []).map((r: any) => ({
-        'N° Sinistre': r.NumSinistre || '',
-        'Souscripteur': r.souscripteur || '',
-        'Montant': r.MontantSinistre || '',
+        'N° Contrat': r.numContrat,
+        'Prime Émise': r.primeEmise,
+        'Souscripteur': r.souscripteur,
+        'Date': r['Date'],
         'Statut': r['Statut de paiement'] || '',
-        'Mode de paiement': r['Modede paiement'] || '',
+        'Mode de paiement': r['Mode de paiement'] || '',
         'Date de paiement': r['Date de paiement'] || ''
       }));
       exportToExcel(dataToExport, 'sinistres_pdf', 'Sinistres PDF');
