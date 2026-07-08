@@ -87,7 +87,7 @@ function App() {
   }
 
   return (
-    <div className="App animate-app-enter">
+    <div className="App">
       {isAuthenticated ? (
         <Dashboard username={currentUser} onLogout={handleLogout} />
       ) : (

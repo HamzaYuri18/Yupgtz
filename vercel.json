@@ -1,6 +1,7 @@
 {
-  "buildCommand": "cd project && npm install && npx vite build",
-  "outputDirectory": "project/dist",
+  "buildCommand": "npm install && npm run build",
+  "outputDirectory": "dist",
   "installCommand": "echo skip",
-  "framework": null
+  "framework": "vite",
+  "rootDirectory": "project"
 }
