@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, DollarSign, User, Download, MessageSquare, BarChart3, Trash2 } from 'lucide-react';
+import { CreditCard, ListFilter as Filter, Calendar, CircleCheck as CheckCircle, Circle as XCircle, Clock, TrendingUp, TriangleAlert as AlertTriangle, DollarSign, User, Download, MessageSquare, ChartBar as BarChart3, Trash2, FileText } from 'lucide-react';
 import { getCredits, updateCreditStatus, deleteCredit } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
 import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
 import SMSModal from './SMSModal';
 import CreditDetailsModal from './CreditDetailsModal';
 import CreditEvolutionModal from './CreditEvolutionModal';
@@ -37,6 +38,7 @@ const CreditsList: React.FC = () => {
 
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const isHamza = currentUser === 'Hamza';
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const session = getSession();
@@ -300,6 +302,7 @@ const CreditsList: React.FC = () => {
     }
 
     setFilteredCredits(filtered);
+    setSelectedIds(new Set());
   };
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
@@ -485,6 +488,220 @@ const CreditsList: React.FC = () => {
     }
   };
 
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredCredits.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredCredits.map(c => c.id)));
+    }
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const generateImpayesPDF = () => {
+    const selected = filteredCredits.filter(c => selectedIds.has(c.id));
+    if (selected.length === 0) return;
+
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 14;
+    const today = new Date().toLocaleDateString('fr-FR');
+
+    // ── Header ────────────────────────────────────────────────────────────────
+    doc.setFillColor(30, 64, 175);
+    doc.rect(0, 0, pageW, 22, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ÉTAT RÉCAPITULATIF DES IMPAYÉS EN COURS', pageW / 2, 10, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Édité le : ${today}`, pageW / 2, 17, { align: 'center' });
+
+    // ── Company info ──────────────────────────────────────────────────────────
+    doc.setTextColor(50, 50, 50);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('STAR ASSURANCES', margin, 30);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Nombre d'impayés sélectionnés : ${selected.length}`, pageW - margin, 30, { align: 'right' });
+
+    // ── Table header ──────────────────────────────────────────────────────────
+    const cols = [
+      { label: 'N° Contrat', x: margin, w: 30 },
+      { label: 'Assuré', x: margin + 30, w: 50 },
+      { label: 'Branche', x: margin + 80, w: 22 },
+      { label: 'Prime (DT)', x: margin + 102, w: 28 },
+      { label: 'Crédit (DT)', x: margin + 130, w: 28 },
+      { label: 'Paiement (DT)', x: margin + 158, w: 30 },
+      { label: 'Solde (DT)', x: margin + 188, w: 28 },
+      { label: 'Échéance', x: margin + 216, w: 28 },
+      { label: 'Statut', x: margin + 244, w: 28 },
+    ];
+
+    let y = 38;
+    const rowH = 8;
+
+    // Header row
+    doc.setFillColor(219, 234, 254);
+    doc.rect(margin, y, pageW - margin * 2, rowH, 'F');
+    doc.setDrawColor(147, 197, 253);
+    doc.rect(margin, y, pageW - margin * 2, rowH, 'S');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(30, 64, 175);
+    cols.forEach(col => {
+      doc.text(col.label, col.x + 1, y + 5.5);
+    });
+
+    // Data rows
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    let totalSolde = 0;
+    let totalPrime = 0;
+    let totalCredit = 0;
+    let totalPaiement = 0;
+
+    selected.forEach((credit, i) => {
+      y += rowH;
+      if (y + rowH > pageH - 55) {
+        doc.addPage();
+        y = 20;
+        // Repeat header on new page
+        doc.setFillColor(219, 234, 254);
+        doc.rect(margin, y, pageW - margin * 2, rowH, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(30, 64, 175);
+        cols.forEach(col => doc.text(col.label, col.x + 1, y + 5.5));
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(50, 50, 50);
+        y += rowH;
+      }
+
+      const isEven = i % 2 === 0;
+      doc.setFillColor(isEven ? 249 : 255, isEven ? 250 : 255, isEven ? 251 : 255);
+      doc.rect(margin, y, pageW - margin * 2, rowH, 'F');
+      doc.setDrawColor(229, 231, 235);
+      doc.rect(margin, y, pageW - margin * 2, rowH, 'S');
+
+      const solde = credit.solde || 0;
+      const prime = credit.prime || 0;
+      const creditAmt = credit.montant_credit || 0;
+      const paiement = credit.paiement || 0;
+      totalSolde += solde;
+      totalPrime += prime;
+      totalCredit += creditAmt;
+      totalPaiement += paiement;
+
+      doc.setTextColor(50, 50, 50);
+      doc.text(credit.numero_contrat || '', cols[0].x + 1, y + 5.5);
+      const assureText = (credit.assure || '').length > 22 ? credit.assure.substring(0, 22) + '…' : credit.assure || '';
+      doc.text(assureText, cols[1].x + 1, y + 5.5);
+      doc.text(credit.branche || '', cols[2].x + 1, y + 5.5);
+      doc.setTextColor(70, 70, 70);
+      doc.text(prime.toLocaleString('fr-FR', { minimumFractionDigits: 3 }), cols[3].x + cols[3].w - 2, y + 5.5, { align: 'right' });
+      doc.text(creditAmt.toLocaleString('fr-FR', { minimumFractionDigits: 3 }), cols[4].x + cols[4].w - 2, y + 5.5, { align: 'right' });
+      doc.text(paiement.toLocaleString('fr-FR', { minimumFractionDigits: 3 }), cols[5].x + cols[5].w - 2, y + 5.5, { align: 'right' });
+      doc.setTextColor(solde > 0 ? 185 : 22, solde > 0 ? 28 : 163, solde > 0 ? 28 : 74);
+      doc.setFont('helvetica', 'bold');
+      doc.text(solde.toLocaleString('fr-FR', { minimumFractionDigits: 3 }), cols[6].x + cols[6].w - 2, y + 5.5, { align: 'right' });
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(50, 50, 50);
+      const echeance = credit.date_paiement_prevue ? new Date(credit.date_paiement_prevue).toLocaleDateString('fr-FR') : '-';
+      doc.text(echeance, cols[7].x + 1, y + 5.5);
+      doc.text(credit.statut || '', cols[8].x + 1, y + 5.5);
+    });
+
+    // ── Totals row ─────────────────────────────────────────────────────────────
+    y += rowH + 2;
+    if (y + rowH + 2 > pageH - 50) { doc.addPage(); y = 20; }
+
+    doc.setFillColor(30, 64, 175);
+    doc.rect(margin, y, pageW - margin * 2, rowH + 1, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text('TOTAL SOLDE IMPAYÉS', cols[0].x + 1, y + 6);
+    doc.text(totalPrime.toLocaleString('fr-FR', { minimumFractionDigits: 3 }) + ' DT', cols[3].x + cols[3].w - 2, y + 6, { align: 'right' });
+    doc.text(totalCredit.toLocaleString('fr-FR', { minimumFractionDigits: 3 }) + ' DT', cols[4].x + cols[4].w - 2, y + 6, { align: 'right' });
+    doc.text(totalPaiement.toLocaleString('fr-FR', { minimumFractionDigits: 3 }) + ' DT', cols[5].x + cols[5].w - 2, y + 6, { align: 'right' });
+    doc.text(totalSolde.toLocaleString('fr-FR', { minimumFractionDigits: 3 }) + ' DT', cols[6].x + cols[6].w - 2, y + 6, { align: 'right' });
+
+    // ── Solde detail summary ──────────────────────────────────────────────────
+    y += rowH + 6;
+    if (y + 20 > pageH - 45) { doc.addPage(); y = 20; }
+    doc.setFillColor(239, 246, 255);
+    doc.rect(margin, y, pageW - margin * 2, 14, 'F');
+    doc.setDrawColor(147, 197, 253);
+    doc.rect(margin, y, pageW - margin * 2, 14, 'S');
+    doc.setTextColor(30, 64, 175);
+    doc.setFontSize(9);
+    doc.text('Détail du Solde Total :', margin + 4, y + 6);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(50, 50, 50);
+    doc.text(
+      `Total Crédits accordés : ${totalCredit.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT   |   ` +
+      `Total Paiements reçus : ${totalPaiement.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT   |   ` +
+      `Solde restant dû : ${totalSolde.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`,
+      margin + 4, y + 11
+    );
+
+    // ── Payment message ────────────────────────────────────────────────────────
+    y += 22;
+    if (y + 36 > pageH) { doc.addPage(); y = 20; }
+    doc.setDrawColor(220, 38, 38);
+    doc.setLineWidth(0.5);
+    doc.rect(margin, y, pageW - margin * 2, 34, 'S');
+    doc.setFillColor(254, 242, 242);
+    doc.rect(margin + 0.3, y + 0.3, pageW - margin * 2 - 0.6, 33.4, 'F');
+
+    doc.setTextColor(185, 28, 28);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text('AVIS DE PAIEMENT', pageW / 2, y + 7, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(50, 50, 50);
+    const msgLines = doc.splitTextToSize(
+      'Cher client,\n\nPour votre intérêt et pour des raisons comptables, nous vous prions d\'effectuer le paiement des impayés par un versement bancaire direct sur nos comptes :',
+      pageW - margin * 2 - 8
+    );
+    doc.text(msgLines, margin + 4, y + 14);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(30, 64, 175);
+    doc.text('04140222008106615139  —  SHIRI FARES HAMZA STAR ASSURANCES  —  ATTIJARI BANQUE', pageW / 2, y + 25, { align: 'center' });
+
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.text('Service Recouvrement', pageW / 2, y + 31, { align: 'center' });
+
+    // ── Footer ────────────────────────────────────────────────────────────────
+    const totalPages = (doc as any).internal.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(150, 150, 150);
+      doc.text(`Page ${p} / ${totalPages}`, pageW - margin, pageH - 5, { align: 'right' });
+      doc.text('STAR ASSURANCES — Document confidentiel', margin, pageH - 5);
+    }
+
+    doc.save(`Etat_Impayes_${today.replace(/\//g, '-')}.pdf`);
+  };
+
   const stats = calculateDetailedStats();
   const uniqueUsers = [...new Set(credits.map(c => c.cree_par).filter(Boolean))];
   const uniqueMonths = [...new Set(credits
@@ -595,6 +812,20 @@ const CreditsList: React.FC = () => {
           </div>
           
           <div className="flex space-x-2">
+            <button
+              onClick={generateImpayesPDF}
+              disabled={selectedIds.size === 0}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                selectedIds.size === 0
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-red-600 text-white hover:bg-red-700 shadow-sm'
+              }`}
+              title={selectedIds.size === 0 ? 'Sélectionnez des crédits pour générer le PDF' : `Générer PDF pour ${selectedIds.size} crédit(s) sélectionné(s)`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>PDF Impayés{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}</span>
+            </button>
+
             <button
               onClick={exportToExcelSimple}
               disabled={filteredCredits.length === 0 || isExporting}
@@ -908,6 +1139,15 @@ const CreditsList: React.FC = () => {
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap w-8">
+                  <input
+                    type="checkbox"
+                    checked={filteredCredits.length > 0 && selectedIds.size === filteredCredits.length}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                    title="Tout sélectionner / désélectionner"
+                  />
+                </th>
                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
                   N° Contrat
                 </th>
@@ -955,7 +1195,7 @@ const CreditsList: React.FC = () => {
               {filteredCredits.map((credit) => (
                 <tr
                   key={credit.id}
-                  className="hover:bg-blue-50 transition-colors cursor-pointer"
+                  className={`hover:bg-blue-50 transition-colors cursor-pointer ${selectedIds.has(credit.id) ? 'bg-red-50' : ''}`}
                   onMouseEnter={(e) => {
                     setHoveredCredit(credit);
                     const rect = e.currentTarget.getBoundingClientRect();
@@ -963,6 +1203,14 @@ const CreditsList: React.FC = () => {
                   }}
                   onMouseLeave={() => setHoveredCredit(null)}
                 >
+                  <td className="px-3 py-2.5 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(credit.id)}
+                      onChange={() => toggleSelect(credit.id)}
+                      className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                    />
+                  </td>
                   <td className="px-3 py-2.5 whitespace-nowrap font-medium text-gray-900">
                     {credit.numero_contrat}
                   </td>
