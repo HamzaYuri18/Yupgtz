@@ -414,6 +414,42 @@ const EtatCommissions: React.FC = () => {
 
   const pct = (val: number) => totalAllComm > 0 ? Math.round((val / totalAllComm) * 100) : 0;
 
+  // ── Evolution and Unliquidated Stats Calculations ─────────────────────────
+  const chronologicalQuinzaines = [...quinzaines].sort((a, b) => {
+    if (a.annee !== b.annee) return a.annee - b.annee;
+    if (a.mois !== b.mois) return a.mois - b.mois;
+    return a.quinzaine - b.quinzaine;
+  });
+
+  const getEvolution = (q: QuinzaineData) => {
+    const idx = chronologicalQuinzaines.findIndex(
+      item => item.annee === q.annee && item.mois === q.mois && item.quinzaine === q.quinzaine
+    );
+    if (idx <= 0) return null;
+    const prev = chronologicalQuinzaines[idx - 1];
+
+    const chargesDiff = q.total_charges - prev.total_charges;
+    const chargesPct = prev.total_charges > 0 ? (chargesDiff / prev.total_charges) * 100 : 0;
+
+    const depensesDiff = q.total_depenses - prev.total_depenses;
+    const depensesPct = prev.total_depenses > 0 ? (depensesDiff / prev.total_depenses) * 100 : 0;
+
+    return {
+      chargesDiff,
+      chargesPct,
+      depensesDiff,
+      depensesPct,
+      prevPeriod: `Q${prev.quinzaine} ${moisNoms[prev.mois - 1].substring(0, 3)} ${prev.annee}`
+    };
+  };
+
+  const nonLiquidePeriodes = quinzaines.filter(q => q.statut === 'Non Liquidée');
+  const totalNonLiquidee = nonLiquidePeriodes.reduce((sum, q) => sum + q.commission_nette, 0);
+
+  const countFiltered = filteredQuinzaines.length;
+  const avgCharges = countFiltered > 0 ? filteredQuinzaines.reduce((sum, q) => sum + q.total_charges, 0) / countFiltered : 0;
+  const avgDepenses = countFiltered > 0 ? filteredQuinzaines.reduce((sum, q) => sum + q.total_depenses, 0) / countFiltered : 0;
+
   return (
     <div className="space-y-6">
       {/* Header + filters */}
@@ -601,6 +637,111 @@ const EtatCommissions: React.FC = () => {
         )}
       </div>
 
+      {/* Nouvelle Section: Statistiques Détaillées & Évolutions */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Colonne Gauche: Commissions Non Liquidées */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col">
+          <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
+            <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+              Commissions Non Liquidées ({nonLiquidePeriodes.length})
+            </h3>
+            <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-xs font-bold">
+              Total à liquider: {fmt(totalNonLiquidee)}
+            </span>
+          </div>
+
+          {nonLiquidePeriodes.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center py-6 text-gray-400">
+              <Check className="w-10 h-10 text-emerald-500 mb-2" />
+              <p className="text-sm font-medium">Toutes les commissions sont liquidées !</p>
+            </div>
+          ) : (
+            <div className="flex-1 max-h-60 overflow-y-auto divide-y divide-gray-100 pr-2">
+              {nonLiquidePeriodes.map((q) => (
+                <div key={`${q.annee}-${q.mois}-${q.quinzaine}`} className="py-2.5 flex items-center justify-between hover:bg-gray-50/50 px-2 rounded-lg transition-colors">
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">
+                      {moisNoms[q.mois - 1]} {q.annee} — Quinzaine {q.quinzaine}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Du {formatDate(q.date_debut)} au {formatDate(q.date_fin)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-amber-600 text-sm">{fmt(q.commission_nette)}</p>
+                    <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200 font-medium">
+                      En attente
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Colonne Droite: Moyennes & Évolutions */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col">
+          <div className="mb-4 pb-2 border-b border-gray-50">
+            <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+              Moyennes & Évolutions par Quinzaine
+            </h3>
+          </div>
+
+          {/* Moyennes */}
+          <div className="grid grid-cols-2 gap-4 mb-5">
+            <div className="bg-red-50/40 border border-red-100 rounded-xl p-4">
+              <span className="text-xs font-semibold text-red-700 uppercase tracking-wide block mb-1">Moyenne Charges</span>
+              <p className="text-lg font-extrabold text-red-800">{fmt(avgCharges)}</p>
+              <span className="text-[10px] text-gray-500 block mt-0.5">Moyenne sur {countFiltered} période(s)</span>
+            </div>
+            <div className="bg-amber-50/40 border border-amber-100 rounded-xl p-4">
+              <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide block mb-1">Moyenne Dépenses</span>
+              <p className="text-lg font-extrabold text-amber-800">{fmt(avgDepenses)}</p>
+              <span className="text-[10px] text-gray-500 block mt-0.5">Moyenne sur {countFiltered} période(s)</span>
+            </div>
+          </div>
+
+          {/* Évolutions récentes */}
+          <div className="flex-1 flex flex-col">
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Évolutions d'une quinzaine à l'autre</h4>
+            <div className="flex-1 max-h-[140px] overflow-y-auto divide-y divide-gray-100 pr-2">
+              {filteredQuinzaines.slice(0, 5).map((q) => {
+                const evo = getEvolution(q);
+                if (!evo) return null;
+                const chargesUp = evo.chargesDiff > 0;
+                const depensesUp = evo.depensesDiff > 0;
+                return (
+                  <div key={`evo-${q.annee}-${q.mois}-${q.quinzaine}`} className="py-2 flex items-center justify-between text-xs">
+                    <span className="font-semibold text-gray-700">
+                      Q{q.quinzaine} {moisNoms[q.mois - 1].substring(0, 4)} {q.annee} <span className="text-gray-400 font-normal">vs {evo.prevPeriod}</span>
+                    </span>
+                    <div className="flex gap-4">
+                      {/* Charges */}
+                      <span className="flex items-center gap-1">
+                        <span className="text-gray-400 text-[10px] uppercase">Charges:</span>
+                        <span className={`font-bold flex items-center ${chargesUp ? 'text-red-500' : 'text-green-600'}`}>
+                          {chargesUp ? '▲' : '▼'} {Math.abs(evo.chargesPct).toFixed(1)}%
+                        </span>
+                      </span>
+                      {/* Dépenses */}
+                      <span className="flex items-center gap-1">
+                        <span className="text-gray-400 text-[10px] uppercase">Dépenses:</span>
+                        <span className={`font-bold flex items-center ${depensesUp ? 'text-red-500' : 'text-green-600'}`}>
+                          {depensesUp ? '▲' : '▼'} {Math.abs(evo.depensesPct).toFixed(1)}%
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+              {filteredQuinzaines.length <= 1 && (
+                <p className="text-gray-400 text-xs py-2 text-center">Pas assez de données pour calculer l'évolution.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
@@ -700,6 +841,16 @@ const EtatCommissions: React.FC = () => {
                         <span className="font-semibold text-red-600">{fmt(quinzaine.total_charges)}</span>
                         <Download className="w-3 h-3 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
+                      {(() => {
+                        const evo = getEvolution(quinzaine);
+                        if (!evo || evo.chargesDiff === 0) return null;
+                        const isUp = evo.chargesDiff > 0;
+                        return (
+                          <div className={`text-[10px] font-bold mt-0.5 leading-none ${isUp ? 'text-red-500' : 'text-green-600'}`} title={`Evolution par rapport à la quinzaine précédente : ${isUp ? '+' : ''}${evo.chargesDiff.toFixed(3)} DT`}>
+                            {isUp ? '▲' : '▼'} {Math.abs(evo.chargesPct).toFixed(1)}%
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* Dépenses */}
@@ -712,6 +863,16 @@ const EtatCommissions: React.FC = () => {
                         <span className="font-semibold text-orange-600">{fmt(quinzaine.total_depenses)}</span>
                         <Download className="w-3 h-3 text-orange-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
+                      {(() => {
+                        const evo = getEvolution(quinzaine);
+                        if (!evo || evo.depensesDiff === 0) return null;
+                        const isUp = evo.depensesDiff > 0;
+                        return (
+                          <div className={`text-[10px] font-bold mt-0.5 leading-none ${isUp ? 'text-red-500' : 'text-green-600'}`} title={`Evolution par rapport à la quinzaine précédente : ${isUp ? '+' : ''}${evo.depensesDiff.toFixed(3)} DT`}>
+                            {isUp ? '▲' : '▼'} {Math.abs(evo.depensesPct).toFixed(1)}%
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* Commission Nette */}

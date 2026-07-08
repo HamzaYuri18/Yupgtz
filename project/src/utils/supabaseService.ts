@@ -396,14 +396,15 @@ export const saveCreditContract = async (contractData: ContractData): Promise<bo
       creditAmountValue = primeValue;
     }
 
-    // Vérifier si le crédit existe déjà pour éviter les doublons
-    const { data: existingCredit } = await supabase
+    // Vérifier si le crédit existe déjà pour éviter les doublons (avec limit(1) pour éviter erreur si doublon temporaire)
+    const cleanedContractNumber = (contractData.contractNumber || '').trim().toUpperCase();
+    const { data: existingCreditData } = await supabase
       .from('liste_credits')
       .select('id')
-      .eq('numero_contrat', contractData.contractNumber || '')
-      .maybeSingle();
+      .eq('numero_contrat', cleanedContractNumber)
+      .limit(1);
 
-    if (existingCredit) {
+    if (existingCreditData && existingCreditData.length > 0) {
       console.log('⚠️ Crédit déjà dans liste_credits, ignoré');
       return true;
     }
@@ -411,7 +412,7 @@ export const saveCreditContract = async (contractData: ContractData): Promise<bo
     const { data, error } = await supabase
       .from('liste_credits')
       .insert([{
-        numero_contrat: contractData.contractNumber || '',
+        numero_contrat: cleanedContractNumber,
         prime: primeValue,
         assure: contractData.insuredName,
         branche: contractData.branch,
@@ -2494,8 +2495,16 @@ export const saveSuivieRealisation = async (contractData: ContractData): Promise
   }
 };
 
+let isSyncingCredits = false;
+
 // Synchronise les contrats Crédit présents dans rapport mais absents de liste_credits
 export const syncMissingCredits = async (): Promise<number> => {
+  if (isSyncingCredits) {
+    console.log('🔄 syncMissingCredits: déjà en cours de synchronisation, ignoré.');
+    return 0;
+  }
+  isSyncingCredits = true;
+
   try {
     console.log('🔄 syncMissingCredits: démarrage...');
 
@@ -2514,11 +2523,14 @@ export const syncMissingCredits = async (): Promise<number> => {
 
     if (!rapportCredits?.length) return 0;
 
-    // Dédupliquer par numero_contrat (garder la première occurrence)
+    // Dédupliquer par numero_contrat après nettoyage
     const uniqueByContract = new Map<string, any>();
     for (const row of rapportCredits) {
-      if (row.numero_contrat && !uniqueByContract.has(row.numero_contrat)) {
-        uniqueByContract.set(row.numero_contrat, row);
+      if (row.numero_contrat) {
+        const cleanedNum = row.numero_contrat.trim().toUpperCase();
+        if (cleanedNum && !uniqueByContract.has(cleanedNum)) {
+          uniqueByContract.set(cleanedNum, row);
+        }
       }
     }
 
@@ -2531,7 +2543,7 @@ export const syncMissingCredits = async (): Promise<number> => {
       return 0;
     }
 
-    const existingNums = new Set((existingCredits || []).map((c: any) => c.numero_contrat));
+    const existingNums = new Set((existingCredits || []).map((c: any) => (c.numero_contrat || '').trim().toUpperCase()));
     console.log(`🔄 syncMissingCredits: ${existingNums.size} crédit(s) déjà dans liste_credits`);
 
     const toInsert: any[] = [];
@@ -2568,12 +2580,14 @@ export const syncMissingCredits = async (): Promise<number> => {
           || (row.created_at ? row.created_at.split('T')[0] : null);
         if (!correctDate || correctDate === today) continue;
 
-        // Récupérer la date actuelle dans liste_credits pour comparer
-        const { data: existing } = await supabase
+        // Récupérer la date actuelle dans liste_credits pour comparer (limit(1) pour éviter erreur si doublon temporaire)
+        const { data: existingData } = await supabase
           .from('liste_credits')
           .select('id, date_paiement_prevue')
           .eq('numero_contrat', num)
-          .maybeSingle();
+          .limit(1);
+
+        const existing = existingData && existingData.length > 0 ? existingData[0] : null;
 
         if (existing && existing.date_paiement_prevue === today) {
           // La date est aujourd'hui (valeur par défaut erronée) → corriger
@@ -2611,6 +2625,8 @@ export const syncMissingCredits = async (): Promise<number> => {
   } catch (error) {
     console.error('❌ Erreur syncMissingCredits:', error);
     return 0;
+  } finally {
+    isSyncingCredits = false;
   }
 };
 

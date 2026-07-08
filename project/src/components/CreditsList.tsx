@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, ListFilter as Filter, Calendar, CircleCheck as CheckCircle, Circle as XCircle, Clock, TrendingUp, TriangleAlert as AlertTriangle, User, Download, MessageSquare, ChartBar as BarChart3, Trash2, X, FileText } from 'lucide-react';
+import { CreditCard, ListFilter as Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, User, Download, MessageSquare, BarChart3, Trash2, X, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { getCredits, updateCreditStatus, deleteCredit, syncMissingCredits } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
@@ -710,21 +710,18 @@ const CreditsList: React.FC = () => {
 
       // Banking message
       y += 8;
-      if (y > 240) { doc.addPage(); y = 20; }
+      if (y > 230) { doc.addPage(); y = 20; }
       doc.setFillColor(239, 246, 255);
       doc.setDrawColor(59, 130, 246);
       doc.setLineWidth(0.5);
       const msgLines = [
         'Cher client,',
+        'Nous vous prions de régulariser ces impayés par versement bancaire direct sur notre compte :',
+        'Numéro : 04140222008106615139  |  Titulaire : SHIRI FARES HAMZA STAR ASSURANCE',
+        'Banque : ATTIJARI',
+        'Veuillez présenter l\'avis de versement à l\'agence ou par email : ShiriFares.star@agence.com.tn',
         '',
-        'Pour votre intérêt et pour des raisons comptables, nous vous prions d\'effectuer le',
-        'paiement des impayés par un versement bancaire direct sur nos comptes :',
-        '',
-        '04140222008106615139',
-        'SHIRI FARES HAMZA — STAR ASSURANCES',
-        'Banque : ATTIJARI BANQUE',
-        '',
-        'Service recouvrement'
+        'Service Recouvrement'
       ];
       const msgH = msgLines.length * 6 + 8;
       doc.rect(marginL, y, contentW, msgH, 'FD');
@@ -733,11 +730,27 @@ const CreditsList: React.FC = () => {
       doc.setFontSize(9);
       let ly = y + 7;
       msgLines.forEach((line, i) => {
-        if (i === 0) { doc.setFont('helvetica', 'bold'); doc.setFontSize(10); }
-        else if (i === 5) { doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(220, 38, 38); }
-        else if (i === 6 || i === 7) { doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(30, 64, 175); }
-        else if (i === 9) { doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(30, 64, 175); }
-        else { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(30, 64, 175); }
+        if (i === 0) {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10);
+          doc.setTextColor(30, 64, 175);
+        } else if (i === 2) {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(9.5);
+          doc.setTextColor(220, 38, 38);
+        } else if (i === 3 || i === 4) {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(9);
+          doc.setTextColor(30, 64, 175);
+        } else if (i === 6) {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(9);
+          doc.setTextColor(30, 64, 175);
+        } else {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9);
+          doc.setTextColor(30, 64, 175);
+        }
         if (line) doc.text(line, pageW / 2, ly, { align: 'center' });
         ly += 6;
       });
