@@ -765,7 +765,22 @@ const CreditsList: React.FC = () => {
                 Connecté en tant que: <span className="text-blue-600">{currentUser || 'Non connecté'}</span>
               </span>
             </div>
-            
+
+            {/* Bouton PDF Impayés — en haut à droite */}
+            <button
+              onClick={generateImpayesPDF}
+              disabled={selectedIds.size === 0}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                selectedIds.size === 0
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-red-600 text-white hover:bg-red-700 shadow-sm'
+              }`}
+              title={selectedIds.size === 0 ? 'Cochez des crédits dans le tableau pour générer le PDF' : `Générer PDF pour ${selectedIds.size} crédit(s)`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>PDF Impayés{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}</span>
+            </button>
+
             <div className="flex space-x-2">
               <button
                 onClick={() => handleViewModeChange('mois')}
@@ -812,20 +827,6 @@ const CreditsList: React.FC = () => {
           </div>
           
           <div className="flex space-x-2">
-            <button
-              onClick={generateImpayesPDF}
-              disabled={selectedIds.size === 0}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                selectedIds.size === 0
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  : 'bg-red-600 text-white hover:bg-red-700 shadow-sm'
-              }`}
-              title={selectedIds.size === 0 ? 'Sélectionnez des crédits pour générer le PDF' : `Générer PDF pour ${selectedIds.size} crédit(s) sélectionné(s)`}
-            >
-              <FileText className="w-4 h-4" />
-              <span>PDF Impayés{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}</span>
-            </button>
-
             <button
               onClick={exportToExcelSimple}
               disabled={filteredCredits.length === 0 || isExporting}
