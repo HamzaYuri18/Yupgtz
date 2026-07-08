@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, User, Download, MessageSquare, BarChart3, Trash2, X } from 'lucide-react';
+import { CreditCard, ListFilter as Filter, Calendar, CircleCheck as CheckCircle, Circle as XCircle, Clock, TrendingUp, TriangleAlert as AlertTriangle, User, Download, MessageSquare, ChartBar as BarChart3, Trash2, X, FileText } from 'lucide-react';
+import jsPDF from 'jspdf';
 import { getCredits, updateCreditStatus, deleteCredit, syncMissingCredits } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
 import * as XLSX from 'xlsx';
@@ -45,6 +46,8 @@ const CreditsList: React.FC = () => {
   const [paidRangeFrom, setPaidRangeFrom] = useState('');
   const [paidRangeTo, setPaidRangeTo] = useState('');
   const [showPaidDetails, setShowPaidDetails] = useState(false);
+  const [selectedCreditIds, setSelectedCreditIds] = useState<Set<number>>(new Set());
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   useEffect(() => {
     const session = getSession();
@@ -561,6 +564,200 @@ const CreditsList: React.FC = () => {
     return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
   };
 
+  const toggleSelectCredit = (id: number) => {
+    setSelectedCreditIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const unpaidIds = filteredCredits
+      .filter(c => c.statut !== 'Payé' && c.statut !== 'Payé en total')
+      .map(c => c.id);
+    const allSelected = unpaidIds.every(id => selectedCreditIds.has(id));
+    if (allSelected) {
+      setSelectedCreditIds(prev => {
+        const next = new Set(prev);
+        unpaidIds.forEach(id => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedCreditIds(prev => {
+        const next = new Set(prev);
+        unpaidIds.forEach(id => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  const generateImpayesPDF = () => {
+    const selected = filteredCredits.filter(c => selectedCreditIds.has(c.id));
+    if (selected.length === 0) {
+      alert('Veuillez sélectionner au moins un crédit.');
+      return;
+    }
+
+    setIsGeneratingPdf(true);
+    try {
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageW = 210;
+      const marginL = 15;
+      const marginR = 15;
+      const contentW = pageW - marginL - marginR;
+
+      // Header
+      doc.setFillColor(220, 38, 38);
+      doc.rect(0, 0, pageW, 28, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('ETAT RÉCAPITULATIF DES IMPAYÉS EN COURS', pageW / 2, 12, { align: 'center' });
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`STAR ASSURANCES — Édité le ${new Date().toLocaleDateString('fr-FR')}`, pageW / 2, 22, { align: 'center' });
+
+      // Table header
+      let y = 36;
+      const colX = [marginL, marginL + 28, marginL + 72, marginL + 92, marginL + 112, marginL + 132, marginL + 152];
+      const headers = ['N° Contrat', 'Assuré', 'Branche', 'Crédit (DT)', 'Paiement (DT)', 'Solde (DT)', 'Échéance'];
+
+      doc.setFillColor(37, 99, 235);
+      doc.rect(marginL, y, contentW, 8, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      headers.forEach((h, i) => {
+        const align = i >= 3 && i <= 5 ? 'right' : 'left';
+        if (align === 'right') {
+          const nextX = i < headers.length - 1 ? colX[i + 1] : marginL + contentW;
+          doc.text(h, nextX - 2, y + 5.5, { align: 'right' });
+        } else {
+          doc.text(h, colX[i] + 1, y + 5.5);
+        }
+      });
+      y += 8;
+
+      // Table rows
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      selected.forEach((c, idx) => {
+        if (y > 260) {
+          doc.addPage();
+          y = 15;
+        }
+        const bg = idx % 2 === 0;
+        if (bg) {
+          doc.setFillColor(254, 242, 242);
+          doc.rect(marginL, y, contentW, 7, 'F');
+        }
+        doc.setTextColor(30, 30, 30);
+
+        const contrat = (c.numero_contrat || '').substring(0, 14);
+        const assure = (c.assure || '').substring(0, 22);
+        const branche = (c.branche || '').substring(0, 8);
+        const credit = (c.montant_credit || 0).toLocaleString('fr-FR');
+        const paiement = (c.paiement || 0).toLocaleString('fr-FR');
+        const solde = (c.solde || 0).toLocaleString('fr-FR');
+        const echeance = c.date_paiement_prevue
+          ? new Date(c.date_paiement_prevue).toLocaleDateString('fr-FR')
+          : '-';
+
+        doc.text(contrat, colX[0] + 1, y + 4.8);
+        doc.text(assure, colX[1] + 1, y + 4.8);
+        doc.text(branche, colX[2] + 1, y + 4.8);
+        doc.text(credit, colX[4] - 2, y + 4.8, { align: 'right' });
+        doc.text(paiement, colX[5] - 2, y + 4.8, { align: 'right' });
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(220, 38, 38);
+        doc.text(solde, colX[6] - 2, y + 4.8, { align: 'right' });
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(30, 30, 30);
+        doc.text(echeance, colX[6] + 1, y + 4.8);
+        y += 7;
+      });
+
+      // Totals row
+      y += 2;
+      doc.setFillColor(30, 58, 138);
+      doc.rect(marginL, y, contentW, 9, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      const totalCredit = selected.reduce((s, c) => s + (c.montant_credit || 0), 0);
+      const totalPaiement = selected.reduce((s, c) => s + (c.paiement || 0), 0);
+      const totalSolde = selected.reduce((s, c) => s + (c.solde || 0), 0);
+      doc.text(`TOTAL — ${selected.length} crédit(s)`, marginL + 2, y + 6);
+      doc.text(totalCredit.toLocaleString('fr-FR'), colX[4] - 2, y + 6, { align: 'right' });
+      doc.text(totalPaiement.toLocaleString('fr-FR'), colX[5] - 2, y + 6, { align: 'right' });
+      doc.text(totalSolde.toLocaleString('fr-FR'), colX[6] - 2, y + 6, { align: 'right' });
+      y += 9;
+
+      // Solde detail box
+      y += 6;
+      doc.setFillColor(254, 226, 226);
+      doc.setDrawColor(220, 38, 38);
+      doc.setLineWidth(0.5);
+      doc.rect(marginL, y, contentW, 14, 'FD');
+      doc.setTextColor(153, 27, 27);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text('TOTAL SOLDE IMPAYÉ :', marginL + 4, y + 6);
+      doc.setFontSize(13);
+      doc.text(`${totalSolde.toLocaleString('fr-FR')} DT`, marginL + 4, y + 12);
+      y += 14;
+
+      // Banking message
+      y += 8;
+      if (y > 240) { doc.addPage(); y = 20; }
+      doc.setFillColor(239, 246, 255);
+      doc.setDrawColor(59, 130, 246);
+      doc.setLineWidth(0.5);
+      const msgLines = [
+        'Cher client,',
+        '',
+        'Pour votre intérêt et pour des raisons comptables, nous vous prions d\'effectuer le',
+        'paiement des impayés par un versement bancaire direct sur nos comptes :',
+        '',
+        '04140222008106615139',
+        'SHIRI FARES HAMZA — STAR ASSURANCES',
+        'Banque : ATTIJARI BANQUE',
+        '',
+        'Service recouvrement'
+      ];
+      const msgH = msgLines.length * 6 + 8;
+      doc.rect(marginL, y, contentW, msgH, 'FD');
+      doc.setTextColor(30, 64, 175);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      let ly = y + 7;
+      msgLines.forEach((line, i) => {
+        if (i === 0) { doc.setFont('helvetica', 'bold'); doc.setFontSize(10); }
+        else if (i === 5) { doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(220, 38, 38); }
+        else if (i === 6 || i === 7) { doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(30, 64, 175); }
+        else if (i === 9) { doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(30, 64, 175); }
+        else { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(30, 64, 175); }
+        if (line) doc.text(line, pageW / 2, ly, { align: 'center' });
+        ly += 6;
+      });
+
+      // Footer
+      const footerY = 287;
+      doc.setFillColor(220, 38, 38);
+      doc.rect(0, footerY - 4, pageW, 10, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.text('STAR ASSURANCES — Service Recouvrement', pageW / 2, footerY + 2, { align: 'center' });
+
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      doc.save(`Etat_Impayes_${date}.pdf`);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -707,6 +904,18 @@ const CreditsList: React.FC = () => {
           </div>
           
           <div className="flex space-x-2">
+            {selectedCreditIds.size > 0 && (
+              <button
+                onClick={generateImpayesPDF}
+                disabled={isGeneratingPdf}
+                className="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                <FileText className="w-4 h-4" />
+                <span>
+                  {isGeneratingPdf ? 'Génération...' : `État Impayés PDF (${selectedCreditIds.size})`}
+                </span>
+              </button>
+            )}
             <button
               onClick={exportToExcelSimple}
               disabled={filteredCredits.length === 0 || isExporting}
@@ -1192,6 +1401,7 @@ const CreditsList: React.FC = () => {
         <div id="credits-table" className="overflow-x-auto rounded-lg border border-gray-100 mt-2 w-full">
           <table className="w-full divide-y divide-gray-200 text-sm" style={{ tableLayout: 'fixed' }}>
             <colgroup>
+              <col style={{ width: '32px' }} />   {/* Checkbox */}
               <col style={{ width: '108px' }} />  {/* N° Contrat */}
               <col />                              {/* Assuré — prend l'espace restant */}
               <col style={{ width: '62px' }} />   {/* Branche */}
@@ -1208,6 +1418,18 @@ const CreditsList: React.FC = () => {
             </colgroup>
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-2 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                  <input
+                    type="checkbox"
+                    title="Tout sélectionner (impayés)"
+                    onChange={toggleSelectAll}
+                    checked={
+                      filteredCredits.filter(c => c.statut !== 'Payé' && c.statut !== 'Payé en total').length > 0 &&
+                      filteredCredits.filter(c => c.statut !== 'Payé' && c.statut !== 'Payé en total').every(c => selectedCreditIds.has(c.id))
+                    }
+                    className="w-3.5 h-3.5 cursor-pointer"
+                  />
+                </th>
                 <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">N° Contrat</th>
                 <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Assuré</th>
                 <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Branche</th>
@@ -1257,6 +1479,16 @@ const CreditsList: React.FC = () => {
                   }}
                   onMouseLeave={() => setHoveredCredit(null)}
                 >
+                  <td className="px-2 py-2.5 text-center overflow-hidden" onClick={e => e.stopPropagation()}>
+                    {!isPaid && (
+                      <input
+                        type="checkbox"
+                        checked={selectedCreditIds.has(credit.id)}
+                        onChange={() => toggleSelectCredit(credit.id)}
+                        className="w-3.5 h-3.5 cursor-pointer accent-red-600"
+                      />
+                    )}
+                  </td>
                   <td className="px-2 py-2.5 font-medium text-gray-900 truncate" title={credit.numero_contrat}>
                     {credit.numero_contrat}
                   </td>
