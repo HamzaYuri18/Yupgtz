@@ -82,7 +82,6 @@ const CreditsList: React.FC = () => {
     }
   };
 
-  // Fonction pour obtenir l'icône de statut
   const getStatusIcon = (statut: string) => {
     switch (statut) {
       case 'Payé':
@@ -97,7 +96,6 @@ const CreditsList: React.FC = () => {
     }
   };
 
-  // Fonction pour obtenir la couleur du statut
   const getStatusColor = (statut: string) => {
     switch (statut) {
       case 'Payé':
@@ -112,7 +110,6 @@ const CreditsList: React.FC = () => {
     }
   };
 
-  // Fonction pour exporter en Excel
   const exportToExcel = () => {
     if (filteredCredits.length === 0) {
       alert('Aucune donnée à exporter.');
@@ -121,8 +118,7 @@ const CreditsList: React.FC = () => {
 
     try {
       setIsExporting(true);
-      
-      // Préparer les données pour l'export
+
       const exportData = filteredCredits.map(credit => ({
         'Numéro Contrat': credit.numero_contrat || '',
         'Assuré': credit.assure || '',
@@ -138,36 +134,21 @@ const CreditsList: React.FC = () => {
         'Créé par': credit.cree_par || ''
       }));
 
-      // Créer un nouveau workbook
       const workbook = XLSX.utils.book_new();
-      
-      // Créer une worksheet à partir des données
       const worksheet = XLSX.utils.json_to_sheet(exportData);
-      
-      // Ajuster la largeur des colonnes
+
       const colWidths = [
-        { wch: 15 }, // Numéro Contrat
-        { wch: 20 }, // Assuré
-        { wch: 10 }, // Branche
-        { wch: 12 }, // Prime
-        { wch: 15 }, // Montant Crédit
-        { wch: 12 }, // Paiement
-        { wch: 12 }, // Solde
-        { wch: 12 }, // Date Crédit
-        { wch: 18 }, // Date Paiement Prévue
-        { wch: 15 }, // Statut
-        { wch: 18 }, // Date Paiement Effectif
-        { wch: 15 }  // Créé par
+        { wch: 15 }, { wch: 20 }, { wch: 10 }, { wch: 12 }, { wch: 15 },
+        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 15 },
+        { wch: 18 }, { wch: 15 }
       ];
       worksheet['!cols'] = colWidths;
 
-      // Ajouter la worksheet au workbook
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Credits');
 
-      // Générer le nom du fichier
       const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       let fileName = '';
-      
+
       if (activeFilter === 'echeances') {
         fileName = `Credits_Echeances_7_Jours_${date}.xlsx`;
       } else if (activeFilter === 'retard') {
@@ -179,11 +160,7 @@ const CreditsList: React.FC = () => {
         fileName = `Tous_Les_Credits_${date}.xlsx`;
       }
 
-      // Exporter le fichier
       XLSX.writeFile(workbook, fileName);
-      
-      console.log(`Export réussi: ${fileName}, ${exportData.length} enregistrements`);
-      
     } catch (error) {
       console.error('Erreur lors de l\'exportation:', error);
       alert('Erreur lors de l\'exportation. Voir la console pour plus de détails.');
@@ -192,7 +169,6 @@ const CreditsList: React.FC = () => {
     }
   };
 
-  // Version alternative plus simple de l'exportation
   const exportToExcelSimple = () => {
     if (filteredCredits.length === 0) {
       alert('Aucune donnée à exporter.');
@@ -201,8 +177,7 @@ const CreditsList: React.FC = () => {
 
     try {
       setIsExporting(true);
-      
-      // Données simplifiées pour le test
+
       const exportData = filteredCredits.map(credit => ({
         'Contrat': credit.numero_contrat,
         'Assuré': credit.assure,
@@ -215,9 +190,6 @@ const CreditsList: React.FC = () => {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Credits');
       XLSX.writeFile(wb, 'test_export_credits.xlsx');
-      
-      console.log('Export simple réussi');
-      
     } catch (error) {
       console.error('Erreur export simple:', error);
       alert('Erreur export: ' + error);
@@ -286,7 +258,6 @@ const CreditsList: React.FC = () => {
         toDate.setHours(23, 59, 59, 999);
         creditDate.setHours(0, 0, 0, 0);
 
-        // Filtre par nom de client avec tolérance
         const matchesClientName = filters.nomClient
           ? normalizeString(credit.assure || '').includes(normalizeString(filters.nomClient))
           : true;
@@ -321,7 +292,7 @@ const CreditsList: React.FC = () => {
     }
 
     const datePaiement = newStatus === 'Payé' ? new Date().toISOString().split('T')[0] : null;
-    
+
     try {
       const success = await updateCreditStatus(id, newStatus, datePaiement);
       if (success) {
@@ -357,8 +328,8 @@ const CreditsList: React.FC = () => {
   const showDueIn7Days = () => {
     setActiveFilter('echeances');
     setViewMode('tous');
-    setFilters(prev => ({ 
-      ...prev, 
+    setFilters(prev => ({
+      ...prev,
       statut: 'all',
       branche: 'all',
       createdBy: 'all',
@@ -373,8 +344,8 @@ const CreditsList: React.FC = () => {
   const showOverdueCredits = () => {
     setActiveFilter('retard');
     setViewMode('tous');
-    setFilters(prev => ({ 
-      ...prev, 
+    setFilters(prev => ({
+      ...prev,
       statut: 'all',
       branche: 'all',
       createdBy: 'all',
@@ -515,7 +486,6 @@ const CreditsList: React.FC = () => {
     const margin = 14;
     const today = new Date().toLocaleDateString('fr-FR');
 
-    // ── Header ────────────────────────────────────────────────────────────────
     doc.setFillColor(30, 64, 175);
     doc.rect(0, 0, pageW, 22, 'F');
     doc.setTextColor(255, 255, 255);
@@ -526,7 +496,6 @@ const CreditsList: React.FC = () => {
     doc.setFont('helvetica', 'normal');
     doc.text(`Édité le : ${today}`, pageW / 2, 17, { align: 'center' });
 
-    // ── Company info ──────────────────────────────────────────────────────────
     doc.setTextColor(50, 50, 50);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
@@ -534,7 +503,6 @@ const CreditsList: React.FC = () => {
     doc.setFont('helvetica', 'normal');
     doc.text(`Nombre d'impayés sélectionnés : ${selected.length}`, pageW - margin, 30, { align: 'right' });
 
-    // ── Table header ──────────────────────────────────────────────────────────
     const cols = [
       { label: 'N° Contrat', x: margin, w: 30 },
       { label: 'Assuré', x: margin + 30, w: 50 },
@@ -550,7 +518,6 @@ const CreditsList: React.FC = () => {
     let y = 38;
     const rowH = 8;
 
-    // Header row
     doc.setFillColor(219, 234, 254);
     doc.rect(margin, y, pageW - margin * 2, rowH, 'F');
     doc.setDrawColor(147, 197, 253);
@@ -562,7 +529,6 @@ const CreditsList: React.FC = () => {
       doc.text(col.label, col.x + 1, y + 5.5);
     });
 
-    // Data rows
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     let totalSolde = 0;
@@ -575,7 +541,6 @@ const CreditsList: React.FC = () => {
       if (y + rowH > pageH - 55) {
         doc.addPage();
         y = 20;
-        // Repeat header on new page
         doc.setFillColor(219, 234, 254);
         doc.rect(margin, y, pageW - margin * 2, rowH, 'F');
         doc.setFont('helvetica', 'bold');
@@ -621,7 +586,6 @@ const CreditsList: React.FC = () => {
       doc.text(credit.statut || '', cols[8].x + 1, y + 5.5);
     });
 
-    // ── Totals row ─────────────────────────────────────────────────────────────
     y += rowH + 2;
     if (y + rowH + 2 > pageH - 50) { doc.addPage(); y = 20; }
 
@@ -636,7 +600,6 @@ const CreditsList: React.FC = () => {
     doc.text(totalPaiement.toLocaleString('fr-FR', { minimumFractionDigits: 3 }) + ' DT', cols[5].x + cols[5].w - 2, y + 6, { align: 'right' });
     doc.text(totalSolde.toLocaleString('fr-FR', { minimumFractionDigits: 3 }) + ' DT', cols[6].x + cols[6].w - 2, y + 6, { align: 'right' });
 
-    // ── Solde detail summary ──────────────────────────────────────────────────
     y += rowH + 6;
     if (y + 20 > pageH - 45) { doc.addPage(); y = 20; }
     doc.setFillColor(239, 246, 255);
@@ -655,7 +618,6 @@ const CreditsList: React.FC = () => {
       margin + 4, y + 11
     );
 
-    // ── Payment message ────────────────────────────────────────────────────────
     y += 22;
     if (y + 36 > pageH) { doc.addPage(); y = 20; }
     doc.setDrawColor(220, 38, 38);
@@ -688,7 +650,6 @@ const CreditsList: React.FC = () => {
     doc.setTextColor(100, 100, 100);
     doc.text('Service Recouvrement', pageW / 2, y + 31, { align: 'center' });
 
-    // ── Footer ────────────────────────────────────────────────────────────────
     const totalPages = (doc as any).internal.getNumberOfPages();
     for (let p = 1; p <= totalPages; p++) {
       doc.setPage(p);
@@ -704,12 +665,7 @@ const CreditsList: React.FC = () => {
 
   const stats = calculateDetailedStats();
   const uniqueUsers = [...new Set(credits.map(c => c.cree_par).filter(Boolean))];
-  const uniqueMonths = [...new Set(credits
-    .map(c => c.date_credit ? c.date_credit.slice(0, 7) : null)
-    .filter(Boolean)
-  )].sort().reverse();
 
-  // Obtenir le nom du mois en français
   const getMonthName = (monthString: string) => {
     const [year, month] = monthString.split('-').map(Number);
     const date = new Date(year, month - 1);
@@ -728,36 +684,35 @@ const CreditsList: React.FC = () => {
   return (
     <div className="w-full">
       <div className="bg-white rounded-lg shadow-lg p-4 lg:p-6">
-        {/* En-tête avec informations utilisateur */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">
             <CreditCard className="w-6 h-6 text-blue-600" />
             <h2 className="text-2xl font-bold text-gray-900">
-              {activeFilter === 'echeances' 
-                ? 'Échéances dans 7 jours' 
-                : activeFilter === 'retard' 
-                ? 'Crédits en Retard' 
-                : viewMode === 'mois' 
-                ? `Crédits du ${getMonthName(filters.mois)}` 
+              {activeFilter === 'echeances'
+                ? 'Échéances dans 7 jours'
+                : activeFilter === 'retard'
+                ? 'Crédits en Retard'
+                : viewMode === 'mois'
+                ? `Crédits du ${getMonthName(filters.mois)}`
                 : 'Tous les Crédits'}
             </h2>
             <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${
-              activeFilter === 'echeances' 
+              activeFilter === 'echeances'
                 ? 'bg-yellow-100 text-yellow-800 border border-yellow-300'
                 : activeFilter === 'retard'
                 ? 'bg-red-100 text-red-800 border border-red-300'
                 : 'bg-blue-100 text-blue-800 border border-blue-300'
             }`}>
-              {activeFilter === 'echeances' 
-                ? `${filteredCredits.length} échéances` 
+              {activeFilter === 'echeances'
+                ? `${filteredCredits.length} échéances`
                 : activeFilter === 'retard'
                 ? `${filteredCredits.length} en retard`
-                : viewMode === 'mois' 
-                ? `${filteredCredits.length} crédits ce mois` 
+                : viewMode === 'mois'
+                ? `${filteredCredits.length} crédits ce mois`
                 : `${filteredCredits.length} crédits au total`}
             </span>
           </div>
-          
+
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2 bg-gray-100 rounded-lg px-3 py-2">
               <User className="w-4 h-4 text-gray-600" />
@@ -766,7 +721,6 @@ const CreditsList: React.FC = () => {
               </span>
             </div>
 
-            {/* Bouton PDF Impayés — en haut à droite */}
             <button
               onClick={generateImpayesPDF}
               disabled={selectedIds.size === 0}
@@ -814,7 +768,6 @@ const CreditsList: React.FC = () => {
           </div>
         </div>
 
-        {/* Bouton d'exportation */}
         <div className="flex justify-between items-center mb-4">
           <div>
             {(activeFilter === 'echeances' || activeFilter === 'retard') && (
@@ -825,7 +778,7 @@ const CreditsList: React.FC = () => {
               </div>
             )}
           </div>
-          
+
           <div className="flex space-x-2">
             <button
               onClick={exportToExcelSimple}
@@ -839,7 +792,7 @@ const CreditsList: React.FC = () => {
               <Download className="w-4 h-4" />
               <span>Export Simple (Test)</span>
             </button>
-            
+
             <button
               onClick={exportToExcel}
               disabled={filteredCredits.length === 0 || isExporting}
@@ -864,7 +817,6 @@ const CreditsList: React.FC = () => {
           </div>
         </div>
 
-        {/* Bannière d'information pour les permissions */}
         {!isHamza && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
             <div className="flex items-center space-x-2">
@@ -876,7 +828,6 @@ const CreditsList: React.FC = () => {
           </div>
         )}
 
-        {/* Indicateur mode édition pour Hamza */}
         {isHamza && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-6">
             <div className="flex items-center space-x-2">
@@ -888,7 +839,6 @@ const CreditsList: React.FC = () => {
           </div>
         )}
 
-        {/* Statistiques Détaillées */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="bg-blue-50 rounded-lg p-4 cursor-pointer hover:bg-blue-100 transition-colors">
             <div className="flex items-center justify-between">
@@ -953,7 +903,6 @@ const CreditsList: React.FC = () => {
           </div>
         </div>
 
-        {/* Taux de Recouvrement et Retards */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-lg p-4">
             <div className="flex items-center justify-between">
@@ -974,7 +923,7 @@ const CreditsList: React.FC = () => {
               </div>
             </div>
             <div className="mt-3 w-full bg-cyan-200 rounded-full h-2">
-              <div 
+              <div
                 className="bg-cyan-600 h-2 rounded-full transition-all duration-500"
                 style={{ width: `${Math.min(stats.tauxRecouvrement, 100)}%` }}
               ></div>
@@ -1003,7 +952,6 @@ const CreditsList: React.FC = () => {
           </div>
         </div>
 
-        {/* Bouton Evolution P/C */}
         <div className="mb-6">
           <button
             onClick={() => setIsEvolutionModalOpen(true)}
@@ -1014,7 +962,6 @@ const CreditsList: React.FC = () => {
           </button>
         </div>
 
-        {/* Filtres (masqués quand un filtre spécial est actif) */}
         {activeFilter === 'none' && (
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
             <div className="flex items-center space-x-2 mb-4">
@@ -1101,7 +1048,6 @@ const CreditsList: React.FC = () => {
           </div>
         )}
 
-        {/* Indicateur de filtre actif */}
         {(activeFilter === 'echeances' || activeFilter === 'retard') && (
           <div className={`rounded-lg p-4 mb-6 ${
             activeFilter === 'echeances' ? 'bg-yellow-50 border border-yellow-200' : 'bg-red-50 border border-red-200'
@@ -1134,7 +1080,6 @@ const CreditsList: React.FC = () => {
           </div>
         )}
 
-        {/* Liste des crédits */}
         <div id="credits-table" className="-mx-4 lg:-mx-6 overflow-x-auto">
           <div className="inline-block min-w-full align-middle px-4 lg:px-6">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -1149,46 +1094,20 @@ const CreditsList: React.FC = () => {
                     title="Tout sélectionner / désélectionner"
                   />
                 </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  N° Contrat
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Assuré
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Branche
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Prime
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Crédit
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Paiement
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Solde
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Date Crédit
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Échéance
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Statut
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Paiement Effectif
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Créé par
-                </th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">N° Contrat</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Assuré</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Branche</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Prime</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Crédit</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Paiement</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Solde</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Date Crédit</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Échéance</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Statut</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Paiement Effectif</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Créé par</th>
                 {isHamza && (
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                    Actions
-                  </th>
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Actions</th>
                 )}
               </tr>
             </thead>
@@ -1212,26 +1131,14 @@ const CreditsList: React.FC = () => {
                       className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
                     />
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap font-medium text-gray-900">
-                    {credit.numero_contrat}
-                  </td>
-                  <td className="px-3 py-2.5 text-gray-900 max-w-[160px] truncate" title={credit.assure}>
-                    {credit.assure}
-                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap font-medium text-gray-900">{credit.numero_contrat}</td>
+                  <td className="px-3 py-2.5 text-gray-900 max-w-[160px] truncate" title={credit.assure}>{credit.assure}</td>
                   <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
-                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                      {credit.branche}
-                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{credit.branche}</span>
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-right text-gray-700 tabular-nums">
-                    {(credit.prime || 0).toLocaleString('fr-FR')}
-                  </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-right font-semibold text-blue-700 tabular-nums">
-                    {(credit.montant_credit || 0).toLocaleString('fr-FR')}
-                  </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-right text-gray-700 tabular-nums">
-                    {(credit.paiement || 0).toLocaleString('fr-FR')}
-                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap text-right text-gray-700 tabular-nums">{(credit.prime || 0).toLocaleString('fr-FR')}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap text-right font-semibold text-blue-700 tabular-nums">{(credit.montant_credit || 0).toLocaleString('fr-FR')}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap text-right text-gray-700 tabular-nums">{(credit.paiement || 0).toLocaleString('fr-FR')}</td>
                   <td className="px-3 py-2.5 whitespace-nowrap text-right tabular-nums">
                     {(credit.solde !== null && credit.solde !== undefined && credit.solde !== 0) ? (
                       <div className="flex items-center justify-end space-x-1.5">
@@ -1252,9 +1159,7 @@ const CreditsList: React.FC = () => {
                         </button>
                       </div>
                     ) : (
-                      <span className="font-semibold text-gray-400">
-                        {(credit.solde || 0).toLocaleString('fr-FR')}
-                      </span>
+                      <span className="font-semibold text-gray-400">{(credit.solde || 0).toLocaleString('fr-FR')}</span>
                     )}
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
@@ -1274,9 +1179,7 @@ const CreditsList: React.FC = () => {
                   <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
                     {credit.date_paiement_effectif ? new Date(credit.date_paiement_effectif).toLocaleDateString('fr-FR') : '-'}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
-                    {credit.cree_par}
-                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">{credit.cree_par}</td>
                   {isHamza && (
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <div className="flex items-center space-x-1.5">
@@ -1417,7 +1320,6 @@ const CreditsList: React.FC = () => {
           </div>
         )}
 
-        {/* SMS Modal */}
         <SMSModal
           isOpen={!!selectedCreditForSMS}
           onClose={() => setSelectedCreditForSMS(null)}
@@ -1429,7 +1331,6 @@ const CreditsList: React.FC = () => {
           }}
         />
 
-        {/* Stats Detail Modal */}
         {statsModalData && (
           <CreditDetailsModal
             isOpen={isStatsModalOpen}
@@ -1443,7 +1344,6 @@ const CreditsList: React.FC = () => {
           />
         )}
 
-        {/* Evolution P/C Modal */}
         <CreditEvolutionModal
           isOpen={isEvolutionModalOpen}
           onClose={() => setIsEvolutionModalOpen(false)}
