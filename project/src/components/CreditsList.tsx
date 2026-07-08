@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, ListFilter as Filter, Calendar, CircleCheck as CheckCircle, Circle as XCircle, Clock, TrendingUp, TriangleAlert as AlertTriangle, DollarSign, User, Download, MessageSquare, ChartBar as BarChart3, Trash2, FileText } from 'lucide-react';
+import { CreditCard, ListFilter as Filter, Calendar, CircleCheck as CheckCircle, Circle as XCircle, Clock, TrendingUp, TriangleAlert as AlertTriangle, DollarSign, User, Download, MessageSquare, ChartBar as BarChart2, Trash2, FileText } from 'lucide-react';
 import { getCredits, updateCreditStatus, deleteCredit } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
 import * as XLSX from 'xlsx';
@@ -1008,7 +1008,7 @@ const CreditsList: React.FC = () => {
             onClick={() => setIsEvolutionModalOpen(true)}
             className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold py-4 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center space-x-3"
           >
-            <BarChart3 className="w-6 h-6" />
+            <BarChart2 className="w-6 h-6" />
             <span className="text-lg">Evolution P/C - Analyse 15 Derniers Jours</span>
           </button>
         </div>
