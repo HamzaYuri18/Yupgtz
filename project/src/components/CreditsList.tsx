@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, ListFilter as Filter, Calendar, CircleCheck as CheckCircle, Circle as XCircle, Clock, TrendingUp, TriangleAlert as AlertTriangle, DollarSign, User, Download, MessageSquare, ChartBar as BarChart3, Trash2, FileText } from 'lucide-react';
-import { getCredits, updateCreditStatus, deleteCredit } from '../utils/supabaseService';
+import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, User, Download, MessageSquare, BarChart3, Trash2, X } from 'lucide-react';
+import { getCredits, updateCreditStatus, deleteCredit, syncMissingCredits } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
 import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
 import SMSModal from './SMSModal';
 import CreditDetailsModal from './CreditDetailsModal';
 import CreditEvolutionModal from './CreditEvolutionModal';
+import CreditPaymentModal from './CreditPaymentModal';
 
 const CreditsList: React.FC = () => {
   const [credits, setCredits] = useState<any[]>([]);
@@ -22,11 +22,13 @@ const CreditsList: React.FC = () => {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'mois' | 'tous'>('mois');
-  const [activeFilter, setActiveFilter] = useState<'none' | 'echeances' | 'retard'>('none');
+  const [activeFilter, setActiveFilter] = useState<'none' | 'echeances' | 'retard' | 'calendrier'>('none');
+  const [calendarDate, setCalendarDate] = useState<string>('');
   const [isExporting, setIsExporting] = useState(false);
   const [hoveredCredit, setHoveredCredit] = useState<any | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [selectedCreditForSMS, setSelectedCreditForSMS] = useState<any | null>(null);
+  const [selectedCreditForPayment, setSelectedCreditForPayment] = useState<any | null>(null);
 
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
   const [statsModalData, setStatsModalData] = useState<{
@@ -38,7 +40,11 @@ const CreditsList: React.FC = () => {
 
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const isHamza = currentUser === 'Hamza';
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [paidRangeFrom, setPaidRangeFrom] = useState('');
+  const [paidRangeTo, setPaidRangeTo] = useState('');
+  const [showPaidDetails, setShowPaidDetails] = useState(false);
 
   useEffect(() => {
     const session = getSession();
@@ -46,11 +52,31 @@ const CreditsList: React.FC = () => {
       setCurrentUser(session.username);
     }
     loadCredits();
+    // Synchroniser automatiquement les crédits manquants au chargement
+    handleSync(true);
   }, []);
+
+  const handleSync = async (silent = false) => {
+    setSyncing(true);
+    try {
+      const count = await syncMissingCredits();
+      if (count > 0) {
+        setSyncMsg(`✅ ${count} crédit(s) manquant(s) ajouté(s) à la liste`);
+        await loadCredits();
+      } else if (!silent) {
+        setSyncMsg('✅ Tous les crédits sont déjà synchronisés');
+      }
+    } catch (e) {
+      if (!silent) setSyncMsg('❌ Erreur lors de la synchronisation');
+    } finally {
+      setSyncing(false);
+      if (!silent) setTimeout(() => setSyncMsg(null), 4000);
+    }
+  };
 
   useEffect(() => {
     applyFilters();
-  }, [filters, credits, viewMode, activeFilter]);
+  }, [filters, credits, viewMode, activeFilter, calendarDate]);
 
   const loadCredits = async () => {
     try {
@@ -276,6 +302,12 @@ const CreditsList: React.FC = () => {
       filtered = getCreditsDueIn7Days();
     } else if (activeFilter === 'retard') {
       filtered = getOverdueCredits();
+    } else if (activeFilter === 'calendrier' && calendarDate) {
+      filtered = credits.filter(c => {
+        if (!c.date_paiement_prevue) return false;
+        if (c.statut === 'Payé' || c.statut === 'Payé en total') return false;
+        return c.date_paiement_prevue.slice(0, 10) === calendarDate;
+      });
     } else {
       filtered = filtered.filter(credit => {
         const creditDate = credit.date_credit ? new Date(credit.date_credit) : new Date();
@@ -302,7 +334,6 @@ const CreditsList: React.FC = () => {
     }
 
     setFilteredCredits(filtered);
-    setSelectedIds(new Set());
   };
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
@@ -351,6 +382,19 @@ const CreditsList: React.FC = () => {
       }
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
+    }
+  };
+
+  const handleCalendarDateChange = (date: string) => {
+    setCalendarDate(date);
+    if (date) {
+      setActiveFilter('calendrier');
+      setViewMode('tous');
+      setTimeout(() => {
+        document.getElementById('credits-table')?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } else {
+      setActiveFilter('none');
     }
   };
 
@@ -423,6 +467,7 @@ const CreditsList: React.FC = () => {
 
   const clearFilters = () => {
     setActiveFilter('none');
+    setCalendarDate('');
     setFilters({
       statut: 'all',
       branche: 'all',
@@ -480,6 +525,7 @@ const CreditsList: React.FC = () => {
   const handleViewModeChange = (mode: 'mois' | 'tous') => {
     setViewMode(mode);
     setActiveFilter('none');
+    setCalendarDate('');
     if (mode === 'tous') {
       setFilters(prev => ({
         ...prev,
@@ -488,221 +534,20 @@ const CreditsList: React.FC = () => {
     }
   };
 
-  const toggleSelectAll = () => {
-    if (selectedIds.size === filteredCredits.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredCredits.map(c => c.id)));
-    }
-  };
-
-  const toggleSelect = (id: number) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const generateImpayesPDF = () => {
-    const selected = filteredCredits.filter(c => selectedIds.has(c.id));
-    if (selected.length === 0) return;
-
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    const pageW = doc.internal.pageSize.getWidth();
-    const pageH = doc.internal.pageSize.getHeight();
-    const margin = 14;
-    const today = new Date().toLocaleDateString('fr-FR');
-
-    // ── Header ────────────────────────────────────────────────────────────────
-    doc.setFillColor(30, 64, 175);
-    doc.rect(0, 0, pageW, 22, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('ÉTAT RÉCAPITULATIF DES IMPAYÉS EN COURS', pageW / 2, 10, { align: 'center' });
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Édité le : ${today}`, pageW / 2, 17, { align: 'center' });
-
-    // ── Company info ──────────────────────────────────────────────────────────
-    doc.setTextColor(50, 50, 50);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('STAR ASSURANCES', margin, 30);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Nombre d'impayés sélectionnés : ${selected.length}`, pageW - margin, 30, { align: 'right' });
-
-    // ── Table header ──────────────────────────────────────────────────────────
-    const cols = [
-      { label: 'N° Contrat', x: margin, w: 30 },
-      { label: 'Assuré', x: margin + 30, w: 50 },
-      { label: 'Branche', x: margin + 80, w: 22 },
-      { label: 'Prime (DT)', x: margin + 102, w: 28 },
-      { label: 'Crédit (DT)', x: margin + 130, w: 28 },
-      { label: 'Paiement (DT)', x: margin + 158, w: 30 },
-      { label: 'Solde (DT)', x: margin + 188, w: 28 },
-      { label: 'Échéance', x: margin + 216, w: 28 },
-      { label: 'Statut', x: margin + 244, w: 28 },
-    ];
-
-    let y = 38;
-    const rowH = 8;
-
-    // Header row
-    doc.setFillColor(219, 234, 254);
-    doc.rect(margin, y, pageW - margin * 2, rowH, 'F');
-    doc.setDrawColor(147, 197, 253);
-    doc.rect(margin, y, pageW - margin * 2, rowH, 'S');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    doc.setTextColor(30, 64, 175);
-    cols.forEach(col => {
-      doc.text(col.label, col.x + 1, y + 5.5);
-    });
-
-    // Data rows
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    let totalSolde = 0;
-    let totalPrime = 0;
-    let totalCredit = 0;
-    let totalPaiement = 0;
-
-    selected.forEach((credit, i) => {
-      y += rowH;
-      if (y + rowH > pageH - 55) {
-        doc.addPage();
-        y = 20;
-        // Repeat header on new page
-        doc.setFillColor(219, 234, 254);
-        doc.rect(margin, y, pageW - margin * 2, rowH, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7.5);
-        doc.setTextColor(30, 64, 175);
-        cols.forEach(col => doc.text(col.label, col.x + 1, y + 5.5));
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(50, 50, 50);
-        y += rowH;
-      }
-
-      const isEven = i % 2 === 0;
-      doc.setFillColor(isEven ? 249 : 255, isEven ? 250 : 255, isEven ? 251 : 255);
-      doc.rect(margin, y, pageW - margin * 2, rowH, 'F');
-      doc.setDrawColor(229, 231, 235);
-      doc.rect(margin, y, pageW - margin * 2, rowH, 'S');
-
-      const solde = credit.solde || 0;
-      const prime = credit.prime || 0;
-      const creditAmt = credit.montant_credit || 0;
-      const paiement = credit.paiement || 0;
-      totalSolde += solde;
-      totalPrime += prime;
-      totalCredit += creditAmt;
-      totalPaiement += paiement;
-
-      doc.setTextColor(50, 50, 50);
-      doc.text(credit.numero_contrat || '', cols[0].x + 1, y + 5.5);
-      const assureText = (credit.assure || '').length > 22 ? credit.assure.substring(0, 22) + '…' : credit.assure || '';
-      doc.text(assureText, cols[1].x + 1, y + 5.5);
-      doc.text(credit.branche || '', cols[2].x + 1, y + 5.5);
-      doc.setTextColor(70, 70, 70);
-      doc.text(prime.toLocaleString('fr-FR', { minimumFractionDigits: 3 }), cols[3].x + cols[3].w - 2, y + 5.5, { align: 'right' });
-      doc.text(creditAmt.toLocaleString('fr-FR', { minimumFractionDigits: 3 }), cols[4].x + cols[4].w - 2, y + 5.5, { align: 'right' });
-      doc.text(paiement.toLocaleString('fr-FR', { minimumFractionDigits: 3 }), cols[5].x + cols[5].w - 2, y + 5.5, { align: 'right' });
-      doc.setTextColor(solde > 0 ? 185 : 22, solde > 0 ? 28 : 163, solde > 0 ? 28 : 74);
-      doc.setFont('helvetica', 'bold');
-      doc.text(solde.toLocaleString('fr-FR', { minimumFractionDigits: 3 }), cols[6].x + cols[6].w - 2, y + 5.5, { align: 'right' });
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(50, 50, 50);
-      const echeance = credit.date_paiement_prevue ? new Date(credit.date_paiement_prevue).toLocaleDateString('fr-FR') : '-';
-      doc.text(echeance, cols[7].x + 1, y + 5.5);
-      doc.text(credit.statut || '', cols[8].x + 1, y + 5.5);
-    });
-
-    // ── Totals row ─────────────────────────────────────────────────────────────
-    y += rowH + 2;
-    if (y + rowH + 2 > pageH - 50) { doc.addPage(); y = 20; }
-
-    doc.setFillColor(30, 64, 175);
-    doc.rect(margin, y, pageW - margin * 2, rowH + 1, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text('TOTAL SOLDE IMPAYÉS', cols[0].x + 1, y + 6);
-    doc.text(totalPrime.toLocaleString('fr-FR', { minimumFractionDigits: 3 }) + ' DT', cols[3].x + cols[3].w - 2, y + 6, { align: 'right' });
-    doc.text(totalCredit.toLocaleString('fr-FR', { minimumFractionDigits: 3 }) + ' DT', cols[4].x + cols[4].w - 2, y + 6, { align: 'right' });
-    doc.text(totalPaiement.toLocaleString('fr-FR', { minimumFractionDigits: 3 }) + ' DT', cols[5].x + cols[5].w - 2, y + 6, { align: 'right' });
-    doc.text(totalSolde.toLocaleString('fr-FR', { minimumFractionDigits: 3 }) + ' DT', cols[6].x + cols[6].w - 2, y + 6, { align: 'right' });
-
-    // ── Solde detail summary ──────────────────────────────────────────────────
-    y += rowH + 6;
-    if (y + 20 > pageH - 45) { doc.addPage(); y = 20; }
-    doc.setFillColor(239, 246, 255);
-    doc.rect(margin, y, pageW - margin * 2, 14, 'F');
-    doc.setDrawColor(147, 197, 253);
-    doc.rect(margin, y, pageW - margin * 2, 14, 'S');
-    doc.setTextColor(30, 64, 175);
-    doc.setFontSize(9);
-    doc.text('Détail du Solde Total :', margin + 4, y + 6);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(50, 50, 50);
-    doc.text(
-      `Total Crédits accordés : ${totalCredit.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT   |   ` +
-      `Total Paiements reçus : ${totalPaiement.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT   |   ` +
-      `Solde restant dû : ${totalSolde.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`,
-      margin + 4, y + 11
-    );
-
-    // ── Payment message ────────────────────────────────────────────────────────
-    y += 22;
-    if (y + 36 > pageH) { doc.addPage(); y = 20; }
-    doc.setDrawColor(220, 38, 38);
-    doc.setLineWidth(0.5);
-    doc.rect(margin, y, pageW - margin * 2, 34, 'S');
-    doc.setFillColor(254, 242, 242);
-    doc.rect(margin + 0.3, y + 0.3, pageW - margin * 2 - 0.6, 33.4, 'F');
-
-    doc.setTextColor(185, 28, 28);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text('AVIS DE PAIEMENT', pageW / 2, y + 7, { align: 'center' });
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.setTextColor(50, 50, 50);
-    const msgLines = doc.splitTextToSize(
-      'Cher client,\n\nPour votre intérêt et pour des raisons comptables, nous vous prions d\'effectuer le paiement des impayés par un versement bancaire direct sur nos comptes :',
-      pageW - margin * 2 - 8
-    );
-    doc.text(msgLines, margin + 4, y + 14);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(30, 64, 175);
-    doc.text('04140222008106615139  —  SHIRI FARES HAMZA STAR ASSURANCES  —  ATTIJARI BANQUE', pageW / 2, y + 25, { align: 'center' });
-
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
-    doc.text('Service Recouvrement', pageW / 2, y + 31, { align: 'center' });
-
-    // ── Footer ────────────────────────────────────────────────────────────────
-    const totalPages = (doc as any).internal.getNumberOfPages();
-    for (let p = 1; p <= totalPages; p++) {
-      doc.setPage(p);
-      doc.setFontSize(7);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(150, 150, 150);
-      doc.text(`Page ${p} / ${totalPages}`, pageW - margin, pageH - 5, { align: 'right' });
-      doc.text('STAR ASSURANCES — Document confidentiel', margin, pageH - 5);
-    }
-
-    doc.save(`Etat_Impayes_${today.replace(/\//g, '-')}.pdf`);
-  };
-
   const stats = calculateDetailedStats();
+
+  const paidInRange = (paidRangeFrom || paidRangeTo)
+    ? credits.filter(c => {
+        const isPaid = c.statut === 'Payé' || c.statut === 'Payé en total' || c.statut === 'Payé partiellement';
+        if (!isPaid || !c.date_paiement_effectif) return false;
+        const d = new Date(c.date_paiement_effectif);
+        d.setHours(0, 0, 0, 0);
+        if (paidRangeFrom) { const f = new Date(paidRangeFrom); f.setHours(0, 0, 0, 0); if (d < f) return false; }
+        if (paidRangeTo)   { const t = new Date(paidRangeTo);   t.setHours(23, 59, 59, 999); if (d > t) return false; }
+        return true;
+      })
+    : [];
+
   const uniqueUsers = [...new Set(credits.map(c => c.cree_par).filter(Boolean))];
   const uniqueMonths = [...new Set(credits
     .map(c => c.date_credit ? c.date_credit.slice(0, 7) : null)
@@ -727,38 +572,88 @@ const CreditsList: React.FC = () => {
 
   return (
     <div className="w-full">
+      <style>{`
+        @keyframes neon-slide {
+          0%   { transform: translateX(0px);  box-shadow: 0 0 4px 1px rgba(239,68,68,0.9), 0 0 10px 3px rgba(239,68,68,0.5); }
+          30%  { transform: translateX(4px);  box-shadow: 0 0 8px 2px rgba(239,68,68,1),   0 0 18px 6px rgba(239,68,68,0.7); }
+          60%  { transform: translateX(-4px); box-shadow: 0 0 8px 2px rgba(239,68,68,1),   0 0 18px 6px rgba(239,68,68,0.7); }
+          100% { transform: translateX(0px);  box-shadow: 0 0 4px 1px rgba(239,68,68,0.9), 0 0 10px 3px rgba(239,68,68,0.5); }
+        }
+        .neon-overdue-badge {
+          animation: neon-slide 1.4s ease-in-out infinite;
+          display: inline-flex; align-items: center; gap: 3px;
+          padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;
+          color: #fff; background: #dc2626; border: 1px solid #ef4444;
+          letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;
+        }
+        @keyframes neon-slide-yellow {
+          0%   { transform: translateX(0px);  box-shadow: 0 0 4px 1px rgba(234,179,8,0.9), 0 0 10px 3px rgba(234,179,8,0.5); }
+          30%  { transform: translateX(4px);  box-shadow: 0 0 8px 2px rgba(234,179,8,1),   0 0 18px 6px rgba(234,179,8,0.7); }
+          60%  { transform: translateX(-4px); box-shadow: 0 0 8px 2px rgba(234,179,8,1),   0 0 18px 6px rgba(234,179,8,0.7); }
+          100% { transform: translateX(0px);  box-shadow: 0 0 4px 1px rgba(234,179,8,0.9), 0 0 10px 3px rgba(234,179,8,0.5); }
+        }
+        .neon-due-soon-badge {
+          animation: neon-slide-yellow 1.4s ease-in-out infinite;
+          display: inline-flex; align-items: center; gap: 3px;
+          padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;
+          color: #713f12; background: #fef08a; border: 1px solid #eab308;
+          letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;
+        }
+      `}</style>
       <div className="bg-white rounded-lg shadow-lg p-4 lg:p-6">
         {/* En-tête avec informations utilisateur */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">
             <CreditCard className="w-6 h-6 text-blue-600" />
             <h2 className="text-2xl font-bold text-gray-900">
-              {activeFilter === 'echeances' 
-                ? 'Échéances dans 7 jours' 
-                : activeFilter === 'retard' 
-                ? 'Crédits en Retard' 
-                : viewMode === 'mois' 
-                ? `Crédits du ${getMonthName(filters.mois)}` 
+              {activeFilter === 'echeances'
+                ? 'Échéances dans 7 jours'
+                : activeFilter === 'retard'
+                ? 'Crédits en Retard'
+                : activeFilter === 'calendrier' && calendarDate
+                ? `Échéances du ${new Date(calendarDate + 'T00:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}`
+                : viewMode === 'mois'
+                ? `Crédits du ${getMonthName(filters.mois)}`
                 : 'Tous les Crédits'}
             </h2>
             <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${
-              activeFilter === 'echeances' 
+              activeFilter === 'echeances'
                 ? 'bg-yellow-100 text-yellow-800 border border-yellow-300'
                 : activeFilter === 'retard'
                 ? 'bg-red-100 text-red-800 border border-red-300'
+                : activeFilter === 'calendrier'
+                ? 'bg-blue-100 text-blue-800 border border-blue-300'
                 : 'bg-blue-100 text-blue-800 border border-blue-300'
             }`}>
-              {activeFilter === 'echeances' 
-                ? `${filteredCredits.length} échéances` 
+              {activeFilter === 'echeances'
+                ? `${filteredCredits.length} échéances`
                 : activeFilter === 'retard'
                 ? `${filteredCredits.length} en retard`
-                : viewMode === 'mois' 
-                ? `${filteredCredits.length} crédits ce mois` 
+                : activeFilter === 'calendrier'
+                ? `${filteredCredits.length} crédit${filteredCredits.length !== 1 ? 's' : ''}`
+                : viewMode === 'mois'
+                ? `${filteredCredits.length} crédits ce mois`
                 : `${filteredCredits.length} crédits au total`}
             </span>
           </div>
           
           <div className="flex items-center space-x-4">
+            {syncMsg && (
+              <span className="text-sm font-medium px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg">
+                {syncMsg}
+              </span>
+            )}
+            <button
+              onClick={() => handleSync(false)}
+              disabled={syncing}
+              title="Synchroniser les crédits manquants depuis le rapport"
+              className="flex items-center gap-1.5 px-3 py-2 bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-sm font-medium hover:bg-amber-200 transition-colors disabled:opacity-60"
+            >
+              <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {syncing ? 'Sync...' : 'Synchroniser'}
+            </button>
             <div className="flex items-center space-x-2 bg-gray-100 rounded-lg px-3 py-2">
               <User className="w-4 h-4 text-gray-600" />
               <span className="text-sm font-medium text-gray-700">
@@ -787,7 +682,7 @@ const CreditsList: React.FC = () => {
               >
                 Tous les Crédits
               </button>
-              {(activeFilter === 'echeances' || activeFilter === 'retard') && (
+              {(activeFilter === 'echeances' || activeFilter === 'retard' || activeFilter === 'calendrier') && (
                 <button
                   onClick={clearFilters}
                   className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
@@ -812,20 +707,6 @@ const CreditsList: React.FC = () => {
           </div>
           
           <div className="flex space-x-2">
-            <button
-              onClick={generateImpayesPDF}
-              disabled={selectedIds.size === 0}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                selectedIds.size === 0
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  : 'bg-red-600 text-white hover:bg-red-700 shadow-sm'
-              }`}
-              title={selectedIds.size === 0 ? 'Sélectionnez des crédits pour générer le PDF' : `Générer PDF pour ${selectedIds.size} crédit(s) sélectionné(s)`}
-            >
-              <FileText className="w-4 h-4" />
-              <span>PDF Impayés{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}</span>
-            </button>
-
             <button
               onClick={exportToExcelSimple}
               disabled={filteredCredits.length === 0 || isExporting}
@@ -886,6 +767,45 @@ const CreditsList: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Filtre calendrier — date d'échéance précise */}
+        <div className="flex flex-wrap items-center gap-3 mb-5 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
+              <Calendar className="w-4.5 h-4.5 text-indigo-600" />
+            </div>
+            <span className="text-sm font-semibold text-indigo-800 whitespace-nowrap">
+              Filtrer par date d'échéance :
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-1 flex-wrap">
+            <input
+              type="date"
+              value={calendarDate}
+              onChange={(e) => handleCalendarDateChange(e.target.value)}
+              className="px-3 py-2 border border-indigo-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white shadow-sm cursor-pointer"
+            />
+            {calendarDate && (
+              <button
+                onClick={() => handleCalendarDateChange('')}
+                className="flex items-center gap-1.5 px-3 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-sm font-medium transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+                Effacer
+              </button>
+            )}
+          </div>
+          {activeFilter === 'calendrier' && (
+            <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
+              <span className="px-3 py-1 bg-indigo-600 text-white rounded-full text-xs font-bold">
+                {filteredCredits.length} crédit{filteredCredits.length !== 1 ? 's' : ''} à échéance
+              </span>
+              {filteredCredits.length === 0 && (
+                <span className="text-xs text-indigo-500 italic">Aucun crédit non payé à cette date</span>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Statistiques Détaillées */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -1013,6 +933,141 @@ const CreditsList: React.FC = () => {
           </button>
         </div>
 
+        {/* Section: Crédits Payés par Période */}
+        <div className="mb-6 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <CheckCircle className="w-5 h-5 text-green-600" />
+            <h3 className="text-base font-bold text-green-900">Crédits Payés — Par Période</h3>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <span className="text-sm text-green-700 font-medium whitespace-nowrap">Du</span>
+            <input
+              type="date"
+              value={paidRangeFrom}
+              onChange={e => { setPaidRangeFrom(e.target.value); setShowPaidDetails(false); }}
+              className="px-3 py-1.5 border border-green-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white shadow-sm"
+            />
+            <span className="text-sm text-green-700 font-medium whitespace-nowrap">au</span>
+            <input
+              type="date"
+              value={paidRangeTo}
+              onChange={e => { setPaidRangeTo(e.target.value); setShowPaidDetails(false); }}
+              className="px-3 py-1.5 border border-green-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white shadow-sm"
+            />
+            {(paidRangeFrom || paidRangeTo) && (
+              <button
+                onClick={() => { setPaidRangeFrom(''); setPaidRangeTo(''); setShowPaidDetails(false); }}
+                className="text-xs text-red-500 hover:text-red-700 font-medium underline"
+              >
+                Effacer
+              </button>
+            )}
+          </div>
+
+          {(paidRangeFrom || paidRangeTo) && (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                <div className="bg-white rounded-xl p-3 shadow-sm border border-green-100 text-center">
+                  <p className="text-3xl font-bold text-green-700">{paidInRange.length}</p>
+                  <p className="text-xs text-gray-500 font-medium mt-1">Crédits payés</p>
+                </div>
+                <div className="bg-white rounded-xl p-3 shadow-sm border border-green-100 text-center">
+                  <p className="text-xl font-bold text-green-700 tabular-nums">
+                    {paidInRange.reduce((a, c) => a + (c.paiement || 0), 0).toLocaleString('fr-FR')} DT
+                  </p>
+                  <p className="text-xs text-gray-500 font-medium mt-1">Montant encaissé</p>
+                </div>
+                <div className="bg-white rounded-xl p-3 shadow-sm border border-blue-100 text-center">
+                  <p className="text-xl font-bold text-blue-700 tabular-nums">
+                    {paidInRange.reduce((a, c) => a + (c.montant_credit || 0), 0).toLocaleString('fr-FR')} DT
+                  </p>
+                  <p className="text-xs text-gray-500 font-medium mt-1">Total crédits</p>
+                </div>
+              </div>
+
+              {paidInRange.length === 0 ? (
+                <p className="text-sm text-gray-500 italic">Aucun crédit payé dans cette période.</p>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setShowPaidDetails(v => !v)}
+                    className="flex items-center gap-1.5 text-sm font-semibold text-green-700 hover:text-green-900 transition-colors mb-3"
+                  >
+                    {showPaidDetails ? '▲ Masquer' : '▼ Voir'} les détails ({paidInRange.length} crédit{paidInRange.length > 1 ? 's' : ''})
+                  </button>
+
+                  {showPaidDetails && (
+                    <div className="overflow-x-auto rounded-lg border border-green-200">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-green-100 border-b border-green-200">
+                            <th className="px-3 py-2 text-left font-semibold text-green-800">N° Contrat</th>
+                            <th className="px-3 py-2 text-left font-semibold text-green-800">Assuré</th>
+                            <th className="px-3 py-2 text-left font-semibold text-green-800">Branche</th>
+                            <th className="px-3 py-2 text-right font-semibold text-green-800">Crédit (DT)</th>
+                            <th className="px-3 py-2 text-right font-semibold text-green-800">Payé (DT)</th>
+                            <th className="px-3 py-2 text-right font-semibold text-green-800">Solde (DT)</th>
+                            <th className="px-3 py-2 text-left font-semibold text-green-800">Date Paiement</th>
+                            <th className="px-3 py-2 text-left font-semibold text-green-800">Statut</th>
+                            <th className="px-3 py-2 text-left font-semibold text-green-800">Créé par</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-green-50 bg-white">
+                          {paidInRange.map(c => (
+                            <tr key={c.id} className="hover:bg-green-50 transition-colors">
+                              <td className="px-3 py-2 font-medium text-gray-900">{c.numero_contrat}</td>
+                              <td className="px-3 py-2 text-gray-700">{c.assure}</td>
+                              <td className="px-3 py-2">
+                                <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-700">{c.branche}</span>
+                              </td>
+                              <td className="px-3 py-2 text-right font-semibold text-blue-700 tabular-nums">
+                                {(c.montant_credit || 0).toLocaleString('fr-FR')}
+                              </td>
+                              <td className="px-3 py-2 text-right font-semibold text-green-700 tabular-nums">
+                                {(c.paiement || 0).toLocaleString('fr-FR')}
+                              </td>
+                              <td className="px-3 py-2 text-right tabular-nums text-gray-500">
+                                {(c.solde || 0).toLocaleString('fr-FR')}
+                              </td>
+                              <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
+                                {c.date_paiement_effectif
+                                  ? new Date(c.date_paiement_effectif).toLocaleDateString('fr-FR')
+                                  : '-'}
+                              </td>
+                              <td className="px-3 py-2">
+                                <span className={`px-1.5 py-0.5 rounded-full font-semibold ${getStatusColor(c.statut)}`}>
+                                  {c.statut}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-gray-600">{c.cree_par}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-green-50 border-t border-green-200 font-semibold text-green-900">
+                            <td colSpan={3} className="px-3 py-2">Total</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-blue-800">
+                              {paidInRange.reduce((a, c) => a + (c.montant_credit || 0), 0).toLocaleString('fr-FR')}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums text-green-800">
+                              {paidInRange.reduce((a, c) => a + (c.paiement || 0), 0).toLocaleString('fr-FR')}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums text-gray-600">
+                              {paidInRange.reduce((a, c) => a + (c.solde || 0), 0).toLocaleString('fr-FR')}
+                            </td>
+                            <td colSpan={3} />
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </div>
+
         {/* Filtres (masqués quand un filtre spécial est actif) */}
         {activeFilter === 'none' && (
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
@@ -1134,68 +1189,67 @@ const CreditsList: React.FC = () => {
         )}
 
         {/* Liste des crédits */}
-        <div id="credits-table" className="-mx-4 lg:-mx-6 overflow-x-auto">
-          <div className="inline-block min-w-full align-middle px-4 lg:px-6">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
+        <div id="credits-table" className="overflow-x-auto rounded-lg border border-gray-100 mt-2 w-full">
+          <table className="w-full divide-y divide-gray-200 text-sm" style={{ tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: '108px' }} />  {/* N° Contrat */}
+              <col />                              {/* Assuré — prend l'espace restant */}
+              <col style={{ width: '62px' }} />   {/* Branche */}
+              <col style={{ width: '66px' }} />   {/* Prime */}
+              <col style={{ width: '66px' }} />   {/* Crédit */}
+              <col style={{ width: '66px' }} />   {/* Paiement */}
+              <col style={{ width: '80px' }} />   {/* Solde */}
+              <col style={{ width: '80px' }} />   {/* Date Crédit */}
+              <col style={{ width: '118px' }} />  {/* Échéance */}
+              <col style={{ width: '100px' }} />  {/* Statut */}
+              <col style={{ width: '82px' }} />   {/* Paiement Effectif */}
+              <col style={{ width: '66px' }} />   {/* Créé par */}
+              {isHamza && <col style={{ width: '64px' }} />}  {/* Actions */}
+            </colgroup>
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap w-8">
-                  <input
-                    type="checkbox"
-                    checked={filteredCredits.length > 0 && selectedIds.size === filteredCredits.length}
-                    onChange={toggleSelectAll}
-                    className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
-                    title="Tout sélectionner / désélectionner"
-                  />
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  N° Contrat
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Assuré
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Branche
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Prime
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Crédit
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Paiement
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Solde
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Date Crédit
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Échéance
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Statut
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Paiement Effectif
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                  Créé par
-                </th>
-                {isHamza && (
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
-                    Actions
-                  </th>
-                )}
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">N° Contrat</th>
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Assuré</th>
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Branche</th>
+                <th className="px-2 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">Prime</th>
+                <th className="px-2 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">Crédit</th>
+                <th className="px-2 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">Paiem.</th>
+                <th className="px-2 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">Solde</th>
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Dt Crédit</th>
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Échéance</th>
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Statut</th>
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Dt Paiement</th>
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Créé par</th>
+                {isHamza && <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Actions</th>}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
-              {filteredCredits.map((credit) => (
+              {filteredCredits.map((credit) => {
+                const isPaid = credit.statut === 'Payé' || credit.statut === 'Payé en total';
+                const isPartial = credit.statut === 'Payé partiellement';
+                const rowBg = isPaid
+                  ? 'bg-green-50 hover:bg-green-100'
+                  : isPartial
+                  ? 'bg-orange-50 hover:bg-orange-100'
+                  : 'bg-red-50 hover:bg-red-100';
+                const todayMidnight = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
+                const isOverdue = !isPaid && !!credit.date_paiement_prevue && (() => {
+                  const due = new Date(credit.date_paiement_prevue);
+                  due.setHours(0, 0, 0, 0);
+                  return due < todayMidnight;
+                })();
+                const isDueSoon = !isPaid && !isOverdue && !!credit.date_paiement_prevue && (() => {
+                  const due = new Date(credit.date_paiement_prevue);
+                  due.setHours(0, 0, 0, 0);
+                  const in5 = new Date(todayMidnight);
+                  in5.setDate(todayMidnight.getDate() + 5);
+                  return due >= todayMidnight && due <= in5;
+                })();
+                return (
                 <tr
                   key={credit.id}
-                  className={`hover:bg-blue-50 transition-colors cursor-pointer ${selectedIds.has(credit.id) ? 'bg-red-50' : ''}`}
+                  className={`transition-colors ${rowBg} ${!isPaid ? 'cursor-pointer' : 'cursor-default'}`}
+                  onClick={() => { if (!isPaid) setSelectedCreditForPayment(credit); }}
                   onMouseEnter={(e) => {
                     setHoveredCredit(credit);
                     const rect = e.currentTarget.getBoundingClientRect();
@@ -1203,115 +1257,115 @@ const CreditsList: React.FC = () => {
                   }}
                   onMouseLeave={() => setHoveredCredit(null)}
                 >
-                  <td className="px-3 py-2.5 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(credit.id)}
-                      onChange={() => toggleSelect(credit.id)}
-                      className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
-                    />
-                  </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap font-medium text-gray-900">
+                  <td className="px-2 py-2.5 font-medium text-gray-900 truncate" title={credit.numero_contrat}>
                     {credit.numero_contrat}
                   </td>
-                  <td className="px-3 py-2.5 text-gray-900 max-w-[160px] truncate" title={credit.assure}>
+                  <td className="px-2 py-2.5 text-gray-900 truncate" title={credit.assure}>
                     {credit.assure}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
-                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                  <td className="px-2 py-2.5 truncate">
+                    <span className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
                       {credit.branche}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-right text-gray-700 tabular-nums">
+                  <td className="px-2 py-2.5 text-right text-gray-700 tabular-nums whitespace-nowrap overflow-hidden">
                     {(credit.prime || 0).toLocaleString('fr-FR')}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-right font-semibold text-blue-700 tabular-nums">
+                  <td className="px-2 py-2.5 text-right font-semibold text-blue-700 tabular-nums whitespace-nowrap overflow-hidden">
                     {(credit.montant_credit || 0).toLocaleString('fr-FR')}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-right text-gray-700 tabular-nums">
+                  <td className="px-2 py-2.5 text-right text-gray-700 tabular-nums whitespace-nowrap overflow-hidden">
                     {(credit.paiement || 0).toLocaleString('fr-FR')}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-right tabular-nums">
+                  <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap overflow-hidden">
                     {(credit.solde !== null && credit.solde !== undefined && credit.solde !== 0) ? (
-                      <div className="flex items-center justify-end space-x-1.5">
-                        <span className={`font-bold ${credit.solde > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      <div className="flex items-center justify-end gap-1">
+                        <span className={`font-bold text-xs ${credit.solde > 0 ? 'text-red-600' : 'text-green-600'}`}>
                           {credit.solde.toLocaleString('fr-FR')}
                         </span>
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            setSelectedCreditForSMS(credit);
-                          }}
-                          className="p-1 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 hover:text-blue-700 transition-all hover:scale-110 flex-shrink-0"
+                          onClick={(e) => { e.stopPropagation(); setSelectedCreditForSMS(credit); }}
+                          className="p-0.5 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 hover:text-blue-700 transition-all flex-shrink-0"
                           title="Envoyer un SMS de rappel"
                         >
-                          <MessageSquare className="w-3.5 h-3.5" />
+                          <MessageSquare className="w-3 h-3" />
                         </button>
                       </div>
                     ) : (
-                      <span className="font-semibold text-gray-400">
+                      <span className="font-semibold text-xs text-gray-400">
                         {(credit.solde || 0).toLocaleString('fr-FR')}
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
+                  <td className="px-2 py-2.5 text-gray-700 whitespace-nowrap overflow-hidden text-xs">
                     {credit.date_credit ? new Date(credit.date_credit).toLocaleDateString('fr-FR') : '-'}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
-                    {credit.date_paiement_prevue ? new Date(credit.date_paiement_prevue).toLocaleDateString('fr-FR') : '-'}
+                  <td className="px-2 py-2.5 overflow-hidden">
+                    {credit.date_paiement_prevue ? (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-xs whitespace-nowrap ${
+                          isOverdue ? 'font-semibold text-red-700' :
+                          isDueSoon ? 'font-semibold text-yellow-700' :
+                          'text-gray-700'
+                        }`}>
+                          {new Date(credit.date_paiement_prevue).toLocaleDateString('fr-FR')}
+                        </span>
+                        {isOverdue && <span className="neon-overdue-badge">⚠ RETARD</span>}
+                        {isDueSoon && <span className="neon-due-soon-badge">⏰ PROCHE</span>}
+                      </div>
+                    ) : <span className="text-xs text-gray-400">-</span>}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">
-                    <div className="flex items-center space-x-1.5">
+                  <td className="px-2 py-2.5 overflow-hidden">
+                    <div className="flex items-center gap-1">
                       {getStatusIcon(credit.statut)}
-                      <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${getStatusColor(credit.statut)}`}>
+                      <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full whitespace-nowrap ${getStatusColor(credit.statut)}`}>
                         {credit.statut}
                       </span>
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
+                  <td className="px-2 py-2.5 text-gray-700 whitespace-nowrap overflow-hidden text-xs">
                     {credit.date_paiement_effectif ? new Date(credit.date_paiement_effectif).toLocaleDateString('fr-FR') : '-'}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
+                  <td className="px-2 py-2.5 text-gray-700 truncate text-xs" title={credit.cree_par}>
                     {credit.cree_par}
                   </td>
                   {isHamza && (
-                    <td className="px-3 py-2.5 whitespace-nowrap">
-                      <div className="flex items-center space-x-1.5">
-                        {credit.statut !== 'Payé' && (
+                    <td className="px-2 py-2.5 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-0.5">
+                        {credit.statut !== 'Payé' && credit.statut !== 'Payé en total' && (
                           <button
                             onClick={() => handleStatusUpdate(credit.id, 'Payé')}
-                            className="p-1 rounded text-green-600 hover:text-green-800 hover:bg-green-50 transition-colors"
+                            className="p-1 rounded text-green-600 hover:text-green-800 hover:bg-green-100 transition-colors"
                             title="Marquer comme payé"
                           >
-                            <CheckCircle className="w-4 h-4" />
+                            <CheckCircle className="w-3.5 h-3.5" />
                           </button>
                         )}
                         {credit.statut === 'Non payé' && (
                           <button
                             onClick={() => handleStatusUpdate(credit.id, 'En retard')}
-                            className="p-1 rounded text-orange-500 hover:text-orange-700 hover:bg-orange-50 transition-colors"
+                            className="p-1 rounded text-orange-500 hover:text-orange-700 hover:bg-orange-100 transition-colors"
                             title="Marquer en retard"
                           >
-                            <XCircle className="w-4 h-4" />
+                            <XCircle className="w-3.5 h-3.5" />
                           </button>
                         )}
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDeleteCredit(credit.id, credit.assure); }}
-                          className="p-1 rounded text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors"
+                          className="p-1 rounded text-red-500 hover:text-red-700 hover:bg-red-100 transition-colors"
                           title="Supprimer ce crédit"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>
                   )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
-          </div>
 
           {filteredCredits.length === 0 && (
             <div className="text-center py-8 text-gray-500">
@@ -1415,6 +1469,15 @@ const CreditsList: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Credit Payment Modal */}
+        <CreditPaymentModal
+          isOpen={!!selectedCreditForPayment}
+          credit={selectedCreditForPayment}
+          isHamza={isHamza}
+          onClose={() => setSelectedCreditForPayment(null)}
+          onPaymentSuccess={loadCredits}
+        />
 
         {/* SMS Modal */}
         <SMSModal

@@ -42,9 +42,16 @@ export const getSession = (): Session | null => {
 };
 
 export const getSessionDate = (): string => {
-  const session = getSession();
-  if (!session) return new Date().toISOString().split('T')[0];
-  return new Date(session.loginTime).toISOString().split('T')[0];
+  const d = (() => {
+    const session = getSession();
+    return session ? new Date(session.loginTime) : new Date();
+  })();
+  // Utiliser la date LOCALE (pas UTC) pour éviter le décalage d'une heure (UTC+1 Tunisie)
+  // Ex : 00h30 heure locale = 23h30 UTC veille → toISOString() renverrait la mauvaise date
+  const year  = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day   = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 export const shouldShowLogoutConfirmation = (username: string): boolean => {

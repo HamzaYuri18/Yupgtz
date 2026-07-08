@@ -22,14 +22,15 @@ interface Stats {
   prime_brute: number;
   by_type: Record<string, { count: number; prime_ttc: number; prime_brute: number }>;
   bonus_total: number;
-  bonus_detail: Record<string, { bonus: number; atteint: boolean; reste: number }>;
+  bonus_detail: Record<string, { bonus: number; actif: boolean }>;
 }
 
-const BONUS_RULES: Record<string, { taux: number; seuil: number }> = {
-  'Habitation':            { taux: 0.05,  seuil: 1000 },
-  'Transport Marchandise': { taux: 0.05,  seuil: 1000 },
-  'Santé Internationale':  { taux: 0.015, seuil: 2000 },
-  'Santé Nationale':       { taux: 0.015, seuil: 2000 },
+// Pas de seuil minimum — le bonus s'applique dès le 1er DT de prime brute
+const BONUS_RULES: Record<string, { taux: number }> = {
+  'Habitation':            { taux: 0.05  },
+  'Transport Marchandise': { taux: 0.05  },
+  'Santé Internationale':  { taux: 0.015 },
+  'Santé Nationale':       { taux: 0.015 },
 };
 
 const TYPE_BADGE: Record<string, string> = {
@@ -57,13 +58,13 @@ function buildStats(rows: Realisation[]): Stats {
     by_type[r.type_contrat].prime_brute += pb;
   }
 
-  const bonus_detail: Record<string, { bonus: number; atteint: boolean; reste: number }> = {};
+  const bonus_detail: Record<string, { bonus: number; actif: boolean }> = {};
   let bonus_total = 0;
   for (const [type, rule] of Object.entries(BONUS_RULES)) {
     const pb = by_type[type]?.prime_brute ?? 0;
-    const atteint = pb >= rule.seuil;
-    const bonus = atteint ? pb * rule.taux : 0;
-    bonus_detail[type] = { bonus, atteint, reste: Math.max(0, rule.seuil - pb) };
+    const actif = pb > 0;
+    const bonus = pb * rule.taux;
+    bonus_detail[type] = { bonus, actif };
     bonus_total += bonus;
   }
 
@@ -198,12 +199,12 @@ const ProductiviteNotification: React.FC<ProductiviteNotificationProps> = ({ use
           </div>
         </div>
 
+
         {/* Leader highlight — always visible */}
         {leader && data.length === 2 && (
           <div className="relative overflow-hidden bg-gradient-to-r from-amber-500 via-yellow-500 to-orange-400 px-4 py-3">
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_right,rgba(255,255,255,0.15)_0%,transparent_65%)]" />
             <div className="relative flex items-center justify-between gap-2">
-              {/* Identity */}
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-9 h-9 rounded-xl bg-white/25 border border-white/30 flex items-center justify-center text-white font-extrabold text-base shadow-inner flex-shrink-0">
                   {leader.name[0]}
@@ -216,7 +217,6 @@ const ProductiviteNotification: React.FC<ProductiviteNotificationProps> = ({ use
                   <p className="text-white/75 text-xs leading-tight">En tête · {leader.cumul.count} contrat{leader.cumul.count > 1 ? 's' : ''}</p>
                 </div>
               </div>
-              {/* KPIs */}
               <div className="flex items-center gap-2 flex-shrink-0">
                 <div className="text-right">
                   <div className="text-white font-bold text-sm leading-tight">{fmt(leader.cumul.prime_ttc)}</div>
@@ -230,7 +230,6 @@ const ProductiviteNotification: React.FC<ProductiviteNotificationProps> = ({ use
                 )}
               </div>
             </div>
-            {/* Type pills */}
             {Object.keys(leader.cumul.by_type).length > 0 && (
               <div className="relative flex flex-wrap gap-1.5 mt-2">
                 {Object.entries(leader.cumul.by_type).map(([type, stat]) => (
@@ -325,50 +324,35 @@ const ProductiviteNotification: React.FC<ProductiviteNotificationProps> = ({ use
                     </div>
                   )}
 
-                  {/* Bonus progress */}
-                  <div className="space-y-1.5">
-                    {Object.entries(BONUS_RULES).map(([type, rule]) => {
+                  {/* Bonus par type */}
+                  <div className="space-y-1">
+                    {Object.entries(BONUS_RULES).map(([type]) => {
                       const d = block.cumul.bonus_detail[type];
-                      const pb = block.cumul.by_type[type]?.prime_brute ?? 0;
-                      const pct = Math.min(100, Math.round((pb / rule.seuil) * 100));
-                      if (pb === 0) return null;
+                      if (!d?.actif) return null;
                       return (
-                        <div key={type} className="bg-white rounded-lg px-2.5 py-2 border border-gray-100 space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] text-gray-600 font-medium truncate pr-2">{type}</span>
-                            {d.atteint ? (
-                              <span className="flex items-center gap-0.5 text-[11px] text-green-700 font-bold whitespace-nowrap">
-                                <CheckCircle2 className="w-3 h-3" /> +{fmt(d.bonus)}
-                              </span>
-                            ) : (
-                              <span className="text-[11px] text-amber-600 whitespace-nowrap">−{fmt(d.reste)}</span>
-                            )}
-                          </div>
-                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all duration-700 ${d.atteint ? 'bg-green-500' : 'bg-amber-400'}`}
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
+                        <div key={type} className="flex items-center justify-between bg-white rounded-lg px-2.5 py-1.5 border border-gray-100">
+                          <span className="text-[11px] text-gray-600 font-medium truncate pr-2">{type}</span>
+                          <span className="flex items-center gap-0.5 text-[11px] text-green-700 font-bold whitespace-nowrap">
+                            <CheckCircle2 className="w-3 h-3" /> +{fmt(d.bonus)}
+                          </span>
                         </div>
                       );
                     })}
                   </div>
 
                   {/* Bonus total */}
-                  {block.cumul.bonus_total > 0 && (
+                  {block.cumul.bonus_total > 0 ? (
                     <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-2.5 py-1.5">
                       <div className="flex items-center gap-1.5">
                         <Zap className="w-3.5 h-3.5 text-green-600" />
-                        <span className="text-xs font-semibold text-green-800">Bonus gagné</span>
+                        <span className="text-xs font-semibold text-green-800">Bonus estimé</span>
                       </div>
                       <span className="text-sm font-bold text-green-700">{fmt(block.cumul.bonus_total)}</span>
                     </div>
-                  )}
-                  {block.cumul.bonus_total === 0 && (
-                    <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
-                      <Target className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-                      <span className="text-xs text-amber-700">Aucun bonus débloqué</span>
+                  ) : (
+                    <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1.5">
+                      <Target className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      <span className="text-xs text-gray-500">Aucune réalisation enregistrée</span>
                     </div>
                   )}
                 </div>
