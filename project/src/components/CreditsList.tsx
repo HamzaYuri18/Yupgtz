@@ -1080,9 +1080,9 @@ const CreditsList: React.FC = () => {
           </div>
         )}
 
-        <div id="credits-table" className="-mx-4 lg:-mx-6 overflow-x-auto">
+        <div id="credits-table" className="-mx-4 lg:-mx-6 overflow-x-auto scrollbar-thin">
           <div className="inline-block min-w-full align-middle px-4 lg:px-6">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
+          <table className="min-w-full divide-y divide-gray-200 text-sm" style={{ minWidth: '900px' }}>
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap w-8">
@@ -1115,7 +1115,17 @@ const CreditsList: React.FC = () => {
               {filteredCredits.map((credit) => (
                 <tr
                   key={credit.id}
-                  className={`hover:bg-blue-50 transition-colors cursor-pointer ${selectedIds.has(credit.id) ? 'bg-red-50' : ''}`}
+                  className={`transition-colors cursor-pointer ${
+                    selectedIds.has(credit.id)
+                      ? 'bg-red-100 hover:bg-red-200'
+                      : credit.statut === 'Payé' || credit.statut === 'Payé en total'
+                      ? 'bg-green-50 hover:bg-green-100'
+                      : credit.statut === 'Payé partiellement'
+                      ? 'bg-blue-50 hover:bg-blue-100'
+                      : credit.statut === 'En retard'
+                      ? 'bg-red-50 hover:bg-red-100'
+                      : 'hover:bg-gray-50'
+                  }`}
                   onMouseEnter={(e) => {
                     setHoveredCredit(credit);
                     const rect = e.currentTarget.getBoundingClientRect();
