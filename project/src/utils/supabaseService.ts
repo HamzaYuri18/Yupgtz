@@ -157,6 +157,21 @@ export const saveContractToRapport = async (contractData: ContractData): Promise
     }
 
     console.log('✅ Contrat sauvegardé dans rapport avec succès');
+
+    // Sauvegarder automatiquement dans liste_credits si type paiement Crédit
+    if (contractData.paymentType === 'Crédit') {
+      await saveCreditContract({
+        contractNumber: contractData.contractNumber,
+        insuredName: contractData.insuredName,
+        premiumAmount: contractData.premiumAmount,
+        creditAmount: contractData.creditAmount ? Number(contractData.creditAmount) : primeValue,
+        paymentDate: contractData.paymentDate || '',
+        branch: contractData.branch,
+        createdBy: contractData.createdBy,
+        telephone: contractData.telephone
+      });
+    }
+
     return true;
   } catch (error) {
     console.error('❌ Erreur générale lors de la sauvegarde dans rapport:', error);
@@ -396,16 +411,18 @@ export const saveCreditContract = async (contractData: ContractData): Promise<bo
       creditAmountValue = primeValue;
     }
 
-    // Vérifier si le crédit existe déjà pour éviter les doublons (avec limit(1) pour éviter erreur si doublon temporaire)
+    // Vérifier si le crédit existe déjà pour éviter les doublons (avec limit(1) pour la sécurité)
     const cleanedContractNumber = (contractData.contractNumber || '').trim().toUpperCase();
+    const targetPaymentDate = contractData.paymentDate || '';
     const { data: existingCreditData } = await supabase
       .from('liste_credits')
       .select('id')
       .eq('numero_contrat', cleanedContractNumber)
+      .eq('date_paiement_prevue', targetPaymentDate)
       .limit(1);
 
     if (existingCreditData && existingCreditData.length > 0) {
-      console.log('⚠️ Crédit déjà dans liste_credits, ignoré');
+      console.log('⚠️ Crédit déjà dans liste_credits pour cette date, ignoré');
       return true;
     }
 
@@ -1064,15 +1081,16 @@ export const saveTermeContract = async (
     }
 
     // Sauvegarder automatiquement dans liste_credits si type Crédit
-    if (contractData.paymentType === 'Crédit' && contractData.creditAmount) {
+    if (contractData.paymentType === 'Crédit') {
       await saveCreditContract({
         contractNumber: contractData.contractNumber,
         insuredName: contractData.insuredName,
         premiumAmount: contractData.premiumAmount,
-        creditAmount: Number(contractData.creditAmount),
+        creditAmount: contractData.creditAmount ? Number(contractData.creditAmount) : (contractData.premiumAmount || 0),
         paymentDate: contractData.paymentDate || echeanceISO || '',
         branch: contractData.branch,
         createdBy: contractData.createdBy,
+        telephone: contractData.telephone
       });
     }
 
@@ -2523,45 +2541,49 @@ export const syncMissingCredits = async (): Promise<number> => {
 
     if (!rapportCredits?.length) return 0;
 
-    // Dédupliquer par numero_contrat après nettoyage
-    const uniqueByContract = new Map<string, any>();
+    // Dédupliquer par numero_contrat + date_paiement_prevue après nettoyage
+    const uniqueCredits = new Map<string, any>();
     for (const row of rapportCredits) {
       if (row.numero_contrat) {
         const cleanedNum = row.numero_contrat.trim().toUpperCase();
-        if (cleanedNum && !uniqueByContract.has(cleanedNum)) {
-          uniqueByContract.set(cleanedNum, row);
+        const datePrevue = row.date_paiement_prevue
+          || (row.created_at ? row.created_at.split('T')[0] : '');
+        const key = `${cleanedNum}_${datePrevue}`;
+        if (cleanedNum && !uniqueCredits.has(key)) {
+          uniqueCredits.set(key, { ...row, cleanedNum, datePrevue });
         }
       }
     }
 
     const { data: existingCredits, error: creditsError } = await supabase
       .from('liste_credits')
-      .select('numero_contrat');
+      .select('numero_contrat, date_paiement_prevue');
 
     if (creditsError) {
       console.error('❌ syncMissingCredits: erreur lecture liste_credits:', creditsError);
       return 0;
     }
 
-    const existingNums = new Set((existingCredits || []).map((c: any) => (c.numero_contrat || '').trim().toUpperCase()));
-    console.log(`🔄 syncMissingCredits: ${existingNums.size} crédit(s) déjà dans liste_credits`);
+    const existingKeys = new Set((existingCredits || []).map((c: any) => {
+      const num = (c.numero_contrat || '').trim().toUpperCase();
+      const date = c.date_paiement_prevue || '';
+      return `${num}_${date}`;
+    }));
+    console.log(`🔄 syncMissingCredits: ${existingKeys.size} transaction(s) de crédit déjà dans liste_credits`);
 
     const toInsert: any[] = [];
-    for (const [num, row] of uniqueByContract) {
-      if (!existingNums.has(num)) {
-        const montantCredit = row.montant_credit || row.prime;
-        // Utiliser date_paiement_prevue si disponible, sinon la date de création dans rapport
-        const datePrevue = row.date_paiement_prevue
-          || (row.created_at ? row.created_at.split('T')[0] : null);
-        console.log(`➕ À insérer: ${num} (montant: ${montantCredit}, date: ${datePrevue})`);
+    for (const [key, item] of uniqueCredits) {
+      if (!existingKeys.has(key)) {
+        const montantCredit = item.montant_credit || item.prime;
+        console.log(`➕ À insérer: ${item.cleanedNum} (montant: ${montantCredit}, date: ${item.datePrevue})`);
         toInsert.push({
-          numero_contrat: num,
-          prime: row.prime,
-          assure: row.assure,
-          branche: row.branche,
+          numero_contrat: item.cleanedNum,
+          prime: item.prime,
+          assure: item.assure,
+          branche: item.branche,
           montant_credit: montantCredit,
-          date_paiement_prevue: datePrevue,
-          cree_par: row.cree_par || 'Système',
+          date_paiement_prevue: item.datePrevue || null,
+          cree_par: item.cree_par || 'Système',
           statut: 'Non payé',
           solde: montantCredit,
           paiement: 0,
@@ -2574,30 +2596,30 @@ export const syncMissingCredits = async (): Promise<number> => {
     // Corriger les dates erronées pour les crédits déjà présents dans liste_credits
     // (cas où date_paiement_prevue = null → Supabase a mis la date du jour par défaut)
     const today = new Date().toISOString().split('T')[0];
-    for (const [num, row] of uniqueByContract) {
-      if (existingNums.has(num)) {
-        const correctDate = row.date_paiement_prevue
-          || (row.created_at ? row.created_at.split('T')[0] : null);
-        if (!correctDate || correctDate === today) continue;
+    for (const [key, item] of uniqueCredits) {
+      const correctDate = item.datePrevue;
+      if (!correctDate || correctDate === today) continue;
 
-        // Récupérer la date actuelle dans liste_credits pour comparer (limit(1) pour éviter erreur si doublon temporaire)
+      // Chercher si un crédit pour ce contrat existe avec la date d'aujourd'hui (la valeur erronée)
+      const errKey = `${item.cleanedNum}_${today}`;
+      if (existingKeys.has(errKey)) {
         const { data: existingData } = await supabase
           .from('liste_credits')
-          .select('id, date_paiement_prevue')
-          .eq('numero_contrat', num)
+          .select('id')
+          .eq('numero_contrat', item.cleanedNum)
+          .eq('date_paiement_prevue', today)
           .limit(1);
 
         const existing = existingData && existingData.length > 0 ? existingData[0] : null;
 
-        if (existing && existing.date_paiement_prevue === today) {
-          // La date est aujourd'hui (valeur par défaut erronée) → corriger
+        if (existing) {
           const { error: updateErr } = await supabase
             .from('liste_credits')
             .update({ date_paiement_prevue: correctDate })
             .eq('id', existing.id);
 
           if (!updateErr) {
-            console.log(`🔧 Date corrigée pour ${num}: ${today} → ${correctDate}`);
+            console.log(`🔧 Date corrigée pour ${item.cleanedNum}: ${today} → ${correctDate}`);
             fixed++;
           }
         }

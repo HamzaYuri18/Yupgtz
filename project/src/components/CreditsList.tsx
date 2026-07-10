@@ -627,8 +627,8 @@ const CreditsList: React.FC = () => {
 
       // Table header (Green)
       let y = 36;
-      const colX = [marginL, marginL + 28, marginL + 72, marginL + 92, marginL + 112, marginL + 132, marginL + 152];
-      const headers = ['N° Contrat', 'Assuré', 'Branche', 'Crédit (DT)', 'Paiement (DT)', 'Solde (DT)', 'Date Prévue'];
+      const colX = [marginL, marginL + 24, marginL + 62, marginL + 78, marginL + 98, marginL + 118, marginL + 138, marginL + 158];
+      const headers = ['N° Contrat', 'Assuré', 'Branche', 'Dt Crédit', 'Crédit (DT)', 'Paiement (DT)', 'Solde (DT)', 'Date Prévue'];
 
       doc.setFillColor(22, 101, 52);
       doc.rect(marginL, y, contentW, 8, 'F');
@@ -636,7 +636,7 @@ const CreditsList: React.FC = () => {
       doc.setFontSize(8);
       doc.setFont('helvetica', 'bold');
       headers.forEach((h, i) => {
-        const align = i >= 3 && i <= 5 ? 'right' : 'left';
+        const align = i >= 4 && i <= 6 ? 'right' : 'left';
         if (align === 'right') {
           const nextX = i < headers.length - 1 ? colX[i + 1] : marginL + contentW;
           doc.text(h, nextX - 2, y + 5.5, { align: 'right' });
@@ -664,6 +664,7 @@ const CreditsList: React.FC = () => {
         const contrat = (c.numero_contrat || '').substring(0, 14);
         const assure = (c.assure || '').substring(0, 22);
         const branche = (c.branche || '').substring(0, 8);
+        const dateCredit = c.date_credit ? new Date(c.date_credit).toLocaleDateString('fr-FR') : '-';
         const credit = formatDT(c.montant_credit || 0);
         const paiement = formatDT(c.paiement || 0);
         const solde = formatDT(c.solde || 0);
@@ -674,14 +675,15 @@ const CreditsList: React.FC = () => {
         doc.text(contrat, colX[0] + 1, y + 4.8);
         doc.text(assure, colX[1] + 1, y + 4.8);
         doc.text(branche, colX[2] + 1, y + 4.8);
-        doc.text(credit, colX[4] - 2, y + 4.8, { align: 'right' });
-        doc.text(paiement, colX[5] - 2, y + 4.8, { align: 'right' });
+        doc.text(dateCredit, colX[3] + 1, y + 4.8);
+        doc.text(credit, colX[5] - 2, y + 4.8, { align: 'right' });
+        doc.text(paiement, colX[6] - 2, y + 4.8, { align: 'right' });
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(220, 38, 38); // Red color for outstanding balance remains
-        doc.text(solde, colX[6] - 2, y + 4.8, { align: 'right' });
+        doc.text(solde, colX[7] - 2, y + 4.8, { align: 'right' });
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(30, 30, 30);
-        doc.text(echeance, colX[6] + 1, y + 4.8);
+        doc.text(echeance, colX[7] + 1, y + 4.8);
         y += 7;
       });
 
@@ -696,9 +698,9 @@ const CreditsList: React.FC = () => {
       const totalPaiement = selected.reduce((s, c) => s + (c.paiement || 0), 0);
       const totalSolde = selected.reduce((s, c) => s + (c.solde || 0), 0);
       doc.text(`TOTAL — ${selected.length} crédit(s)`, marginL + 2, y + 6);
-      doc.text(formatDT(totalCredit), colX[4] - 2, y + 6, { align: 'right' });
-      doc.text(formatDT(totalPaiement), colX[5] - 2, y + 6, { align: 'right' });
-      doc.text(formatDT(totalSolde), colX[6] - 2, y + 6, { align: 'right' });
+      doc.text(formatDT(totalCredit), colX[5] - 2, y + 6, { align: 'right' });
+      doc.text(formatDT(totalPaiement), colX[6] - 2, y + 6, { align: 'right' });
+      doc.text(formatDT(totalSolde), colX[7] - 2, y + 6, { align: 'right' });
       y += 9;
 
       // Solde detail box (Red alert)
@@ -1408,23 +1410,23 @@ const CreditsList: React.FC = () => {
         )}
 
         {/* Liste des crédits */}
-        <div id="credits-table" className="overflow-x-auto rounded-lg border border-gray-100 mt-2 w-full">
-          <table className="w-full divide-y divide-gray-200 text-sm" style={{ tableLayout: 'fixed' }}>
+        <div id="credits-table" className="overflow-x-auto rounded-lg border border-gray-100 mt-2 w-full shadow-sm bg-white">
+          <table className="divide-y divide-gray-200 text-sm" style={{ tableLayout: 'fixed', minWidth: '1350px', width: '100%' }}>
             <colgroup>
-              <col style={{ width: '32px' }} />   {/* Checkbox */}
-              <col style={{ width: '108px' }} />  {/* N° Contrat */}
-              <col />                              {/* Assuré — prend l'espace restant */}
-              <col style={{ width: '62px' }} />   {/* Branche */}
-              <col style={{ width: '66px' }} />   {/* Prime */}
-              <col style={{ width: '66px' }} />   {/* Crédit */}
-              <col style={{ width: '66px' }} />   {/* Paiement */}
-              <col style={{ width: '80px' }} />   {/* Solde */}
-              <col style={{ width: '80px' }} />   {/* Date Crédit */}
-              <col style={{ width: '118px' }} />  {/* Échéance */}
+              <col style={{ width: '35px' }} />   {/* Checkbox */}
+              <col style={{ width: '120px' }} />  {/* N° Contrat */}
+              <col style={{ width: '180px' }} />  {/* Assuré */}
+              <col style={{ width: '70px' }} />   {/* Branche */}
+              <col style={{ width: '90px' }} />   {/* Prime */}
+              <col style={{ width: '90px' }} />   {/* Crédit */}
+              <col style={{ width: '90px' }} />   {/* Paiement */}
+              <col style={{ width: '110px' }} />  {/* Solde */}
+              <col style={{ width: '95px' }} />   {/* Date Crédit */}
+              <col style={{ width: '130px' }} />  {/* Date Prévu de Paiement */}
               <col style={{ width: '100px' }} />  {/* Statut */}
-              <col style={{ width: '82px' }} />   {/* Paiement Effectif */}
-              <col style={{ width: '66px' }} />   {/* Créé par */}
-              {isHamza && <col style={{ width: '64px' }} />}  {/* Actions */}
+              <col style={{ width: '95px' }} />   {/* Paiement Effectif */}
+              <col style={{ width: '80px' }} />   {/* Créé par */}
+              {isHamza && <col style={{ width: '70px' }} />}  {/* Actions */}
             </colgroup>
             <thead className="bg-gray-50">
               <tr>
