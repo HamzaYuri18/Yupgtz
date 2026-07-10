@@ -411,18 +411,19 @@ export const saveCreditContract = async (contractData: ContractData): Promise<bo
       creditAmountValue = primeValue;
     }
 
-    // Vérifier si le crédit existe déjà pour éviter les doublons (avec limit(1) pour la sécurité)
+    // Vérifier si le crédit existe déjà pour éviter les doublons le même jour
     const cleanedContractNumber = (contractData.contractNumber || '').trim().toUpperCase();
-    const targetPaymentDate = contractData.paymentDate || '';
+    const todayStr = new Date().toISOString().split('T')[0];
     const { data: existingCreditData } = await supabase
       .from('liste_credits')
       .select('id')
       .eq('numero_contrat', cleanedContractNumber)
-      .eq('date_paiement_prevue', targetPaymentDate)
+      .gte('created_at', `${todayStr}T00:00:00.000Z`)
+      .lte('created_at', `${todayStr}T23:59:59.999Z`)
       .limit(1);
 
     if (existingCreditData && existingCreditData.length > 0) {
-      console.log('⚠️ Crédit déjà dans liste_credits pour cette date, ignoré');
+      console.log('⚠️ Crédit déjà dans liste_credits pour aujourd\'hui, ignoré');
       return true;
     }
 
@@ -2541,23 +2542,22 @@ export const syncMissingCredits = async (): Promise<number> => {
 
     if (!rapportCredits?.length) return 0;
 
-    // Dédupliquer par numero_contrat + date_paiement_prevue après nettoyage
+    // Dédupliquer par numero_contrat + created_at après nettoyage
     const uniqueCredits = new Map<string, any>();
     for (const row of rapportCredits) {
       if (row.numero_contrat) {
         const cleanedNum = row.numero_contrat.trim().toUpperCase();
-        const datePrevue = row.date_paiement_prevue
-          || (row.created_at ? row.created_at.split('T')[0] : '');
-        const key = `${cleanedNum}_${datePrevue}`;
+        const createdAt = row.created_at || '';
+        const key = `${cleanedNum}_${createdAt}`;
         if (cleanedNum && !uniqueCredits.has(key)) {
-          uniqueCredits.set(key, { ...row, cleanedNum, datePrevue });
+          uniqueCredits.set(key, { ...row, cleanedNum, createdAt });
         }
       }
     }
 
     const { data: existingCredits, error: creditsError } = await supabase
       .from('liste_credits')
-      .select('numero_contrat, date_paiement_prevue');
+      .select('numero_contrat, created_at');
 
     if (creditsError) {
       console.error('❌ syncMissingCredits: erreur lecture liste_credits:', creditsError);
@@ -2566,7 +2566,7 @@ export const syncMissingCredits = async (): Promise<number> => {
 
     const existingKeys = new Set((existingCredits || []).map((c: any) => {
       const num = (c.numero_contrat || '').trim().toUpperCase();
-      const date = c.date_paiement_prevue || '';
+      const date = c.created_at || '';
       return `${num}_${date}`;
     }));
     console.log(`🔄 syncMissingCredits: ${existingKeys.size} transaction(s) de crédit déjà dans liste_credits`);
@@ -2575,18 +2575,22 @@ export const syncMissingCredits = async (): Promise<number> => {
     for (const [key, item] of uniqueCredits) {
       if (!existingKeys.has(key)) {
         const montantCredit = item.montant_credit || item.prime;
-        console.log(`➕ À insérer: ${item.cleanedNum} (montant: ${montantCredit}, date: ${item.datePrevue})`);
+        // Utiliser date_paiement_prevue si disponible, sinon la date de création
+        const datePrevue = item.date_paiement_prevue
+          || (item.createdAt ? item.createdAt.split('T')[0] : null);
+        console.log(`➕ À insérer: ${item.cleanedNum} (montant: ${montantCredit}, created_at: ${item.createdAt})`);
         toInsert.push({
           numero_contrat: item.cleanedNum,
           prime: item.prime,
           assure: item.assure,
           branche: item.branche,
           montant_credit: montantCredit,
-          date_paiement_prevue: item.datePrevue || null,
+          date_paiement_prevue: datePrevue,
           cree_par: item.cree_par || 'Système',
           statut: 'Non payé',
           solde: montantCredit,
           paiement: 0,
+          created_at: item.createdAt || undefined
         });
       }
     }
@@ -2597,31 +2601,30 @@ export const syncMissingCredits = async (): Promise<number> => {
     // (cas où date_paiement_prevue = null → Supabase a mis la date du jour par défaut)
     const today = new Date().toISOString().split('T')[0];
     for (const [key, item] of uniqueCredits) {
-      const correctDate = item.datePrevue;
+      const correctDate = item.date_paiement_prevue
+        || (item.createdAt ? item.createdAt.split('T')[0] : null);
       if (!correctDate || correctDate === today) continue;
 
-      // Chercher si un crédit pour ce contrat existe avec la date d'aujourd'hui (la valeur erronée)
-      const errKey = `${item.cleanedNum}_${today}`;
-      if (existingKeys.has(errKey)) {
-        const { data: existingData } = await supabase
+      // Chercher si un crédit pour ce contrat avec cette date de création existe
+      const { data: existingData } = await supabase
+        .from('liste_credits')
+        .select('id, date_paiement_prevue')
+        .eq('numero_contrat', item.cleanedNum)
+        .eq('created_at', item.createdAt)
+        .limit(1);
+
+      const existing = existingData && existingData.length > 0 ? existingData[0] : null;
+
+      if (existing && existing.date_paiement_prevue === today) {
+        // La date est aujourd'hui (valeur par défaut erronée) → corriger
+        const { error: updateErr } = await supabase
           .from('liste_credits')
-          .select('id')
-          .eq('numero_contrat', item.cleanedNum)
-          .eq('date_paiement_prevue', today)
-          .limit(1);
+          .update({ date_paiement_prevue: correctDate })
+          .eq('id', existing.id);
 
-        const existing = existingData && existingData.length > 0 ? existingData[0] : null;
-
-        if (existing) {
-          const { error: updateErr } = await supabase
-            .from('liste_credits')
-            .update({ date_paiement_prevue: correctDate })
-            .eq('id', existing.id);
-
-          if (!updateErr) {
-            console.log(`🔧 Date corrigée pour ${item.cleanedNum}: ${today} → ${correctDate}`);
-            fixed++;
-          }
+        if (!updateErr) {
+          console.log(`🔧 Date corrigée pour ${item.cleanedNum}: ${today} → ${correctDate}`);
+          fixed++;
         }
       }
     }
