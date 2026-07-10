@@ -608,7 +608,10 @@ const CreditsList: React.FC = () => {
       const contentW = pageW - marginL - marginR;
 
       const formatDT = (val: number) => {
-        return new Intl.NumberFormat('fr-TN', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(val);
+        const fixed = val.toFixed(3);
+        const parts = fixed.split('.');
+        const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+        return `${integerPart}.${parts[1]}`;
       };
 
       // Header (Green)
@@ -625,7 +628,7 @@ const CreditsList: React.FC = () => {
       // Table header (Green)
       let y = 36;
       const colX = [marginL, marginL + 28, marginL + 72, marginL + 92, marginL + 112, marginL + 132, marginL + 152];
-      const headers = ['N° Contrat', 'Assuré', 'Branche', 'Crédit (DT)', 'Paiement (DT)', 'Solde (DT)', 'Échéance'];
+      const headers = ['N° Contrat', 'Assuré', 'Branche', 'Crédit (DT)', 'Paiement (DT)', 'Solde (DT)', 'Date Prévue'];
 
       doc.setFillColor(22, 101, 52);
       doc.rect(marginL, y, contentW, 8, 'F');
@@ -991,7 +994,7 @@ const CreditsList: React.FC = () => {
               <Calendar className="w-4.5 h-4.5 text-indigo-600" />
             </div>
             <span className="text-sm font-semibold text-indigo-800 whitespace-nowrap">
-              Filtrer par date d'échéance :
+              Filtrer par date prévu de paiement :
             </span>
           </div>
           <div className="flex items-center gap-2 flex-1 flex-wrap">
@@ -1445,7 +1448,7 @@ const CreditsList: React.FC = () => {
                 <th className="px-2 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">Paiem.</th>
                 <th className="px-2 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">Solde</th>
                 <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Dt Crédit</th>
-                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Échéance</th>
+                <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Date Prévu de Paiement</th>
                 <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Statut</th>
                 <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Dt Paiement</th>
                 <th className="px-2 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Créé par</th>
