@@ -124,6 +124,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [hasShownTaskAlert, setHasShownTaskAlert] = useState(false);
   const [showPromoBanner, setShowPromoBanner] = useState(false);
   const [promoImageIndex, setPromoImageIndex] = useState(0);
+  const [initialPopupsChecked, setInitialPopupsChecked] = useState(false);
   const [remarqueStats, setRemarqueStats] = useState<RemarqueMonthStats[]>([]);
   const [remarqueStatsLoading, setRemarqueStatsLoading] = useState(false);
   const [remarqueDrillDown, setRemarqueDrillDown] = useState<{ month: string; type: string; contracts: any[] } | null>(null);
@@ -152,21 +153,26 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   }, [selectedMonth, selectedYear, daysFilter]);
 
 
+  // Coordinateur des alertes et popups au démarrage
   useEffect(() => {
-    if (creditsDueToday.length > 0 && !showCreditAlert && !hasShownCreditAlert) {
-      setShowCreditAlert(true);
-      setHasShownCreditAlert(true);
-    }
-  }, [creditsDueToday, showCreditAlert, hasShownCreditAlert]);
+    if (initialPopupsChecked) return;
 
-  useEffect(() => {
-    if (sessionTasks.length > 0 && !showTaskAlert && !showCreditAlert && !hasShownTaskAlert) {
-      setTimeout(() => {
+    // Attendre que la récupération des données de session soit terminée
+    const timer = setTimeout(() => {
+      if (creditsDueToday.length > 0) {
+        setShowCreditAlert(true);
+        setHasShownCreditAlert(true);
+      } else if (sessionTasks.length > 0) {
         setShowTaskAlert(true);
         setHasShownTaskAlert(true);
-      }, 500);
-    }
-  }, [sessionTasks, showCreditAlert, showTaskAlert, hasShownTaskAlert]);
+      } else {
+        openPromoBanner();
+      }
+      setInitialPopupsChecked(true);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [creditsDueToday.length, sessionTasks.length, initialPopupsChecked]);
 
   useEffect(() => {
     if (showCreditAlert || showTaskAlert) {

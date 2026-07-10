@@ -607,8 +607,12 @@ const CreditsList: React.FC = () => {
       const marginR = 15;
       const contentW = pageW - marginL - marginR;
 
-      // Header
-      doc.setFillColor(220, 38, 38);
+      const formatDT = (val: number) => {
+        return new Intl.NumberFormat('fr-TN', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(val);
+      };
+
+      // Header (Green)
+      doc.setFillColor(16, 124, 65);
       doc.rect(0, 0, pageW, 28, 'F');
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(16);
@@ -616,14 +620,14 @@ const CreditsList: React.FC = () => {
       doc.text('ETAT RÉCAPITULATIF DES IMPAYÉS EN COURS', pageW / 2, 12, { align: 'center' });
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text(`STAR ASSURANCES — Édité le ${new Date().toLocaleDateString('fr-FR')}`, pageW / 2, 22, { align: 'center' });
+      doc.text(`STAR ASSURANCES — Édité le ${new Date().toLocaleDateString('fr-FR')} — Agence Shiri Fares Hamza`, pageW / 2, 22, { align: 'center' });
 
-      // Table header
+      // Table header (Green)
       let y = 36;
       const colX = [marginL, marginL + 28, marginL + 72, marginL + 92, marginL + 112, marginL + 132, marginL + 152];
       const headers = ['N° Contrat', 'Assuré', 'Branche', 'Crédit (DT)', 'Paiement (DT)', 'Solde (DT)', 'Échéance'];
 
-      doc.setFillColor(37, 99, 235);
+      doc.setFillColor(22, 101, 52);
       doc.rect(marginL, y, contentW, 8, 'F');
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(8);
@@ -649,7 +653,7 @@ const CreditsList: React.FC = () => {
         }
         const bg = idx % 2 === 0;
         if (bg) {
-          doc.setFillColor(254, 242, 242);
+          doc.setFillColor(240, 253, 244); // Very light green instead of red/pink
           doc.rect(marginL, y, contentW, 7, 'F');
         }
         doc.setTextColor(30, 30, 30);
@@ -657,9 +661,9 @@ const CreditsList: React.FC = () => {
         const contrat = (c.numero_contrat || '').substring(0, 14);
         const assure = (c.assure || '').substring(0, 22);
         const branche = (c.branche || '').substring(0, 8);
-        const credit = (c.montant_credit || 0).toLocaleString('fr-FR');
-        const paiement = (c.paiement || 0).toLocaleString('fr-FR');
-        const solde = (c.solde || 0).toLocaleString('fr-FR');
+        const credit = formatDT(c.montant_credit || 0);
+        const paiement = formatDT(c.paiement || 0);
+        const solde = formatDT(c.solde || 0);
         const echeance = c.date_paiement_prevue
           ? new Date(c.date_paiement_prevue).toLocaleDateString('fr-FR')
           : '-';
@@ -670,7 +674,7 @@ const CreditsList: React.FC = () => {
         doc.text(credit, colX[4] - 2, y + 4.8, { align: 'right' });
         doc.text(paiement, colX[5] - 2, y + 4.8, { align: 'right' });
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(220, 38, 38);
+        doc.setTextColor(220, 38, 38); // Red color for outstanding balance remains
         doc.text(solde, colX[6] - 2, y + 4.8, { align: 'right' });
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(30, 30, 30);
@@ -678,9 +682,9 @@ const CreditsList: React.FC = () => {
         y += 7;
       });
 
-      // Totals row
+      // Totals row (Green)
       y += 2;
-      doc.setFillColor(30, 58, 138);
+      doc.setFillColor(22, 101, 52);
       doc.rect(marginL, y, contentW, 9, 'F');
       doc.setTextColor(255, 255, 255);
       doc.setFont('helvetica', 'bold');
@@ -689,12 +693,12 @@ const CreditsList: React.FC = () => {
       const totalPaiement = selected.reduce((s, c) => s + (c.paiement || 0), 0);
       const totalSolde = selected.reduce((s, c) => s + (c.solde || 0), 0);
       doc.text(`TOTAL — ${selected.length} crédit(s)`, marginL + 2, y + 6);
-      doc.text(totalCredit.toLocaleString('fr-FR'), colX[4] - 2, y + 6, { align: 'right' });
-      doc.text(totalPaiement.toLocaleString('fr-FR'), colX[5] - 2, y + 6, { align: 'right' });
-      doc.text(totalSolde.toLocaleString('fr-FR'), colX[6] - 2, y + 6, { align: 'right' });
+      doc.text(formatDT(totalCredit), colX[4] - 2, y + 6, { align: 'right' });
+      doc.text(formatDT(totalPaiement), colX[5] - 2, y + 6, { align: 'right' });
+      doc.text(formatDT(totalSolde), colX[6] - 2, y + 6, { align: 'right' });
       y += 9;
 
-      // Solde detail box
+      // Solde detail box (Red alert)
       y += 6;
       doc.setFillColor(254, 226, 226);
       doc.setDrawColor(220, 38, 38);
@@ -705,27 +709,27 @@ const CreditsList: React.FC = () => {
       doc.setFontSize(9);
       doc.text('TOTAL SOLDE IMPAYÉ :', marginL + 4, y + 6);
       doc.setFontSize(13);
-      doc.text(`${totalSolde.toLocaleString('fr-FR')} DT`, marginL + 4, y + 12);
+      doc.text(`${formatDT(totalSolde)} DT`, marginL + 4, y + 12);
       y += 14;
 
-      // Banking message
+      // Banking message (Green & Red)
       y += 8;
       if (y > 230) { doc.addPage(); y = 20; }
-      doc.setFillColor(239, 246, 255);
-      doc.setDrawColor(59, 130, 246);
+      doc.setFillColor(240, 253, 244); // Very light green background
+      doc.setDrawColor(34, 197, 94);   // Green border
       doc.setLineWidth(0.5);
       const msgLines = [
         'Cher client,',
         'Nous vous prions de régulariser ces impayés par versement bancaire direct sur notre compte :',
         'Numéro : 04140222008106615139  |  Titulaire : SHIRI FARES HAMZA STAR ASSURANCE',
         'Banque : ATTIJARI',
-        'Veuillez présenter l\'avis de versement à l\'agence ou par email : ShiriFares.star@agence.com.tn',
+        'Veuillez présenter l\'avis de versement à l\'agence ou par email : ShiriFares.Hamza@staragence.com.tn',
         '',
         'Service Recouvrement'
       ];
       const msgH = msgLines.length * 6 + 8;
       doc.rect(marginL, y, contentW, msgH, 'FD');
-      doc.setTextColor(30, 64, 175);
+      doc.setTextColor(22, 101, 52); // Green text
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       let ly = y + 7;
@@ -733,31 +737,31 @@ const CreditsList: React.FC = () => {
         if (i === 0) {
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(10);
-          doc.setTextColor(30, 64, 175);
+          doc.setTextColor(22, 101, 52);
         } else if (i === 2) {
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(9.5);
-          doc.setTextColor(220, 38, 38);
+          doc.setTextColor(220, 38, 38); // Highlight account number in Red
         } else if (i === 3 || i === 4) {
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(9);
-          doc.setTextColor(30, 64, 175);
+          doc.setTextColor(22, 101, 52);
         } else if (i === 6) {
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(9);
-          doc.setTextColor(30, 64, 175);
+          doc.setTextColor(22, 101, 52);
         } else {
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(9);
-          doc.setTextColor(30, 64, 175);
+          doc.setTextColor(22, 101, 52);
         }
         if (line) doc.text(line, pageW / 2, ly, { align: 'center' });
         ly += 6;
       });
 
-      // Footer
+      // Footer (Green)
       const footerY = 287;
-      doc.setFillColor(220, 38, 38);
+      doc.setFillColor(16, 124, 65);
       doc.rect(0, footerY - 4, pageW, 10, 'F');
       doc.setTextColor(255, 255, 255);
       doc.setFont('helvetica', 'normal');
@@ -978,17 +982,7 @@ const CreditsList: React.FC = () => {
           </div>
         )}
 
-        {/* Indicateur mode édition pour Hamza */}
-        {isHamza && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-6">
-            <div className="flex items-center space-x-2">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              <p className="text-green-700 text-sm font-medium">
-                <strong>Mode édition activé :</strong> Vous pouvez modifier les statuts et supprimer des crédits.
-              </p>
-            </div>
-          </div>
-        )}
+
 
         {/* Filtre calendrier — date d'échéance précise */}
         <div className="flex flex-wrap items-center gap-3 mb-5 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl px-4 py-3">
