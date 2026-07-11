@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, ListFilter as Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, User, Download, MessageSquare, BarChart3, Trash2, X, FileText } from 'lucide-react';
+import { CreditCard, ListFilter as Filter, Calendar, CircleCheck as CheckCircle, Circle as XCircle, Clock, TrendingUp, TriangleAlert as AlertTriangle, User, Download, MessageSquare, ChartBar as BarChart3, Trash2, X, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { getCredits, updateCreditStatus, deleteCredit, syncMissingCredits, getDuplicateCredits, deleteDuplicateCredits, type DuplicateCreditGroup } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
@@ -391,6 +391,32 @@ const CreditsList: React.FC = () => {
       }
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
+    }
+  };
+
+  const handleBulkDeleteCredits = async () => {
+    if (!isHamza) {
+      alert('Seul Hamza peut supprimer des crédits.');
+      return;
+    }
+    if (selectedCreditIds.size === 0) return;
+
+    if (!confirm(`Supprimer ${selectedCreditIds.size} crédit(s) sélectionné(s) ? Cette action est irréversible.`)) {
+      return;
+    }
+
+    try {
+      const idsToDelete = Array.from(selectedCreditIds);
+      const results = await Promise.all(idsToDelete.map(id => deleteCredit(id)));
+      const failedCount = results.filter(r => !r).length;
+      if (failedCount > 0) {
+        alert(`${idsToDelete.length - failedCount} crédit(s) supprimé(s). ${failedCount} échec(s).`);
+      }
+      setSelectedCreditIds(new Set());
+      await loadCredits();
+    } catch (error) {
+      console.error('Erreur lors de la suppression groupée:', error);
+      alert('Erreur lors de la suppression groupée.');
     }
   };
 
@@ -1031,6 +1057,15 @@ const CreditsList: React.FC = () => {
                 <span>
                   {isGeneratingPdf ? 'Génération...' : `État Impayés PDF (${selectedCreditIds.size})`}
                 </span>
+              </button>
+            )}
+            {isHamza && selectedCreditIds.size > 0 && (
+              <button
+                onClick={handleBulkDeleteCredits}
+                className="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors bg-red-700 text-white hover:bg-red-800"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Supprimer ({selectedCreditIds.size})</span>
               </button>
             )}
             <button
