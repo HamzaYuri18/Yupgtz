@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, ListFilter as Filter, Calendar, CircleCheck as CheckCircle, Circle as XCircle, Clock, TrendingUp, TriangleAlert as AlertTriangle, User, Download, MessageSquare, ChartBar as BarChart3, Trash2, X, FileText } from 'lucide-react';
+import { CreditCard, ListFilter as Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, User, Download, MessageSquare, BarChart3, Trash2, X, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { getCredits, updateCreditStatus, deleteCredit, syncMissingCredits, getDuplicateCredits, deleteDuplicateCredits, type DuplicateCreditGroup } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
