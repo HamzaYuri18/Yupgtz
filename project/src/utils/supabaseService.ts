@@ -2551,7 +2551,7 @@ export const syncMissingCredits = async (): Promise<number> => {
     // Chercher avec les deux graphies possibles (accent ou non)
     const { data: rapportCredits, error: rapportError } = await supabase
       .from('rapport')
-      .select('numero_contrat, prime, assure, branche, montant_credit, date_paiement_prevue, cree_par, type_paiement, created_at, echeance')
+      .select('numero_contrat, prime, assure, branche, montant_credit, date_paiement_prevue, cree_par, type_paiement, created_at, echeance, date_operation')
       .or('type_paiement.eq.Crédit,type_paiement.eq.Credit,type_paiement.ilike.cr%dit');
 
     if (rapportError) {
@@ -2563,23 +2563,24 @@ export const syncMissingCredits = async (): Promise<number> => {
 
     if (!rapportCredits?.length) return 0;
 
-    // Dédupliquer par numero_contrat + échéance du contrat après nettoyage
+    // Dédupliquer par numero_contrat + date_operation (correspond à echeanceV dans liste_credits)
     const uniqueCredits = new Map<string, any>();
     for (const row of rapportCredits) {
       if (row.numero_contrat) {
         const cleanedNum = row.numero_contrat.trim().toUpperCase();
         const echeance = row.echeance || '';
         const createdAt = row.created_at || '';
-        const key = `${cleanedNum}_${echeance}`;
+        const dateOperation = row.date_operation || (createdAt ? createdAt.split('T')[0] : '');
+        const key = `${cleanedNum}_${dateOperation}`;
         if (cleanedNum && !uniqueCredits.has(key)) {
-          uniqueCredits.set(key, { ...row, cleanedNum, echeance, createdAt });
+          uniqueCredits.set(key, { ...row, cleanedNum, echeance, createdAt, dateOperation });
         }
       }
     }
 
     const { data: existingCredits, error: creditsError } = await supabase
       .from('liste_credits')
-      .select('numero_contrat, echeance');
+      .select('numero_contrat, echeance, echeanceV');
 
     if (creditsError) {
       console.error('❌ syncMissingCredits: erreur lecture liste_credits:', creditsError);
@@ -2588,8 +2589,8 @@ export const syncMissingCredits = async (): Promise<number> => {
 
     const existingKeys = new Set((existingCredits || []).map((c: any) => {
       const num = (c.numero_contrat || '').trim().toUpperCase();
-      const ech = c.echeance || '';
-      return `${num}_${ech}`;
+      const echeanceV = c.echeanceV || '';
+      return `${num}_${echeanceV}`;
     }));
     console.log(`🔄 syncMissingCredits: ${existingKeys.size} transaction(s) de crédit déjà dans liste_credits`);
 
@@ -2613,7 +2614,8 @@ export const syncMissingCredits = async (): Promise<number> => {
           solde: montantCredit,
           paiement: 0,
           created_at: item.createdAt || undefined,
-          echeance: item.echeance || null
+          echeance: item.echeance || null,
+          echeanceV: item.dateOperation || null
         });
       }
     }
@@ -2692,12 +2694,12 @@ export const getDuplicateCredits = async (): Promise<DuplicateCreditGroup[]> => 
 
     if (!data || data.length === 0) return [];
 
-    // Grouper par clé: numero_contrat + échéance du contrat (PAS date_paiement_prevue)
+    // Grouper par clé: numero_contrat + echeanceV (correspond à date_operation dans rapport)
     const groups = new Map<string, CreditData[]>();
     for (const credit of data as CreditData[]) {
       const num = (credit.numero_contrat || '').trim().toUpperCase();
-      const ech = credit.echeance || '';
-      const key = `${num}|${ech}`;
+      const echeanceV = (credit as any).echeanceV || '';
+      const key = `${num}|${echeanceV}`;
       if (!groups.has(key)) {
         groups.set(key, []);
       }
