@@ -140,7 +140,7 @@ const CreditsList: React.FC = () => {
       case 'Payé en total':
         return 'bg-green-100 text-green-800';
       case 'Payé partiellement':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-yellow-200 text-yellow-900';
       case 'En retard':
         return 'bg-red-100 text-red-800';
       default:
@@ -1603,7 +1603,7 @@ const CreditsList: React.FC = () => {
                 const rowBg = isPaid
                   ? 'bg-green-50 hover:bg-green-100'
                   : isPartial
-                  ? 'bg-blue-50 hover:bg-blue-100'
+                  ? 'bg-yellow-100 hover:bg-yellow-200'
                   : 'bg-red-50 hover:bg-red-100';
                 const todayMidnight = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
                 const isOverdue = !isPaid && !!credit.date_paiement_prevue && (() => {
