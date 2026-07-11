@@ -2580,7 +2580,7 @@ export const syncMissingCredits = async (): Promise<number> => {
 
     const { data: existingCredits, error: creditsError } = await supabase
       .from('liste_credits')
-      .select('numero_contrat, echeance, echeanceV');
+      .select('numero_contrat, echeance, echeancev');
 
     if (creditsError) {
       console.error('❌ syncMissingCredits: erreur lecture liste_credits:', creditsError);
@@ -2589,7 +2589,7 @@ export const syncMissingCredits = async (): Promise<number> => {
 
     const existingKeys = new Set((existingCredits || []).map((c: any) => {
       const num = (c.numero_contrat || '').trim().toUpperCase();
-      const echeanceV = c.echeanceV || '';
+      const echeanceV = c.echeancev || '';
       return `${num}_${echeanceV}`;
     }));
     console.log(`🔄 syncMissingCredits: ${existingKeys.size} transaction(s) de crédit déjà dans liste_credits`);
@@ -2615,7 +2615,7 @@ export const syncMissingCredits = async (): Promise<number> => {
           paiement: 0,
           created_at: item.createdAt || undefined,
           echeance: item.echeance || null,
-          echeanceV: item.dateOperation || null
+          echeancev: item.dateOperation || null
         });
       }
     }
@@ -2692,7 +2692,7 @@ export const getDuplicateCredits = async (monthFilter?: string): Promise<Duplica
       const [year, monthNum] = monthFilter.split('-').map(Number);
       const endDay = new Date(year, monthNum, 0).getDate();
       const endDate = `${monthFilter}-${String(endDay).padStart(2, '0')}`;
-      query = query.gte('echeanceV', startDate).lte('echeanceV', endDate);
+      query = query.gte('echeancev', startDate).lte('echeancev', endDate);
     }
 
     const { data, error } = await query;
@@ -2708,7 +2708,7 @@ export const getDuplicateCredits = async (monthFilter?: string): Promise<Duplica
     const groups = new Map<string, CreditData[]>();
     for (const credit of data as CreditData[]) {
       const num = (credit.numero_contrat || '').trim().toUpperCase();
-      const echeanceV = (credit as any).echeanceV || '';
+      const echeanceV = (credit as any).echeancev || '';
       const key = `${num}|${echeanceV}`;
       if (!groups.has(key)) {
         groups.set(key, []);
