@@ -53,6 +53,7 @@ const CreditsList: React.FC = () => {
   const [loadingDuplicates, setLoadingDuplicates] = useState(false);
   const [deletingDuplicates, setDeletingDuplicates] = useState(false);
   const [duplicateMsg, setDuplicateMsg] = useState<string | null>(null);
+  const [keepChoice, setKeepChoice] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const session = getSession();
@@ -428,6 +429,17 @@ const CreditsList: React.FC = () => {
       const monthFilter = viewMode === 'mois' ? filters.mois : undefined;
       const groups = await getDuplicateCredits(monthFilter);
       setDuplicateGroups(groups);
+      // Initialiser le choix par défaut: privilégier "Payé", sinon le plus ancien
+      const initialChoice: Record<string, number> = {};
+      for (const group of groups) {
+        const sorted = [...group.credits].sort((a, b) => {
+          if (a.statut === 'Payé' && b.statut !== 'Payé') return -1;
+          if (b.statut === 'Payé' && a.statut !== 'Payé') return 1;
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        });
+        initialChoice[group.key] = sorted[0].id;
+      }
+      setKeepChoice(initialChoice);
       if (groups.length === 0) {
         setDuplicateMsg('Aucun doublon trouvé. Tous les crédits ont un couple contrat + échéance unique.');
       }
@@ -464,18 +476,14 @@ const CreditsList: React.FC = () => {
   const handleDeleteAllDuplicates = async () => {
     const idsToDelete: number[] = [];
     for (const group of duplicateGroups) {
-      const sorted = [...group.credits].sort((a, b) => {
-        if (a.statut === 'Payé' && b.statut !== 'Payé') return -1;
-        if (b.statut === 'Payé' && a.statut !== 'Payé') return 1;
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      });
-      sorted.slice(1).forEach(c => idsToDelete.push(c.id));
+      const keepId = keepChoice[group.key];
+      group.credits.forEach(c => { if (c.id !== keepId) idsToDelete.push(c.id); });
     }
     if (idsToDelete.length === 0) {
       setDuplicateMsg('Aucun doublon à supprimer.');
       return;
     }
-    if (!confirm(`Supprimer ${idsToDelete.length} doublon(s) ? Pour chaque groupe, la première occurrence (la plus ancienne, ou payée) sera conservée. Cette action est irréversible.`)) return;
+    if (!confirm(`Supprimer ${idsToDelete.length} doublon(s) ? Pour chaque groupe, le crédit sélectionné sera conservé. Cette action est irréversible.`)) return;
     setDeletingDuplicates(true);
     try {
       const result = await deleteDuplicateCredits(idsToDelete);
@@ -1976,16 +1984,25 @@ const CreditsList: React.FC = () => {
                           </span>
                         </div>
                         <div className="divide-y divide-gray-100">
-                          {group.credits.map((credit, ci) => {
-                            const isKept = ci === 0;
+                          {group.credits.map((credit) => {
+                            const isKept = keepChoice[group.key] === credit.id;
                             return (
                               <div key={credit.id} className={`flex items-center justify-between px-4 py-3 ${isKept ? 'bg-green-50' : 'bg-white'}`}>
                                 <div className="flex items-center gap-3">
-                                  {isKept ? (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Conserver</span>
-                                  ) : (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Doublon</span>
-                                  )}
+                                  <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                      type="radio"
+                                      name={`keep-${group.key}`}
+                                      checked={isKept}
+                                      onChange={() => setKeepChoice(prev => ({ ...prev, [group.key]: credit.id }))}
+                                      className="w-4 h-4 text-green-600 border-gray-300 focus:ring-green-500"
+                                    />
+                                    {isKept ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Conserver</span>
+                                    ) : (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">À supprimer</span>
+                                    )}
+                                  </label>
                                   <div className="text-sm">
                                     <div className="font-medium text-gray-900">{credit.assure || 'N/A'}</div>
                                     <div className="text-xs text-gray-500">
