@@ -447,6 +447,11 @@ export const saveCreditContract = async (contractData: ContractData): Promise<bo
       return true;
     }
 
+    // echeancev = created_at converted to date (YYYY-MM-DD), used to match
+    // credits between rapport (date_operation) and liste_credits (echeancev)
+    const now = new Date();
+    const echeancevValue = now.toISOString().split('T')[0];
+
     const { data, error } = await supabase
       .from('liste_credits')
       .insert([{
@@ -461,7 +466,8 @@ export const saveCreditContract = async (contractData: ContractData): Promise<bo
         solde: creditAmountValue,
         paiement: 0,
         telephone: contractData.telephone || null,
-        echeance: echeanceValue
+        echeance: echeanceValue,
+        echeancev: echeancevValue
       }]);
 
     if (error) {
@@ -2582,16 +2588,21 @@ export const syncMissingCredits = async (): Promise<number> => {
 
     const { data: existingCredits, error: creditsError } = await supabase
       .from('liste_credits')
-      .select('numero_contrat, echeance, echeancev');
+      .select('numero_contrat, echeance, echeancev, created_at');
 
     if (creditsError) {
       console.error('❌ syncMissingCredits: erreur lecture liste_credits:', creditsError);
       return 0;
     }
 
+    // echeancev = created_at converted to date (YYYY-MM-DD). When echeancev is NULL
+    // (legacy rows), fall back to created_at::date so the comparison still works.
     const existingKeys = new Set((existingCredits || []).map((c: any) => {
       const num = (c.numero_contrat || '').trim().toUpperCase();
-      const echeanceV = c.echeancev || '';
+      let echeanceV = c.echeancev || '';
+      if (!echeanceV && c.created_at) {
+        echeanceV = c.created_at.split('T')[0];
+      }
       return `${num}_${echeanceV}`;
     }));
     console.log(`🔄 syncMissingCredits: ${existingKeys.size} transaction(s) de crédit déjà dans liste_credits`);
