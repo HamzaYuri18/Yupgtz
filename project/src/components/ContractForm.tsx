@@ -633,7 +633,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             premiumAmount: contract.premiumAmount,
             creditAmount: contract.creditAmount,
             branch: contract.branch,
-            paymentDate: cleanedFormData.customCreatedAt || sessionDate,
+            paymentDate: contract.paymentDate || '',
             paymentMode: contract.paymentMode,
             paymentType: contract.paymentType,
             createdBy: username,
@@ -660,27 +660,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
           setMessage('❌ Erreur lors de la sauvegarde du contrat Affaire');
           setIsLoading(false);
           return;
-        }
-      }
-
-      if (contract.paymentType === 'Crédit') {
-        try {
-          const creditSuccess = await saveCreditContract({
-            contractNumber: contract.contractNumber,
-            insuredName: contract.insuredName,
-            premiumAmount: contract.premiumAmount,
-            creditAmount: contract.creditAmount || 0,
-            paymentDate: contract.paymentDate || '',
-            branch: contract.branch,
-            createdBy: username
-          });
-
-          if (!creditSuccess) {
-            setMessage(prev => prev + ' (erreur crédit)');
-          }
-        } catch (creditError) {
-          console.error('❌ Erreur crédit:', creditError);
-          setMessage(prev => prev + ' (erreur crédit)');
         }
       }
 

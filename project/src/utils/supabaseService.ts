@@ -878,7 +878,8 @@ export const saveAffaireContract = async (contractData: ContractData): Promise<b
         mode_paiement: contractData.paymentMode || '',
         type_paiement: contractData.paymentType || 'Au comptant',
         cree_par: contractData.createdBy || 'Système',
-        montant_credit: montantCreditValue
+        montant_credit: montantCreditValue,
+        date_paiement_prevue: contractData.paymentType === 'Crédit' ? (contractData.paymentDate || null) : null
       };
 
       if (contractData.branch === 'Auto' && contractData.numeroAttestation) {
@@ -1074,7 +1075,8 @@ export const saveTermeContract = async (
         type_paiement: contractData.paymentType || 'Au comptant',
         cree_par: contractData.createdBy || 'Système',
         montant_credit: montantCreditValue,
-        echeance: echeanceISO
+        echeance: echeanceISO,
+        date_paiement_prevue: contractData.paymentType === 'Crédit' ? (contractData.paymentDate || null) : null
       };
 
       if (contractData.branch === 'Auto' && contractData.numeroAttestation) {
