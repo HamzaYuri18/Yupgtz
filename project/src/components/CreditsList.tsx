@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, ListFilter as Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, User, Download, MessageSquare, BarChart3, Trash2, X, FileText } from 'lucide-react';
+import { CreditCard, ListFilter as Filter, Calendar, CircleCheck as CheckCircle, Circle as XCircle, Clock, TrendingUp, TriangleAlert as AlertTriangle, User, Download, MessageSquare, ChartBar as BarChart3, Trash2, X, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { getCredits, updateCreditStatus, deleteCredit, syncMissingCredits, getDuplicateCredits, deleteDuplicateCredits, type DuplicateCreditGroup } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
@@ -425,7 +425,8 @@ const CreditsList: React.FC = () => {
     setLoadingDuplicates(true);
     setDuplicateMsg(null);
     try {
-      const groups = await getDuplicateCredits();
+      const monthFilter = viewMode === 'mois' ? filters.mois : undefined;
+      const groups = await getDuplicateCredits(monthFilter);
       setDuplicateGroups(groups);
       if (groups.length === 0) {
         setDuplicateMsg('Aucun doublon trouvé. Tous les crédits ont un couple contrat + échéance unique.');
@@ -444,7 +445,7 @@ const CreditsList: React.FC = () => {
     try {
       const result = await deleteDuplicateCredits([id]);
       if (result.success) {
-        const groups = await getDuplicateCredits();
+        const groups = await getDuplicateCredits(viewMode === 'mois' ? filters.mois : undefined);
         setDuplicateGroups(groups);
         await loadCredits();
         if (groups.length === 0) {
@@ -479,7 +480,7 @@ const CreditsList: React.FC = () => {
     try {
       const result = await deleteDuplicateCredits(idsToDelete);
       if (result.success) {
-        const groups = await getDuplicateCredits();
+        const groups = await getDuplicateCredits(viewMode === 'mois' ? filters.mois : undefined);
         setDuplicateGroups(groups);
         await loadCredits();
         setDuplicateMsg(`${result.deleted} doublon(s) supprimé(s) avec succès.`);
@@ -985,7 +986,7 @@ const CreditsList: React.FC = () => {
               <button
                 onClick={handleShowDuplicates}
                 disabled={loadingDuplicates}
-                title="Afficher les crédits doublons (même contrat + même échéance)"
+                title="Afficher les crédits doublons (même contrat + même echeanceV)"
                 className="flex items-center gap-1.5 px-3 py-2 bg-red-100 text-red-800 border border-red-300 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors disabled:opacity-60"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1898,7 +1899,12 @@ const CreditsList: React.FC = () => {
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-gray-900">Crédits Doublons</h2>
-                    <p className="text-xs text-gray-500">Règle: même numéro de contrat + même échéance du contrat</p>
+                    <p className="text-xs text-gray-500">
+                      Règle: même numéro de contrat + même echeanceV (date_operation)
+                      {viewMode === 'mois' && filters.mois
+                        ? ` — Filtré: ${new Date(filters.mois + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}`
+                        : ' — Toutes les périodes'}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -1927,7 +1933,9 @@ const CreditsList: React.FC = () => {
                       </svg>
                     </div>
                     <p className="mt-4 text-sm text-gray-600 text-center max-w-sm">
-                      {duplicateMsg || 'Aucun doublon trouvé. Tous les crédits ont un couple contrat + échéance unique.'}
+                      {duplicateMsg || (viewMode === 'mois' && filters.mois
+                        ? `Aucun doublon trouvé pour ${new Date(filters.mois + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}. Tous les crédits ont un couple contrat + echeanceV unique.`
+                        : 'Aucun doublon trouvé. Tous les crédits ont un couple contrat + echeanceV unique.')}
                     </p>
                   </div>
                 ) : (

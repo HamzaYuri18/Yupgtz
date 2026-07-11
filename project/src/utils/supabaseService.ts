@@ -2680,12 +2680,22 @@ export const syncMissingCredits = async (): Promise<number> => {
   }
 };
 
-export const getDuplicateCredits = async (): Promise<DuplicateCreditGroup[]> => {
+export const getDuplicateCredits = async (monthFilter?: string): Promise<DuplicateCreditGroup[]> => {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('liste_credits')
       .select('*')
       .order('created_at', { ascending: true });
+
+    if (monthFilter) {
+      const startDate = `${monthFilter}-01`;
+      const [year, monthNum] = monthFilter.split('-').map(Number);
+      const endDay = new Date(year, monthNum, 0).getDate();
+      const endDate = `${monthFilter}-${String(endDay).padStart(2, '0')}`;
+      query = query.gte('echeanceV', startDate).lte('echeanceV', endDate);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Erreur lors de la récupération des crédits pour doublons:', error);
