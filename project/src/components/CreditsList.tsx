@@ -144,7 +144,7 @@ const CreditsList: React.FC = () => {
       case 'En retard':
         return 'bg-red-100 text-red-800';
       default:
-        return 'bg-orange-100 text-orange-800';
+        return 'bg-red-100 text-red-800';
     }
   };
 
@@ -1603,7 +1603,7 @@ const CreditsList: React.FC = () => {
                 const rowBg = isPaid
                   ? 'bg-green-50 hover:bg-green-100'
                   : isPartial
-                  ? 'bg-orange-50 hover:bg-orange-100'
+                  ? 'bg-blue-50 hover:bg-blue-100'
                   : 'bg-red-50 hover:bg-red-100';
                 const todayMidnight = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
                 const isOverdue = !isPaid && !!credit.date_paiement_prevue && (() => {
