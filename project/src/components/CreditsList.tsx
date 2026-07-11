@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, ListFilter as Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, User, Download, MessageSquare, BarChart3, Trash2, X, FileText } from 'lucide-react';
+import { CreditCard, ListFilter as Filter, Calendar, CircleCheck as CheckCircle, Circle as XCircle, Clock, TrendingUp, TriangleAlert as AlertTriangle, User, Download, MessageSquare, ChartBar as BarChart3, Trash2, X, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
-import { getCredits, updateCreditStatus, deleteCredit, syncMissingCredits } from '../utils/supabaseService';
+import { getCredits, updateCreditStatus, deleteCredit, syncMissingCredits, getDuplicateCredits, deleteDuplicateCredits, type DuplicateCreditGroup } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
 import * as XLSX from 'xlsx';
 import SMSModal from './SMSModal';
@@ -48,6 +48,11 @@ const CreditsList: React.FC = () => {
   const [showPaidDetails, setShowPaidDetails] = useState(false);
   const [selectedCreditIds, setSelectedCreditIds] = useState<Set<number>>(new Set());
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
+  const [duplicateGroups, setDuplicateGroups] = useState<DuplicateCreditGroup[]>([]);
+  const [loadingDuplicates, setLoadingDuplicates] = useState(false);
+  const [deletingDuplicates, setDeletingDuplicates] = useState(false);
+  const [duplicateMsg, setDuplicateMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const session = getSession();
@@ -101,7 +106,8 @@ const CreditsList: React.FC = () => {
         date_credit: credit.created_at,
         created_at: credit.created_at,
         updated_at: credit.updated_at,
-        telephone: (credit as any).telephone || ''
+        telephone: (credit as any).telephone || '',
+        echeance: (credit as any).echeance || ''
       }));
       setCredits(formattedData);
     } catch (error) {
@@ -385,6 +391,82 @@ const CreditsList: React.FC = () => {
       }
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
+    }
+  };
+
+  const handleShowDuplicates = async () => {
+    setShowDuplicatesModal(true);
+    setLoadingDuplicates(true);
+    setDuplicateMsg(null);
+    try {
+      const groups = await getDuplicateCredits();
+      setDuplicateGroups(groups);
+      if (groups.length === 0) {
+        setDuplicateMsg('Aucun doublon trouvé. Tous les crédits ont un couple contrat + échéance unique.');
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération des doublons:', error);
+      setDuplicateMsg('Erreur lors de la récupération des doublons.');
+    } finally {
+      setLoadingDuplicates(false);
+    }
+  };
+
+  const handleDeleteDuplicate = async (id: number, assure: string) => {
+    if (!confirm(`Supprimer ce doublon de "${assure}" ? Cette action est irréversible.`)) return;
+    setDeletingDuplicates(true);
+    try {
+      const result = await deleteDuplicateCredits([id]);
+      if (result.success) {
+        const groups = await getDuplicateCredits();
+        setDuplicateGroups(groups);
+        await loadCredits();
+        if (groups.length === 0) {
+          setDuplicateMsg('Aucun doublon restant. Tous les crédits ont un couple contrat + échéance unique.');
+        }
+      } else {
+        alert(result.error || 'Erreur lors de la suppression.');
+      }
+    } catch (error) {
+      console.error('Erreur suppression doublon:', error);
+    } finally {
+      setDeletingDuplicates(false);
+    }
+  };
+
+  const handleDeleteAllDuplicates = async () => {
+    const idsToDelete: number[] = [];
+    for (const group of duplicateGroups) {
+      const sorted = [...group.credits].sort((a, b) => {
+        if (a.statut === 'Payé' && b.statut !== 'Payé') return -1;
+        if (b.statut === 'Payé' && a.statut !== 'Payé') return 1;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+      sorted.slice(1).forEach(c => idsToDelete.push(c.id));
+    }
+    if (idsToDelete.length === 0) {
+      setDuplicateMsg('Aucun doublon à supprimer.');
+      return;
+    }
+    if (!confirm(`Supprimer ${idsToDelete.length} doublon(s) ? Pour chaque groupe, la première occurrence (la plus ancienne, ou payée) sera conservée. Cette action est irréversible.`)) return;
+    setDeletingDuplicates(true);
+    try {
+      const result = await deleteDuplicateCredits(idsToDelete);
+      if (result.success) {
+        const groups = await getDuplicateCredits();
+        setDuplicateGroups(groups);
+        await loadCredits();
+        setDuplicateMsg(`${result.deleted} doublon(s) supprimé(s) avec succès.`);
+        if (groups.length === 0) {
+          setDuplicateMsg('Tous les doublons ont été supprimés. Tous les crédits ont maintenant un couple contrat + échéance unique.');
+        }
+      } else {
+        alert(result.error || 'Erreur lors de la suppression.');
+      }
+    } catch (error) {
+      console.error('Erreur suppression groupée:', error);
+    } finally {
+      setDeletingDuplicates(false);
     }
   };
 
@@ -873,6 +955,19 @@ const CreditsList: React.FC = () => {
               </svg>
               {syncing ? 'Sync...' : 'Synchroniser'}
             </button>
+            {isHamza && (
+              <button
+                onClick={handleShowDuplicates}
+                disabled={loadingDuplicates}
+                title="Afficher les crédits doublons (même contrat + même échéance)"
+                className="flex items-center gap-1.5 px-3 py-2 bg-red-100 text-red-800 border border-red-300 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors disabled:opacity-60"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 12.604a8.716 8.716 0 0 0-1.07-1.234 9.634 9.634 0 0 0-3.5-2.3l-.213-.08a8.76 8.76 0 0 0-6.488.433 8.76 8.76 0 0 0-3.5 2.3 8.716 8.716 0 0 0-1.07 1.234M19 19l-7-7m0 0l-7 7m7-7v12" />
+                </svg>
+                {loadingDuplicates ? '...' : 'Doublons'}
+              </button>
+            )}
             <div className="flex items-center space-x-2 bg-gray-100 rounded-lg px-3 py-2">
               <User className="w-4 h-4 text-gray-600" />
               <span className="text-sm font-medium text-gray-700">
@@ -1754,6 +1849,134 @@ const CreditsList: React.FC = () => {
           isOpen={isEvolutionModalOpen}
           onClose={() => setIsEvolutionModalOpen(false)}
         />
+
+        {/* Doublons Modal - Hamza only */}
+        {showDuplicatesModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 12.604a8.716 8.716 0 0 0-1.07-1.234 9.634 9.634 0 0 0-3.5-2.3l-.213-.08a8.76 8.76 0 0 0-6.488.433 8.76 8.76 0 0 0-3.5 2.3 8.716 8.716 0 0 0-1.07 1.234M19 19l-7-7m0 0l-7 7m7-7v12" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-900">Crédits Doublons</h2>
+                    <p className="text-xs text-gray-500">Règle: même numéro de contrat + même échéance du contrat</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setShowDuplicatesModal(false); setDuplicateMsg(null); }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-6 py-4">
+                {loadingDuplicates ? (
+                  <div className="flex flex-col items-center justify-center py-16">
+                    <svg className="w-8 h-8 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <p className="mt-3 text-sm text-gray-500">Recherche des doublons...</p>
+                  </div>
+                ) : duplicateGroups.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16">
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                      <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <p className="mt-4 text-sm text-gray-600 text-center max-w-sm">
+                      {duplicateMsg || 'Aucun doublon trouvé. Tous les crédits ont un couple contrat + échéance unique.'}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5">
+                      <span className="text-sm text-amber-800">
+                        <strong>{duplicateGroups.length}</strong> groupe(s) de doublons détecté(s)
+                      </span>
+                      <button
+                        onClick={handleDeleteAllDuplicates}
+                        disabled={deletingDuplicates}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-60"
+                      >
+                        {deletingDuplicates ? (
+                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        ) : null}
+                        Supprimer tous les doublons
+                      </button>
+                    </div>
+                    {duplicateMsg && (
+                      <div className="mb-4 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5 text-sm text-green-800">
+                        {duplicateMsg}
+                      </div>
+                    )}
+                    {duplicateGroups.map((group, gi) => (
+                      <div key={group.key} className="mb-4 border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200">
+                          <span className="text-sm font-semibold text-gray-700">
+                            Groupe {gi + 1}: Contrat <span className="text-blue-600">{group.numero_contrat}</span>
+                            {group.echeance && (
+                              <span className="text-gray-500"> — Échéance: <span className="text-gray-700">{group.echeance}</span></span>
+                            )}
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                              {group.credits.length} doublons
+                            </span>
+                          </span>
+                        </div>
+                        <div className="divide-y divide-gray-100">
+                          {group.credits.map((credit, ci) => {
+                            const isKept = ci === 0;
+                            return (
+                              <div key={credit.id} className={`flex items-center justify-between px-4 py-3 ${isKept ? 'bg-green-50' : 'bg-white'}`}>
+                                <div className="flex items-center gap-3">
+                                  {isKept ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Conserver</span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Doublon</span>
+                                  )}
+                                  <div className="text-sm">
+                                    <div className="font-medium text-gray-900">{credit.assure || 'N/A'}</div>
+                                    <div className="text-xs text-gray-500">
+                                      {credit.branche || '—'} · Montant: {credit.montant_credit || 0} · Statut: {credit.statut || '—'}
+                                    </div>
+                                    <div className="text-xs text-gray-400">
+                                      ID: {credit.id} · Créé le: {credit.created_at ? new Date(credit.created_at).toLocaleDateString('fr-FR') : '—'}
+                                    </div>
+                                  </div>
+                                </div>
+                                {!isKept && (
+                                  <button
+                                    onClick={() => handleDeleteDuplicate(credit.id, credit.assure || '')}
+                                    disabled={deletingDuplicates}
+                                    className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-medium hover:bg-red-100 transition-colors disabled:opacity-60"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+                                    </svg>
+                                    Supprimer
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -19,6 +19,14 @@ interface CreditData {
   numero_cheque?: string;
   banque_cheque?: string;
   date_encaissement_prevue?: string;
+  echeance?: string | null;
+}
+
+export interface DuplicateCreditGroup {
+  key: string;
+  numero_contrat: string;
+  echeance: string;
+  credits: CreditData[];
 }
 
 interface ChequeData {
@@ -411,19 +419,31 @@ export const saveCreditContract = async (contractData: ContractData): Promise<bo
       creditAmountValue = primeValue;
     }
 
-    // Vérifier si le crédit existe déjà pour éviter les doublons le même jour
     const cleanedContractNumber = (contractData.contractNumber || '').trim().toUpperCase();
-    const todayStr = new Date().toISOString().split('T')[0];
-    const { data: existingCreditData } = await supabase
-      .from('liste_credits')
-      .select('id')
-      .eq('numero_contrat', cleanedContractNumber)
-      .gte('created_at', `${todayStr}T00:00:00.000Z`)
-      .lte('created_at', `${todayStr}T23:59:59.999Z`)
-      .limit(1);
+    const echeanceValue = contractData.echeance || contractData.xmlData?.maturity || null;
+
+    // Vérifier si le crédit existe déjà: clé = numéro_contrat + échéance du contrat
+    let existingCreditData: any[] | null = null;
+    if (echeanceValue) {
+      const { data } = await supabase
+        .from('liste_credits')
+        .select('id')
+        .eq('numero_contrat', cleanedContractNumber)
+        .eq('echeance', echeanceValue)
+        .limit(1);
+      existingCreditData = data;
+    } else {
+      const { data } = await supabase
+        .from('liste_credits')
+        .select('id')
+        .eq('numero_contrat', cleanedContractNumber)
+        .is('echeance', null)
+        .limit(1);
+      existingCreditData = data;
+    }
 
     if (existingCreditData && existingCreditData.length > 0) {
-      console.log('⚠️ Crédit déjà dans liste_credits pour aujourd\'hui, ignoré');
+      console.log('⚠️ Crédit déjà dans liste_credits (même contrat + même échéance), ignoré');
       return true;
     }
 
@@ -440,7 +460,8 @@ export const saveCreditContract = async (contractData: ContractData): Promise<bo
         statut: 'Non payé',
         solde: creditAmountValue,
         paiement: 0,
-        telephone: contractData.telephone || null
+        telephone: contractData.telephone || null,
+        echeance: echeanceValue
       }]);
 
     if (error) {
@@ -2530,7 +2551,7 @@ export const syncMissingCredits = async (): Promise<number> => {
     // Chercher avec les deux graphies possibles (accent ou non)
     const { data: rapportCredits, error: rapportError } = await supabase
       .from('rapport')
-      .select('numero_contrat, prime, assure, branche, montant_credit, date_paiement_prevue, cree_par, type_paiement, created_at')
+      .select('numero_contrat, prime, assure, branche, montant_credit, date_paiement_prevue, cree_par, type_paiement, created_at, echeance')
       .or('type_paiement.eq.Crédit,type_paiement.eq.Credit,type_paiement.ilike.cr%dit');
 
     if (rapportError) {
@@ -2542,22 +2563,23 @@ export const syncMissingCredits = async (): Promise<number> => {
 
     if (!rapportCredits?.length) return 0;
 
-    // Dédupliquer par numero_contrat + created_at après nettoyage
+    // Dédupliquer par numero_contrat + échéance du contrat après nettoyage
     const uniqueCredits = new Map<string, any>();
     for (const row of rapportCredits) {
       if (row.numero_contrat) {
         const cleanedNum = row.numero_contrat.trim().toUpperCase();
+        const echeance = row.echeance || '';
         const createdAt = row.created_at || '';
-        const key = `${cleanedNum}_${createdAt}`;
+        const key = `${cleanedNum}_${echeance}`;
         if (cleanedNum && !uniqueCredits.has(key)) {
-          uniqueCredits.set(key, { ...row, cleanedNum, createdAt });
+          uniqueCredits.set(key, { ...row, cleanedNum, echeance, createdAt });
         }
       }
     }
 
     const { data: existingCredits, error: creditsError } = await supabase
       .from('liste_credits')
-      .select('numero_contrat, created_at');
+      .select('numero_contrat, echeance');
 
     if (creditsError) {
       console.error('❌ syncMissingCredits: erreur lecture liste_credits:', creditsError);
@@ -2566,8 +2588,8 @@ export const syncMissingCredits = async (): Promise<number> => {
 
     const existingKeys = new Set((existingCredits || []).map((c: any) => {
       const num = (c.numero_contrat || '').trim().toUpperCase();
-      const date = c.created_at || '';
-      return `${num}_${date}`;
+      const ech = c.echeance || '';
+      return `${num}_${ech}`;
     }));
     console.log(`🔄 syncMissingCredits: ${existingKeys.size} transaction(s) de crédit déjà dans liste_credits`);
 
@@ -2590,7 +2612,8 @@ export const syncMissingCredits = async (): Promise<number> => {
           statut: 'Non payé',
           solde: montantCredit,
           paiement: 0,
-          created_at: item.createdAt || undefined
+          created_at: item.createdAt || undefined,
+          echeance: item.echeance || null
         });
       }
     }
@@ -2655,6 +2678,77 @@ export const syncMissingCredits = async (): Promise<number> => {
   }
 };
 
+export const getDuplicateCredits = async (): Promise<DuplicateCreditGroup[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('liste_credits')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Erreur lors de la récupération des crédits pour doublons:', error);
+      return [];
+    }
+
+    if (!data || data.length === 0) return [];
+
+    // Grouper par clé: numero_contrat + échéance du contrat (PAS date_paiement_prevue)
+    const groups = new Map<string, CreditData[]>();
+    for (const credit of data as CreditData[]) {
+      const num = (credit.numero_contrat || '').trim().toUpperCase();
+      const ech = credit.echeance || '';
+      const key = `${num}|${ech}`;
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key)!.push(credit);
+    }
+
+    // Ne retourner que les groupes avec doublons (plus d'un crédit)
+    const duplicates: DuplicateCreditGroup[] = [];
+    for (const [key, credits] of groups) {
+      if (credits.length > 1) {
+        const [num, ech] = key.split('|');
+        duplicates.push({
+          key,
+          numero_contrat: num,
+          echeance: ech,
+          credits
+        });
+      }
+    }
+
+    return duplicates;
+  } catch (error) {
+    console.error('Erreur générale getDuplicateCredits:', error);
+    return [];
+  }
+};
+
+export const deleteDuplicateCredits = async (idsToDelete: number[]): Promise<{ success: boolean; deleted: number; error?: string }> => {
+  try {
+    if (!idsToDelete || idsToDelete.length === 0) {
+      return { success: true, deleted: 0 };
+    }
+
+    const { error } = await supabase
+      .from('liste_credits')
+      .delete()
+      .in('id', idsToDelete);
+
+    if (error) {
+      console.error('Erreur lors de la suppression des doublons:', error);
+      return { success: false, deleted: 0, error: error.message };
+    }
+
+    console.log(`✅ ${idsToDelete.length} doublon(s) supprimé(s)`);
+    return { success: true, deleted: idsToDelete.length };
+  } catch (error: any) {
+    console.error('Erreur générale deleteDuplicateCredits:', error);
+    return { success: false, deleted: 0, error: error.message };
+  }
+};
+
 export default {
   saveContractToRapport,
   saveAffaireContract,
@@ -2695,7 +2789,9 @@ export default {
   getTotalTermesByMonth,
   syncTermeStatusesWithMainTable,
   verifyTermeStatusWithEcheance,
-  syncMissingCredits
+  syncMissingCredits,
+  getDuplicateCredits,
+  deleteDuplicateCredits
 };
 
 export interface RemarqueMonthStats {
