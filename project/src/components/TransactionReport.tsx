@@ -321,14 +321,13 @@ const TransactionReport: React.FC = () => {
       const { data, error: fetchError } = await supabase
         .from('rapport')
         .select('*')
+        .gte('created_at', `${dateFrom}T00:00:00`)
+        .lte('created_at', `${dateTo}T23:59:59`)
         .order('created_at', { ascending: false });
 
       if (fetchError) throw fetchError;
 
-      const filteredData = (data || []).filter(transaction => {
-        const transactionDateStr = transaction.created_at.split('T')[0];
-        return transactionDateStr >= dateFrom && transactionDateStr <= dateTo;
-      });
+      const filteredData = data || [];
 
       const enrichedData = await Promise.all(
         filteredData.map(async (transaction) => {
@@ -554,6 +553,7 @@ const TransactionReport: React.FC = () => {
       'Prime': t.prime, 'Prime Avant Retour': t.prime_avant_retour || '',
       'Assuré': t.assure, 'Mode Paiement': t.mode_paiement,
       'Type Paiement': t.type_paiement, 'Montant Crédit': t.montant_credit || '',
+      'Echeance': t.echeance ? new Date(t.echeance).toLocaleDateString('fr-FR') : '',
       'Montant': t.montant, 'Date Paiement Prévue': t.date_paiement_prevue || '',
       'Créé Par': t.cree_par, 'Date Création': new Date(t.created_at).toLocaleString('fr-FR')
     }));
