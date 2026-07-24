@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, DollarSign, X, Tag } from 'lucide-react';
+import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, DollarSign, X, Tag, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { getAvailableMonths, getUnpaidTermesByMonth, getOverdueUnpaidTermes, getPaidTermesByMonth, getUpcomingTermes, getCreditsDueToday, getTotalTermesByMonth, getRemarqueStatsByMonth, getRemarqueContractsByMonth, RemarqueMonthStats } from '../utils/supabaseService';
 import { getSessionDate } from '../utils/auth';
 import { isSessionClosed } from '../utils/sessionService';
@@ -480,6 +481,31 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
       fuzzyMatch(searchTerm, terme.assure || '') ||
       fuzzyMatch(searchTerm, terme.echeance || '')
     );
+  };
+
+  const exportPhonesToExcel = (termes: any[], sheetName: string) => {
+    const phones = termes
+      .map(t => t.num_tel || t.num_tel_2 || '')
+      .filter(p => p && p.trim() !== '');
+
+    if (phones.length === 0) {
+      alert('Aucun numéro de téléphone à exporter.');
+      return;
+    }
+
+    const data = phones.map((phone, i) => ({
+      'N°': i + 1,
+      'N° Contrat': termes.find(t => (t.num_tel || t.num_tel_2) === phone)?.numero_contrat || '',
+      'Assuré': termes.find(t => (t.num_tel || t.num_tel_2) === phone)?.assure || '',
+      'Téléphone': phone
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [{ wch: 6 }, { wch: 22 }, { wch: 30 }, { wch: 18 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, `Telephones_${sheetName}_${selectedMonth.replace(' ', '_')}.xlsx`);
   };
 
   const sortByEcheance = (termes: any[]): any[] => {
@@ -1127,10 +1153,19 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
             {showOverdueDetails && overdueTermes.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
                 <div className="mb-4">
-                  <h3 className="text-xl font-bold text-red-600 mb-4 flex items-center gap-2">
-                    <AlertCircle className="w-6 h-6" />
-                    Détails des Termes Échus ({filterTermes(overdueTermes, searchOverdue).length}/{overdueTermes.length})
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-red-600 flex items-center gap-2">
+                      <AlertCircle className="w-6 h-6" />
+                      Détails des Termes Échus ({filterTermes(overdueTermes, searchOverdue).length}/{overdueTermes.length})
+                    </h3>
+                    <button
+                      onClick={() => exportPhonesToExcel(filterTermes(overdueTermes, searchOverdue), 'Termes_Echus')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      <Download className="w-4 h-4" />
+                      Exporter Téléphones
+                    </button>
+                  </div>
                   <input
                     type="text"
                     placeholder="Rechercher par N° contrat, nom assuré ou date d'échéance..."
@@ -1193,10 +1228,19 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
             {showUnpaidDetails && unpaidTermes.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
                 <div className="mb-4">
-                  <h3 className="text-xl font-bold text-orange-600 mb-4 flex items-center gap-2">
-                    <Clock className="w-6 h-6" />
-                    Détails des Termes Non Payés ({filterTermes(unpaidTermes, searchUnpaid).length}/{unpaidTermes.length})
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-orange-600 flex items-center gap-2">
+                      <Clock className="w-6 h-6" />
+                      Détails des Termes Non Payés ({filterTermes(unpaidTermes, searchUnpaid).length}/{unpaidTermes.length})
+                    </h3>
+                    <button
+                      onClick={() => exportPhonesToExcel(filterTermes(unpaidTermes, searchUnpaid), 'Termes_Non_Payes')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition-colors"
+                    >
+                      <Download className="w-4 h-4" />
+                      Exporter Téléphones
+                    </button>
+                  </div>
                   <input
                     type="text"
                     placeholder="Rechercher par N° contrat, nom assuré ou date d'échéance..."
@@ -1259,10 +1303,19 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
             {showUpcomingDetails && upcomingTermes.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
                 <div className="mb-4">
-                  <h3 className="text-xl font-bold text-blue-600 mb-4 flex items-center gap-2">
-                    <Calendar className="w-6 h-6" />
-                    Détails des Échéances Proches ({filterTermes(upcomingTermes, searchUpcoming).length}/{upcomingTermes.length})
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-blue-600 flex items-center gap-2">
+                      <Calendar className="w-6 h-6" />
+                      Détails des Échéances Proches ({filterTermes(upcomingTermes, searchUpcoming).length}/{upcomingTermes.length})
+                    </h3>
+                    <button
+                      onClick={() => exportPhonesToExcel(filterTermes(upcomingTermes, searchUpcoming), 'Echeances_Proches')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <Download className="w-4 h-4" />
+                      Exporter Téléphones
+                    </button>
+                  </div>
                   <input
                     type="text"
                     placeholder="Rechercher par N° contrat, nom assuré ou date d'échéance..."
@@ -1325,10 +1378,19 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
             {showPaidDetails && paidTermes.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
                 <div className="mb-4">
-                  <h3 className="text-xl font-bold text-green-600 mb-4 flex items-center gap-2">
-                    <CheckCircle className="w-6 h-6" />
-                    Détails des Termes Payés ({filterTermes(paidTermes, searchPaid).length}/{paidTermes.length})
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-green-600 flex items-center gap-2">
+                      <CheckCircle className="w-6 h-6" />
+                      Détails des Termes Payés ({filterTermes(paidTermes, searchPaid).length}/{paidTermes.length})
+                    </h3>
+                    <button
+                      onClick={() => exportPhonesToExcel(filterTermes(paidTermes, searchPaid), 'Termes_Payes')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      <Download className="w-4 h-4" />
+                      Exporter Téléphones
+                    </button>
+                  </div>
                   <input
                     type="text"
                     placeholder="Rechercher par N° contrat, nom assuré ou date d'échéance..."
