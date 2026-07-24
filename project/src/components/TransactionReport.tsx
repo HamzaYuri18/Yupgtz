@@ -231,8 +231,8 @@ const TransactionReport: React.FC = () => {
         const { data, error: fetchError } = await supabase
           .from('rapport')
           .select('*')
-          .gte('created_at', `${today}T00:00:00`)
-          .lte('created_at', `${today}T23:59:59`)
+          .gte('date_operation', today)
+          .lte('date_operation', today)
           .order('created_at', { ascending: false });
         if (fetchError) throw fetchError;
         const filteredData = data || [];
@@ -383,8 +383,8 @@ const TransactionReport: React.FC = () => {
       const { data, error: fetchError } = await supabase
         .from('rapport')
         .select('*')
-        .gte('created_at', `${dateFrom}T00:00:00`)
-        .lte('created_at', `${dateTo}T23:59:59`)
+        .gte('date_operation', dateFrom)
+        .lte('date_operation', dateTo)
         .order('created_at', { ascending: false });
 
       if (fetchError) throw fetchError;
@@ -427,7 +427,7 @@ const TransactionReport: React.FC = () => {
       setTransactions(enrichedData);
       setStatistics(calculateStatistics(enrichedData));
     } catch (err) {
-      setError('Erreur lors de la recherche des transactions');
+      setError(`Erreur lors de la recherche: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setLoading(false);
     }
