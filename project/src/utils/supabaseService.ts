@@ -1171,7 +1171,8 @@ export const getAffaireContracts = async (): Promise<any[]> => {
     const { data, error } = await supabase
       .from('affaire')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(10000);
 
     if (error) {
       console.error('Erreur lors de la récupération Affaire:', error);
@@ -1193,7 +1194,8 @@ export const getTermeContracts = async (): Promise<any[]> => {
     const { data, error } = await supabase
       .from('terme')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(10000);
 
     if (error) {
       console.error('❌ Erreur lors de la récupération Terme:', error);
@@ -1214,7 +1216,8 @@ export const getRapportContracts = async (): Promise<any[]> => {
     const { data, error } = await supabase
       .from('rapport')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(10000);
 
     if (error) {
       console.error('❌ Erreur lors de la récupération rapport:', error);
@@ -1234,7 +1237,8 @@ export const getCredits = async (): Promise<CreditData[]> => {
     const { data, error } = await supabase
       .from('liste_credits')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(10000);
 
     if (error) {
       console.error('Erreur lors de la récupération crédits:', error);
@@ -1434,7 +1438,8 @@ export const getFilteredDataForExport = async (
     let query = supabase
       .from('rapport')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(10000);
 
     // Appliquer le filtre de type si spécifié
     if (type && type !== 'all') {
