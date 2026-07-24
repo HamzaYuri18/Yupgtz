@@ -233,7 +233,8 @@ const TransactionReport: React.FC = () => {
           .select('*')
           .gte('date_operation', today)
           .lte('date_operation', today)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(10000);
         if (fetchError) throw fetchError;
         const filteredData = data || [];
         const enrichedData = await Promise.all(
@@ -385,7 +386,8 @@ const TransactionReport: React.FC = () => {
         .select('*')
         .gte('date_operation', dateFrom)
         .lte('date_operation', dateTo)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(10000);
 
       if (fetchError) throw fetchError;
 
