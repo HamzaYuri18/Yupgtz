@@ -1,6 +1,11 @@
 import { supabase } from '../lib/supabase';
 import { getSessionDate, getSession } from './auth';
 
+const monthsFR = [
+  'janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin',
+  'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'
+];
+
 // Types pour les données de crédit
 interface CreditData {
   id: number;
@@ -1107,7 +1112,7 @@ export const saveTermeContract = async (
       const monthName = dateObj.toLocaleString('fr-FR', { month: 'long' }).toLowerCase();
       const year = dateObj.getFullYear().toString();
 
-      await updateTermeStatus(contractData.contractNumber || '', monthName, year, 'payé');
+      await updateTermeStatus(contractData.contractNumber || '', monthName, year, 'payé', maturityDate);
     }
 
     // Sauvegarder automatiquement dans liste_credits si type Crédit
@@ -1135,26 +1140,27 @@ export const updateTermeStatus = async (
   contractNumber: string,
   monthName: string,
   year: string,
-  status: 'payé' | 'non payé'
+  status: 'payé' | 'non payé',
+  echeance?: string
 ): Promise<boolean> => {
   try {
     const tableName = `table_terme_${monthName}_${year}`;
-    console.log(`📝 Mise à jour du statut dans ${tableName} pour le contrat ${contractNumber}...`);
+    console.log(`📝 Mise à jour du statut dans ${tableName} pour le contrat ${contractNumber}${echeance ? ' / echeance ' + echeance : ''}...`);
 
-    const { error } = await supabase.rpc('execute_sql_query', {
-      query: `UPDATE ${tableName} SET statut = '${status}' WHERE numero_contrat = '${contractNumber}'`
-    });
+    let query = supabase
+      .from(tableName)
+      .update({ statut: status })
+      .ilike('numero_contrat', contractNumber);
+
+    if (echeance) {
+      query = query.eq('echeance', echeance);
+    }
+
+    const { error } = await query;
 
     if (error) {
-      const { error: directError } = await supabase
-        .from(tableName)
-        .update({ statut: status })
-        .eq('numero_contrat', contractNumber);
-
-      if (directError) {
-        console.error('❌ Erreur lors de la mise à jour du statut:', directError);
-        return false;
-      }
+      console.error('❌ Erreur lors de la mise à jour du statut:', error);
+      return false;
     }
 
     console.log(`✅ Statut mis à jour: ${status}`);
@@ -2038,6 +2044,49 @@ const isExcludedRemarque = (remarque: string | null | undefined): boolean => {
   return EXCLUDED_REMARQUES.includes(remarque.trim().toLowerCase());
 };
 
+// Safety-net: fetches all paid Terme entries from rapport (case-insensitive) for a given month
+// Returns a Set of "CONTRACT|ECHEANCE" keys that are actually paid
+const getPaidTermeKeysFromRapport = async (monthName: string, year: string): Promise<Set<string>> => {
+  try {
+    const monthNum = monthsFR.indexOf(monthName.toLowerCase()) + 1;
+    if (monthNum === 0) return new Set();
+    const monthStr = String(monthNum).padStart(2, '0');
+    const startDate = `${year}-${monthStr}-01`;
+    const endDate = `${year}-${monthStr}-31`;
+
+    const { data, error } = await supabase
+      .from('rapport')
+      .select('numero_contrat, echeance')
+      .eq('type', 'Terme')
+      .not('echeance', 'is', null)
+      .gte('echeance', startDate)
+      .lte('echeance', endDate);
+
+    if (error) {
+      console.error('❌ Erreur récupération termes payés depuis rapport:', error);
+      return new Set();
+    }
+
+    const paidKeys = new Set<string>();
+    for (const row of data || []) {
+      const key = `${row.numero_contrat?.trim()?.toUpperCase()}|${row.echeance}`;
+      paidKeys.add(key);
+    }
+    console.log(`🛡️ Safety-net: ${paidKeys.size} termes payés trouvés dans rapport pour ${monthName} ${year}`);
+    return paidKeys;
+  } catch (error) {
+    console.error('❌ Erreur getPaidTermeKeysFromRapport:', error);
+    return new Set();
+  }
+};
+
+const filterOutPaidFromRapport = (termes: any[], paidKeys: Set<string>): any[] => {
+  return termes.filter(t => {
+    const key = `${t.numero_contrat?.trim()?.toUpperCase()}|${t.echeance}`;
+    return !paidKeys.has(key);
+  });
+};
+
 export const getUnpaidTermesByMonth = async (monthName: string, year: string): Promise<any[]> => {
   try {
     const tableName = `table_terme_${monthName}_${year}`;
@@ -2055,9 +2104,16 @@ export const getUnpaidTermesByMonth = async (monthName: string, year: string): P
 
     const filtered = (data || []).filter(t => !isExcludedRemarque(t.remarque));
     const uniqueUnpaid = removeDuplicates(filtered);
-    console.log(`✅ Termes non payés uniques: ${uniqueUnpaid.length} (${data?.length || 0} avant filtrage/déduplication)`);
 
-    return uniqueUnpaid;
+    // Safety-net: cross-check with rapport to remove any termes that are actually paid
+    const paidKeys = await getPaidTermeKeysFromRapport(monthName, year);
+    const safetyFiltered = filterOutPaidFromRapport(uniqueUnpaid, paidKeys);
+    if (safetyFiltered.length < uniqueUnpaid.length) {
+      console.log(`🛡️ Safety-net a retiré ${uniqueUnpaid.length - safetyFiltered.length} terme(s) faussement non payé(s)`);
+    }
+
+    console.log(`✅ Termes non payés uniques: ${safetyFiltered.length} (${data?.length || 0} avant filtrage/déduplication)`);
+    return safetyFiltered;
   } catch (error) {
     console.error('❌ Erreur générale:', error);
     return [];
@@ -2083,9 +2139,16 @@ export const getOverdueUnpaidTermes = async (monthName: string, year: string): P
 
     const filtered = (data || []).filter(t => !isExcludedRemarque(t.remarque));
     const uniqueOverdue = removeDuplicates(filtered);
-    console.log(`✅ Termes échus uniques: ${uniqueOverdue.length} (${data?.length || 0} avant filtrage/déduplication)`);
 
-    return uniqueOverdue;
+    // Safety-net: cross-check with rapport to remove any termes that are actually paid
+    const paidKeys = await getPaidTermeKeysFromRapport(monthName, year);
+    const safetyFiltered = filterOutPaidFromRapport(uniqueOverdue, paidKeys);
+    if (safetyFiltered.length < uniqueOverdue.length) {
+      console.log(`🛡️ Safety-net a retiré ${uniqueOverdue.length - safetyFiltered.length} terme(s) faussement échus/non payé(s)`);
+    }
+
+    console.log(`✅ Termes échus uniques: ${safetyFiltered.length} (${data?.length || 0} avant filtrage/déduplication)`);
+    return safetyFiltered;
   } catch (error) {
     console.error('❌ Erreur générale:', error);
     return [];
@@ -2164,8 +2227,15 @@ export const getUpcomingTermes = async (monthName: string, year: string, daysAhe
     // Éliminer d'abord les doublons
     const uniqueUnpaid = removeDuplicates(allUnpaid);
     
+    // Safety-net: cross-check with rapport to remove any termes that are actually paid
+    const paidKeys = await getPaidTermeKeysFromRapport(monthName, year);
+    const safetyFiltered = filterOutPaidFromRapport(uniqueUnpaid, paidKeys);
+    if (safetyFiltered.length < uniqueUnpaid.length) {
+      console.log(`🛡️ Safety-net a retiré ${uniqueUnpaid.length - safetyFiltered.length} terme(s) faussement non payé(s)`);
+    }
+    
     // Filtrer manuellement pour garder ceux dont l'échéance est dans la période future
-    const upcomingTermes = uniqueUnpaid.filter(terme => {
+    const upcomingTermes = safetyFiltered.filter(terme => {
       const echeanceDate = new Date(terme.echeance);
       const todayObj = new Date(todayStr);
       const futureDateObj = new Date(futureDateStr);
@@ -2245,7 +2315,7 @@ export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: 
 
     const { data: paidContracts, error: termeError } = await supabase
       .from('terme')
-      .select('numero_contrat');
+      .select('numero_contrat, echeance');
 
     if (termeError) {
       console.error('❌ Erreur lors de la récupération de la table terme:', termeError);
@@ -2256,11 +2326,12 @@ export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: 
       };
     }
 
-    const paidContractNumbers = new Set(
-      paidContracts?.map(c => c.numero_contrat?.trim()?.toUpperCase()) || []
-    );
-    console.log(`📋 ${paidContractNumbers.size} contrats payés trouvés dans la table principale`);
-    console.log('📝 Exemples de contrats payés:', Array.from(paidContractNumbers).slice(0, 5));
+    const paidContractKeys = new Set<string>();
+    paidContracts?.forEach(c => {
+      const key = `${c.numero_contrat?.trim()?.toUpperCase()}|${c.echeance}`;
+      paidContractKeys.add(key);
+    });
+    console.log(`📋 ${paidContractKeys.size} combinaisons contrat+echeance trouvées dans la table principale`);
 
     let availableTables: string[] = [];
     if (monthName && year) {
@@ -2286,7 +2357,7 @@ export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: 
       try {
         const { data: contracts, error: selectError } = await supabase
           .from(tableName)
-          .select('id, numero_contrat, statut');
+          .select('id, numero_contrat, echeance, statut');
 
         if (selectError) {
           console.error(`❌ Erreur lors de la lecture de ${tableName}:`, selectError);
@@ -2303,8 +2374,8 @@ export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: 
         console.log(`📋 ${contracts.length} contrats trouvés dans ${tableName}`);
 
         for (const contract of contracts) {
-          const normalizedContractNumber = contract.numero_contrat?.trim()?.toUpperCase();
-          const shouldBePaid = paidContractNumbers.has(normalizedContractNumber);
+          const key = `${contract.numero_contrat?.trim()?.toUpperCase()}|${contract.echeance}`;
+          const shouldBePaid = paidContractKeys.has(key);
           const newStatus = shouldBePaid ? 'payé' : 'non payé';
 
           if (shouldBePaid) {
@@ -2314,7 +2385,7 @@ export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: 
           }
 
           if (contract.statut !== newStatus) {
-            console.log(`🔄 Mise à jour: ${contract.numero_contrat} de "${contract.statut}" vers "${newStatus}"`);
+            console.log(`🔄 Mise à jour: ${contract.numero_contrat} (${contract.echeance}) de "${contract.statut}" vers "${newStatus}"`);
 
             const { error: updateError } = await supabase
               .from(tableName)
@@ -2329,7 +2400,7 @@ export const syncTermeStatusesWithMainTable = async (monthName?: string, year?: 
               updated++;
             }
           } else {
-            console.log(`ℹ️ ${contract.numero_contrat}: statut déjà correct (${contract.statut})`);
+            console.log(`ℹ️ ${contract.numero_contrat} (${contract.echeance}): statut déjà correct (${contract.statut})`);
           }
         }
 
