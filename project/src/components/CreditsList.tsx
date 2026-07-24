@@ -61,8 +61,14 @@ const CreditsList: React.FC = () => {
       setCurrentUser(session.username);
     }
     loadCredits();
-    // Synchroniser automatiquement les crédits manquants au chargement
-    handleSync(true);
+    // Synchroniser automatiquement les crédits manquants une seule fois par jour (à minuit)
+    const today = new Date().toISOString().split('T')[0];
+    const lastSyncDate = localStorage.getItem('lastCreditsSyncDate');
+    if (lastSyncDate !== today) {
+      handleSync(true).then(() => {
+        localStorage.setItem('lastCreditsSyncDate', today);
+      });
+    }
   }, []);
 
   const handleSync = async (silent = false) => {

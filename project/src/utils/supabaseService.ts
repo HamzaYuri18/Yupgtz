@@ -1117,7 +1117,7 @@ export const saveTermeContract = async (
         insuredName: contractData.insuredName,
         premiumAmount: contractData.premiumAmount,
         creditAmount: contractData.creditAmount ? Number(contractData.creditAmount) : (contractData.premiumAmount || 0),
-        paymentDate: contractData.paymentDate || echeanceISO || '',
+        paymentDate: contractData.paymentDate || '',
         branch: contractData.branch,
         createdBy: contractData.createdBy,
         telephone: contractData.telephone

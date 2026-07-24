@@ -565,7 +565,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             insuredName: contract.insuredName,
             paymentMode: contract.paymentMode,
             echeance: xmlSearchResult.maturity,
-            paymentDate: xmlSearchResult.maturity,
+            paymentDate: cleanedFormData.paymentDate || '',
             premiumAmount: contract.premiumAmount,
             creditAmount: contract.creditAmount,
             branch: contract.branch,
