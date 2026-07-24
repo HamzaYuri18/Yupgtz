@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Download, TrendingUp, DollarSign, FileText, CreditCard, Trash2, X, Search, ChevronRight, BarChart2, Filter, Receipt, AlertCircle, ArrowDownCircle, RefreshCw, Tag } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getSession, getSessionDate } from '../utils/auth';
@@ -215,6 +215,68 @@ const TransactionReport: React.FC = () => {
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [pendingDeleteTransaction, setPendingDeleteTransaction] = useState<Transaction | null>(null);
+
+  const hasAutoLoaded = useRef(false);
+
+  useEffect(() => {
+    if (hasAutoLoaded.current) return;
+    hasAutoLoaded.current = true;
+    const today = new Date().toISOString().split('T')[0];
+    setDateFrom(today);
+    setDateTo(today);
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('rapport')
+          .select('*')
+          .gte('created_at', `${today}T00:00:00`)
+          .lte('created_at', `${today}T23:59:59`)
+          .order('created_at', { ascending: false });
+        if (fetchError) throw fetchError;
+        const filteredData = data || [];
+        const enrichedData = await Promise.all(
+          filteredData.map(async (transaction) => {
+            if (transaction.type === 'Terme' && transaction.numero_contrat && transaction.echeance) {
+              try {
+                const echeanceDate = new Date(transaction.echeance);
+                const echeanceISO = echeanceDate.toISOString().split('T')[0];
+                const { data: termeData } = await supabase
+                  .from('terme')
+                  .select('"Retour", "Prime avant retour", "Numero Attestation"')
+                  .eq('numero_contrat', transaction.numero_contrat)
+                  .eq('echeance', echeanceISO)
+                  .maybeSingle();
+                if (termeData) return { ...transaction, retour_type: termeData.Retour || null, prime_avant_retour: termeData['Prime avant retour'] || null, numero_attestation: termeData['Numero Attestation'] || null };
+              } catch {}
+            }
+            if (transaction.type === 'Affaire' && transaction.numero_contrat) {
+              try {
+                const createdDate = new Date(transaction.created_at);
+                const createdISO = createdDate.toISOString().split('T')[0];
+                const { data: affaireData } = await supabase
+                  .from('affaire')
+                  .select('"Numero Attestation"')
+                  .eq('numero_contrat', transaction.numero_contrat)
+                  .gte('created_at', `${createdISO}T00:00:00`)
+                  .lt('created_at', `${createdISO}T23:59:59`)
+                  .maybeSingle();
+                if (affaireData) return { ...transaction, numero_attestation: affaireData['Numero Attestation'] || null };
+              } catch {}
+            }
+            return transaction;
+          })
+        );
+        setTransactions(enrichedData);
+        setStatistics(calculateStatistics(enrichedData));
+      } catch (err) {
+        setError('Erreur lors du chargement des transactions');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   const [detailModal, setDetailModal] = useState<{
     open: boolean;
