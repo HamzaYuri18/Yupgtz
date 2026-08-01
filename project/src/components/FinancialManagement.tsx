@@ -147,8 +147,12 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
   // États pour les détails d'avance client
   const [avanceDetail, setAvanceDetail] = useState<RecetteExceptionnelle | null>(null);
-  const [avancePrimeInfo, setAvancePrimeInfo] = useState<{ prime: number; montant_credit: number; solde: number } | null>(null);
+  const [avancePrimeInfo, setAvancePrimeInfo] = useState<{ prime: number; echeance: string } | null>(null);
   const [avanceDetailLoading, setAvanceDetailLoading] = useState(false);
+  const [avanceSearchMonth, setAvanceSearchMonth] = useState('');
+  const [avanceSearchYear, setAvanceSearchYear] = useState('');
+  const [avanceDateLimite, setAvanceDateLimite] = useState('');
+  const [avanceSearchError, setAvanceSearchError] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -707,50 +711,88 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     setTimeout(() => setMessage(''), 3000);
   };
 
-  const fetchAvancePrimeInfo = async (numeroContrat: string): Promise<{ prime: number; montant_credit: number; solde: number } | null> => {
+  const fetchAvancePrimeFromTerme = async (
+    numeroContrat: string,
+    assure: string,
+    month: string,
+    year: string
+  ): Promise<{ prime: number; echeance: string } | null> => {
+    const monthsFR: Record<string, string> = {
+      'janvier': 'janvier', 'février': 'fevrier', 'fevrier': 'fevrier',
+      'mars': 'mars', 'avril': 'avril', 'mai': 'mai', 'juin': 'juin',
+      'juillet': 'juillet', 'août': 'aout', 'aout': 'aout',
+      'septembre': 'septembre', 'octobre': 'octobre',
+      'novembre': 'novembre', 'décembre': 'decembre', 'decembre': 'decembre'
+    };
+    const normalizedMonth = monthsFR[month.toLowerCase()] || month.toLowerCase();
+    const tableName = `table_terme_${normalizedMonth}_${year}`;
+
     try {
-      const { data, error } = await supabase
-        .from('rapport')
-        .select('prime, montant_credit')
-        .eq('numero_contrat', numeroContrat)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      let query = supabase
+        .from(tableName)
+        .select('prime, echeance, assure, numero_contrat')
+        .ilike('numero_contrat', numeroContrat);
+
+      if (assure) {
+        query = query.ilike('assure', assure);
+      }
+
+      const { data, error } = await query.limit(1).maybeSingle();
 
       if (error || !data) return null;
 
-      const prime = data.prime || 0;
-      const montant_credit = data.montant_credit || 0;
-      return { prime, montant_credit, solde: prime - montant_credit };
+      return { prime: parseFloat(data.prime) || 0, echeance: data.echeance || '' };
     } catch {
       return null;
     }
   };
 
-  const handleShowAvanceDetails = async (recette: RecetteExceptionnelle) => {
+  const handleShowAvanceDetails = (recette: RecetteExceptionnelle) => {
     setAvanceDetail(recette);
     setAvancePrimeInfo(null);
-    setAvanceDetailLoading(true);
-
-    if (recette.Numero_Contrat) {
-      const info = await fetchAvancePrimeInfo(recette.Numero_Contrat);
-      setAvancePrimeInfo(info);
-    }
-
     setAvanceDetailLoading(false);
+    setAvanceSearchMonth('');
+    setAvanceSearchYear('');
+    setAvanceDateLimite('');
+    setAvanceSearchError('');
   };
 
-  const handleDownloadDecomptePaiement = async (recette: RecetteExceptionnelle) => {
-    let primeInfo = avancePrimeInfo;
-    if (!primeInfo && recette.Numero_Contrat) {
-      primeInfo = await fetchAvancePrimeInfo(recette.Numero_Contrat);
+  const handleSearchAvancePrime = async () => {
+    if (!avanceDetail) return;
+    if (!avanceSearchMonth || !avanceSearchYear) {
+      setAvanceSearchError('Veuillez saisir le mois et l\'année.');
+      return;
+    }
+    if (!avanceDetail.Numero_Contrat) {
+      setAvanceSearchError('Aucun numéro de contrat associé à cette avance.');
+      return;
     }
 
-    const prime = primeInfo?.prime ?? 0;
-    const montantCredit = primeInfo?.montant_credit ?? 0;
-    const soldePrime = primeInfo?.solde ?? 0;
+    setAvanceDetailLoading(true);
+    setAvanceSearchError('');
+    setAvancePrimeInfo(null);
+
+    const info = await fetchAvancePrimeFromTerme(
+      avanceDetail.Numero_Contrat,
+      avanceDetail.Assure || '',
+      avanceSearchMonth,
+      avanceSearchYear
+    );
+
+    setAvanceDetailLoading(false);
+
+    if (!info) {
+      setAvanceSearchError(`Aucune prime trouvée dans la table terme pour ${avanceSearchMonth} ${avanceSearchYear}.`);
+    } else {
+      setAvancePrimeInfo(info);
+    }
+  };
+
+  const handleDownloadDecomptePaiement = (recette: RecetteExceptionnelle) => {
+    const prime = avancePrimeInfo?.prime ?? 0;
     const montantAvance = recette.montant || 0;
-    const soldeApresAvance = soldePrime - montantAvance;
+    const solde = prime - montantAvance;
+    const dateLimite = avanceDateLimite ? new Date(avanceDateLimite).toLocaleDateString('fr-FR') : '-';
 
     const pdf = new jsPDF('portrait', 'mm', 'a4');
     const pageWidth = pdf.internal.pageSize.width;
@@ -759,10 +801,13 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     const contentWidth = pageWidth - leftMargin - rightMargin;
     let y = 25;
 
-    pdf.setFontSize(18);
+    pdf.setFontSize(16);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('SHIRI FARES HAMZA', pageWidth / 2, y, { align: 'center' });
-    y += 10;
+    pdf.text('AGENCE SHIRI FARES HAMZA', pageWidth / 2, y, { align: 'center' });
+    y += 7;
+    pdf.setFontSize(13);
+    pdf.text('STAR ASSURANCE', pageWidth / 2, y, { align: 'center' });
+    y += 12;
 
     pdf.setFontSize(14);
     pdf.text('DECOMPTE DE PAIEMENT', pageWidth / 2, y, { align: 'center' });
@@ -776,11 +821,11 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     pdf.setFont('helvetica', 'normal');
 
     const rows: [string, string][] = [
-      ['Numero de contrat', recette.Numero_Contrat || '-'],
-      ['Assure', recette.Assure || '-'],
-      ['Echeance', recette.Echeance || '-'],
+      ['Numéro de contrat', recette.Numero_Contrat || '-'],
+      ['Assuré', recette.Assure || '-'],
+      ['Échéance', avancePrimeInfo?.echeance || recette.Echeance || '-'],
       ['Date de recette', recette.date_recette ? new Date(recette.date_recette).toLocaleDateString('fr-FR') : '-'],
-      ['Cree par', recette.cree_par || '-'],
+      ['Créé par', recette.cree_par || '-'],
     ];
 
     rows.forEach(([label, value]) => {
@@ -796,14 +841,12 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     pdf.rect(leftMargin, y, contentWidth, 8, 'F');
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(12);
-    pdf.text('DETAILS FINANCIERS', leftMargin + 5, y + 5);
+    pdf.text('DÉTAILS FINANCIERS', leftMargin + 5, y + 5);
     y += 14;
 
     pdf.setFontSize(11);
     const finRows: [string, string][] = [
-      ['Prime totale', `${prime.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`],
-      ['Montant credit', `${montantCredit.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`],
-      ['Solde de prime', `${soldePrime.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`],
+      ['Prime de l\'échéance', `${prime.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`],
       ['Montant avance client', `${montantAvance.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`],
     ];
 
@@ -826,14 +869,24 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(13);
     pdf.setTextColor(20, 60, 160);
-    pdf.text('Solde apres avance :', leftMargin + 5, y + 6);
-    pdf.text(`${soldeApresAvance.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`, leftMargin + contentWidth - 5, y + 6, { align: 'right' });
+    pdf.text('Solde (Prime - Avance) :', leftMargin + 5, y + 6);
+    pdf.text(`${solde.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`, leftMargin + contentWidth - 5, y + 6, { align: 'right' });
+    pdf.setTextColor(0, 0, 0);
+    y += 18;
+
+    pdf.setFillColor(255, 245, 230);
+    pdf.rect(leftMargin, y, contentWidth, 10, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(12);
+    pdf.setTextColor(180, 80, 0);
+    pdf.text('Date limite de paiement du reste de la prime :', leftMargin + 5, y + 6);
+    pdf.text(dateLimite, leftMargin + contentWidth - 5, y + 6, { align: 'right' });
     pdf.setTextColor(0, 0, 0);
     y += 20;
 
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'italic');
-    pdf.text(`Document genere le ${new Date().toLocaleDateString('fr-FR')} a ${new Date().toLocaleTimeString('fr-FR')}`, pageWidth / 2, y, { align: 'center' });
+    pdf.text(`Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, pageWidth / 2, y, { align: 'center' });
 
     const fileName = `Decompte_Paiement_${recette.Numero_Contrat || 'avance'}.pdf`;
     pdf.save(fileName);
@@ -1761,28 +1814,28 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       {/* Modal Details Avance Client */}
       {avanceDetail && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
-            <div className="flex items-center justify-between p-5 border-b">
-              <h3 className="text-lg font-semibold text-green-700">Details de l'Avance Client</h3>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b sticky top-0 bg-white">
+              <h3 className="text-lg font-semibold text-green-700">Détails de l'Avance Client</h3>
               <button
-                onClick={() => { setAvanceDetail(null); setAvancePrimeInfo(null); }}
+                onClick={() => { setAvanceDetail(null); setAvancePrimeInfo(null); setAvanceSearchError(''); }}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-5 space-y-3">
+            <div className="p-5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-medium text-gray-500">Numero de contrat</label>
+                  <label className="text-xs font-medium text-gray-500">Numéro de contrat</label>
                   <p className="text-sm font-semibold text-gray-900">{avanceDetail.Numero_Contrat || '-'}</p>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-500">Assure</label>
+                  <label className="text-xs font-medium text-gray-500">Assuré</label>
                   <p className="text-sm font-semibold text-gray-900">{avanceDetail.Assure || '-'}</p>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-500">Echeance</label>
+                  <label className="text-xs font-medium text-gray-500">Échéance</label>
                   <p className="text-sm font-semibold text-gray-900">{avanceDetail.Echeance || '-'}</p>
                 </div>
                 <div>
@@ -1794,54 +1847,113 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                   <p className="text-sm font-semibold text-green-600">{avanceDetail.montant.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT</p>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-500">Cree par</label>
+                  <label className="text-xs font-medium text-gray-500">Créé par</label>
                   <p className="text-sm font-semibold text-gray-900">{avanceDetail.cree_par || '-'}</p>
                 </div>
               </div>
 
-              {avanceDetailLoading ? (
-                <div className="text-center py-4 text-gray-500 text-sm">Chargement des informations de prime...</div>
-              ) : avancePrimeInfo ? (
-                <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <h4 className="text-sm font-semibold text-blue-700 mb-3">Informations de Prime</h4>
+              {/* Recherche de la prime dans la table terme */}
+              <div className="mt-2 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">Rechercher la prime dans la table Terme</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Mois</label>
+                    <select
+                      value={avanceSearchMonth}
+                      onChange={(e) => setAvanceSearchMonth(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    >
+                      <option value="">Sélectionner...</option>
+                      <option value="janvier">Janvier</option>
+                      <option value="février">Février</option>
+                      <option value="mars">Mars</option>
+                      <option value="avril">Avril</option>
+                      <option value="mai">Mai</option>
+                      <option value="juin">Juin</option>
+                      <option value="juillet">Juillet</option>
+                      <option value="août">Août</option>
+                      <option value="septembre">Septembre</option>
+                      <option value="octobre">Octobre</option>
+                      <option value="novembre">Novembre</option>
+                      <option value="décembre">Décembre</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Année</label>
+                    <input
+                      type="text"
+                      value={avanceSearchYear}
+                      onChange={(e) => setAvanceSearchYear(e.target.value)}
+                      placeholder="2026"
+                      className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={handleSearchAvancePrime}
+                  disabled={avanceDetailLoading}
+                  className="mt-3 flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm disabled:opacity-50"
+                >
+                  <Search className="w-4 h-4" />
+                  {avanceDetailLoading ? 'Recherche...' : 'Rechercher la prime'}
+                </button>
+                {avanceSearchError && (
+                  <p className="mt-2 text-sm text-red-600">{avanceSearchError}</p>
+                )}
+              </div>
+
+              {/* Affichage de la prime trouvée */}
+              {avancePrimeInfo && (
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <h4 className="text-sm font-semibold text-blue-700 mb-3">Prime trouvée dans la table Terme</h4>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-medium text-blue-600">Prime totale</label>
+                      <label className="text-xs font-medium text-blue-600">Prime de l'échéance</label>
                       <p className="text-sm font-semibold text-gray-900">{avancePrimeInfo.prime.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT</p>
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-blue-600">Montant credit</label>
-                      <p className="text-sm font-semibold text-gray-900">{avancePrimeInfo.montant_credit.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT</p>
+                      <label className="text-xs font-medium text-blue-600">Échéance (terme)</label>
+                      <p className="text-sm font-semibold text-gray-900">{avancePrimeInfo.echeance || '-'}</p>
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-blue-600">Solde de prime</label>
-                      <p className="text-sm font-semibold text-gray-900">{avancePrimeInfo.solde.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT</p>
+                      <label className="text-xs font-medium text-blue-600">Montant avance</label>
+                      <p className="text-sm font-semibold text-green-600">{avanceDetail.montant.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT</p>
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-blue-600">Solde apres avance</label>
-                      <p className="text-sm font-bold text-blue-700">{(avancePrimeInfo.solde - avanceDetail.montant).toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT</p>
+                      <label className="text-xs font-medium text-blue-600">Solde (Prime - Avance)</label>
+                      <p className="text-sm font-bold text-blue-700">{(avancePrimeInfo.prime - avanceDetail.montant).toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT</p>
                     </div>
                   </div>
                 </div>
-              ) : (
-                <div className="mt-4 p-3 bg-yellow-50 rounded-lg text-sm text-yellow-700">
-                  Aucune information de prime trouvee pour ce contrat.
+              )}
+
+              {/* Date limite de paiement */}
+              {avancePrimeInfo && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date limite de paiement du reste de la prime</label>
+                  <input
+                    type="date"
+                    value={avanceDateLimite}
+                    onChange={(e) => setAvanceDateLimite(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
                 </div>
               )}
             </div>
-            <div className="flex justify-end gap-3 p-5 border-t">
+            <div className="flex justify-end gap-3 p-5 border-t sticky bottom-0 bg-white">
               <button
-                onClick={() => { setAvanceDetail(null); setAvancePrimeInfo(null); }}
+                onClick={() => { setAvanceDetail(null); setAvancePrimeInfo(null); setAvanceSearchError(''); }}
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
               >
                 Fermer
               </button>
               <button
                 onClick={() => handleDownloadDecomptePaiement(avanceDetail)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                disabled={!avancePrimeInfo}
+                className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <FileText className="w-4 h-4" />
-                Telecharger Decompte
+                Télécharger Décompte
               </button>
             </div>
           </div>
