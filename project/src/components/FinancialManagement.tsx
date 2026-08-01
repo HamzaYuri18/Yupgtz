@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Gift, AlertTriangle, Save, Plus, Trash2, Search, Calendar, FileSpreadsheet } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Gift, AlertTriangle, Save, Plus, Trash2, Search, Calendar, FileSpreadsheet, Eye, FileText, X } from 'lucide-react';
 import { getSessionDate } from '../utils/auth';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
 import { 
   saveDepense, 
   getDepenses, 
@@ -143,6 +144,11 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     dateTo: getSessionDate()
   });
   const [showRecetteDateFilter, setShowRecetteDateFilter] = useState(false);
+
+  // États pour les détails d'avance client
+  const [avanceDetail, setAvanceDetail] = useState<RecetteExceptionnelle | null>(null);
+  const [avancePrimeInfo, setAvancePrimeInfo] = useState<{ prime: number; montant_credit: number; solde: number } | null>(null);
+  const [avanceDetailLoading, setAvanceDetailLoading] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -699,6 +705,138 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       setMessage('❌ Erreur lors de l\'enregistrement de la recette');
     }
     setTimeout(() => setMessage(''), 3000);
+  };
+
+  const fetchAvancePrimeInfo = async (numeroContrat: string): Promise<{ prime: number; montant_credit: number; solde: number } | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('rapport')
+        .select('prime, montant_credit')
+        .eq('numero_contrat', numeroContrat)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !data) return null;
+
+      const prime = data.prime || 0;
+      const montant_credit = data.montant_credit || 0;
+      return { prime, montant_credit, solde: prime - montant_credit };
+    } catch {
+      return null;
+    }
+  };
+
+  const handleShowAvanceDetails = async (recette: RecetteExceptionnelle) => {
+    setAvanceDetail(recette);
+    setAvancePrimeInfo(null);
+    setAvanceDetailLoading(true);
+
+    if (recette.Numero_Contrat) {
+      const info = await fetchAvancePrimeInfo(recette.Numero_Contrat);
+      setAvancePrimeInfo(info);
+    }
+
+    setAvanceDetailLoading(false);
+  };
+
+  const handleDownloadDecomptePaiement = async (recette: RecetteExceptionnelle) => {
+    let primeInfo = avancePrimeInfo;
+    if (!primeInfo && recette.Numero_Contrat) {
+      primeInfo = await fetchAvancePrimeInfo(recette.Numero_Contrat);
+    }
+
+    const prime = primeInfo?.prime ?? 0;
+    const montantCredit = primeInfo?.montant_credit ?? 0;
+    const soldePrime = primeInfo?.solde ?? 0;
+    const montantAvance = recette.montant || 0;
+    const soldeApresAvance = soldePrime - montantAvance;
+
+    const pdf = new jsPDF('portrait', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.width;
+    const leftMargin = 20;
+    const rightMargin = 20;
+    const contentWidth = pageWidth - leftMargin - rightMargin;
+    let y = 25;
+
+    pdf.setFontSize(18);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('SHIRI FARES HAMZA', pageWidth / 2, y, { align: 'center' });
+    y += 10;
+
+    pdf.setFontSize(14);
+    pdf.text('DECOMPTE DE PAIEMENT', pageWidth / 2, y, { align: 'center' });
+    y += 15;
+
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(leftMargin, y, leftMargin + contentWidth, y);
+    y += 10;
+
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'normal');
+
+    const rows: [string, string][] = [
+      ['Numero de contrat', recette.Numero_Contrat || '-'],
+      ['Assure', recette.Assure || '-'],
+      ['Echeance', recette.Echeance || '-'],
+      ['Date de recette', recette.date_recette ? new Date(recette.date_recette).toLocaleDateString('fr-FR') : '-'],
+      ['Cree par', recette.cree_par || '-'],
+    ];
+
+    rows.forEach(([label, value]) => {
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(label + ' :', leftMargin, y);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(value, leftMargin + 60, y);
+      y += 8;
+    });
+
+    y += 5;
+    pdf.setFillColor(240, 240, 240);
+    pdf.rect(leftMargin, y, contentWidth, 8, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(12);
+    pdf.text('DETAILS FINANCIERS', leftMargin + 5, y + 5);
+    y += 14;
+
+    pdf.setFontSize(11);
+    const finRows: [string, string][] = [
+      ['Prime totale', `${prime.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`],
+      ['Montant credit', `${montantCredit.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`],
+      ['Solde de prime', `${soldePrime.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`],
+      ['Montant avance client', `${montantAvance.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`],
+    ];
+
+    finRows.forEach(([label, value]) => {
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(label + ' :', leftMargin, y);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(value, leftMargin + 80, y);
+      y += 8;
+    });
+
+    y += 5;
+    pdf.setDrawColor(150, 150, 150);
+    pdf.setLineWidth(0.5);
+    pdf.line(leftMargin, y, leftMargin + contentWidth, y);
+    y += 10;
+
+    pdf.setFillColor(230, 240, 255);
+    pdf.rect(leftMargin, y, contentWidth, 10, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(13);
+    pdf.setTextColor(20, 60, 160);
+    pdf.text('Solde apres avance :', leftMargin + 5, y + 6);
+    pdf.text(`${soldeApresAvance.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`, leftMargin + contentWidth - 5, y + 6, { align: 'right' });
+    pdf.setTextColor(0, 0, 0);
+    y += 20;
+
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'italic');
+    pdf.text(`Document genere le ${new Date().toLocaleDateString('fr-FR')} a ${new Date().toLocaleTimeString('fr-FR')}`, pageWidth / 2, y, { align: 'center' });
+
+    const fileName = `Decompte_Paiement_${recette.Numero_Contrat || 'avance'}.pdf`;
+    pdf.save(fileName);
   };
 
   const handleSearchSinistre = async () => {
@@ -1572,6 +1710,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                 <th className="px-6 py-3 text-left text-xs font-medium text-green-600 uppercase tracking-wider">Montant (DT)</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-green-600 uppercase tracking-wider">Date</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-green-600 uppercase tracking-wider">Créé par</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-green-600 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -1585,6 +1724,30 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                     {recette.date_recette ? new Date(recette.date_recette).toLocaleDateString('fr-FR') : '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{recette.cree_par}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {recette.type_recette === 'Avance Client' ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleShowAvanceDetails(recette)}
+                          className="flex items-center gap-1 px-2.5 py-1 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                          title="Voir les details"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          Details
+                        </button>
+                        <button
+                          onClick={() => handleDownloadDecomptePaiement(recette)}
+                          className="flex items-center gap-1 px-2.5 py-1 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors"
+                          title="Telecharger le decompte de paiement"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          Decompte
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1594,6 +1757,96 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
           )}
         </div>
       </div>
+
+      {/* Modal Details Avance Client */}
+      {avanceDetail && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-5 border-b">
+              <h3 className="text-lg font-semibold text-green-700">Details de l'Avance Client</h3>
+              <button
+                onClick={() => { setAvanceDetail(null); setAvancePrimeInfo(null); }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-gray-500">Numero de contrat</label>
+                  <p className="text-sm font-semibold text-gray-900">{avanceDetail.Numero_Contrat || '-'}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500">Assure</label>
+                  <p className="text-sm font-semibold text-gray-900">{avanceDetail.Assure || '-'}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500">Echeance</label>
+                  <p className="text-sm font-semibold text-gray-900">{avanceDetail.Echeance || '-'}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500">Date de recette</label>
+                  <p className="text-sm font-semibold text-gray-900">{avanceDetail.date_recette ? new Date(avanceDetail.date_recette).toLocaleDateString('fr-FR') : '-'}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500">Montant avance</label>
+                  <p className="text-sm font-semibold text-green-600">{avanceDetail.montant.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500">Cree par</label>
+                  <p className="text-sm font-semibold text-gray-900">{avanceDetail.cree_par || '-'}</p>
+                </div>
+              </div>
+
+              {avanceDetailLoading ? (
+                <div className="text-center py-4 text-gray-500 text-sm">Chargement des informations de prime...</div>
+              ) : avancePrimeInfo ? (
+                <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <h4 className="text-sm font-semibold text-blue-700 mb-3">Informations de Prime</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-blue-600">Prime totale</label>
+                      <p className="text-sm font-semibold text-gray-900">{avancePrimeInfo.prime.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT</p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-blue-600">Montant credit</label>
+                      <p className="text-sm font-semibold text-gray-900">{avancePrimeInfo.montant_credit.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT</p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-blue-600">Solde de prime</label>
+                      <p className="text-sm font-semibold text-gray-900">{avancePrimeInfo.solde.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT</p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-blue-600">Solde apres avance</label>
+                      <p className="text-sm font-bold text-blue-700">{(avancePrimeInfo.solde - avanceDetail.montant).toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 p-3 bg-yellow-50 rounded-lg text-sm text-yellow-700">
+                  Aucune information de prime trouvee pour ce contrat.
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 p-5 border-t">
+              <button
+                onClick={() => { setAvanceDetail(null); setAvancePrimeInfo(null); }}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+              >
+                Fermer
+              </button>
+              <button
+                onClick={() => handleDownloadDecomptePaiement(avanceDetail)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+              >
+                <FileText className="w-4 h-4" />
+                Telecharger Decompte
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
