@@ -788,6 +788,9 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     }
   };
 
+  const formatPdfNumber = (n: number): string =>
+    n.toLocaleString('fr-FR', { minimumFractionDigits: 3 }).replace(/\s/g, ' ');
+
   const handleDownloadDecomptePaiement = (recette: RecetteExceptionnelle) => {
     const prime = avancePrimeInfo?.prime ?? 0;
     const montantAvance = recette.montant || 0;
@@ -846,8 +849,8 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
     pdf.setFontSize(11);
     const finRows: [string, string][] = [
-      ['Prime de l\'échéance', `${prime.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`],
-      ['Montant avance client', `${montantAvance.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`],
+      ['Prime de l\'échéance', `${formatPdfNumber(prime)} DT`],
+      ['Montant avance client', `${formatPdfNumber(montantAvance)} DT`],
     ];
 
     finRows.forEach(([label, value]) => {
@@ -870,7 +873,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     pdf.setFontSize(13);
     pdf.setTextColor(20, 60, 160);
     pdf.text('Solde (Prime - Avance) :', leftMargin + 5, y + 6);
-    pdf.text(`${solde.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`, leftMargin + contentWidth - 5, y + 6, { align: 'right' });
+    pdf.text(`${formatPdfNumber(solde)} DT`, leftMargin + contentWidth - 5, y + 6, { align: 'right' });
     pdf.setTextColor(0, 0, 0);
     y += 18;
 
