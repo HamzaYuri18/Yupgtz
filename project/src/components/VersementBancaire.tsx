@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw, CreditCard as Edit, Save, X, MessageSquare, RotateCcw, CalendarClock } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw, CreditCard as Edit, Save, X, MessageSquare, RotateCcw } from 'lucide-react';
 import {
   getRecentSessions,
   getSessionsByDateRange,
@@ -72,9 +72,6 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  const [showTotauxParDate, setShowTotauxParDate] = useState(false);
-  const [totauxDateDebut, setTotauxDateDebut] = useState('');
-  const [totauxDateFin, setTotauxDateFin] = useState('');
 
   useEffect(() => {
     loadSessions();
@@ -480,26 +477,6 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const totalPages = Math.max(1, Math.ceil(filteredSessions.length / itemsPerPage));
   const paginatedSessions = getPaginatedSessions();
 
-  const totauxParDateVersement = useMemo(() => {
-    const groupes: Record<string, { dateVersement: string; banques: Record<string, number>; total: number; nombre: number }> = {};
-    filteredSessions.forEach((session) => {
-      if (!session.date_versement || session.versement <= 0) return;
-      const date = session.date_versement;
-      if (totauxDateDebut && date < totauxDateDebut) return;
-      if (totauxDateFin && date > totauxDateFin) return;
-      if (!groupes[date]) {
-        groupes[date] = { dateVersement: date, banques: {}, total: 0, nombre: 0 };
-      }
-      groupes[date].total += session.versement;
-      groupes[date].nombre += 1;
-      const banque = session.banque || 'Non précisée';
-      groupes[date].banques[banque] = (groupes[date].banques[banque] || 0) + session.versement;
-    });
-    return Object.values(groupes).sort((a, b) => b.dateVersement.localeCompare(a.dateVersement));
-  }, [filteredSessions, totauxDateDebut, totauxDateFin]);
-
-  const totalGeneralVersements = totauxParDateVersement.reduce((sum, g) => sum + g.total, 0);
-
   return (
     <div className="space-y-6">
       {monthlyStats && (
@@ -871,132 +848,6 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
             </button>
           </div>
         </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        <button
-          onClick={() => setShowTotauxParDate(!showTotauxParDate)}
-          className="w-full flex items-center justify-between text-left group"
-        >
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-teal-100 rounded-lg">
-              <CalendarClock className="w-6 h-6 text-teal-600" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-800">Totaux des Versements par Date</h3>
-          </div>
-          <span className={`text-gray-500 text-sm font-medium transition-transform duration-200 ${showTotauxParDate ? 'rotate-180' : ''}`}>
-            ▼
-          </span>
-        </button>
-
-        {showTotauxParDate && (
-          <div className="mt-6">
-            <div className="bg-teal-50 rounded-lg p-4 mb-4 border border-teal-100">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                <div>
-                  <label className="block text-sm font-medium text-teal-700 mb-2">Date de versement - Début</label>
-                  <input
-                    type="date"
-                    value={totauxDateDebut}
-                    onChange={(e) => setTotauxDateDebut(e.target.value)}
-                    className="w-full px-4 py-2 border border-teal-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-teal-700 mb-2">Date de versement - Fin</label>
-                  <input
-                    type="date"
-                    value={totauxDateFin}
-                    onChange={(e) => setTotauxDateFin(e.target.value)}
-                    className="w-full px-4 py-2 border border-teal-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
-                  />
-                </div>
-                <button
-                  onClick={() => { setTotauxDateDebut(''); setTotauxDateFin(''); }}
-                  className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
-                >
-                  Réinitialiser le filtre
-                </button>
-              </div>
-              {(totauxDateDebut || totauxDateFin) && (
-                <p className="text-sm text-teal-600 mt-3">
-                  Période affichée : <span className="font-semibold">{totauxDateDebut || 'Début'}</span> → <span className="font-semibold">{totauxDateFin || 'Fin'}</span>
-                </p>
-              )}
-            </div>
-
-            {totauxParDateVersement.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
-                <CalendarClock className="w-12 h-12 mx-auto mb-3 opacity-40" />
-                <p className="text-sm">Aucun versement sur la période sélectionnée</p>
-              </div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-teal-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-teal-700 uppercase">Date de Versement</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-teal-700 uppercase">Nombre de Sessions</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-teal-700 uppercase">Banques</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-teal-700 uppercase">Total Versement</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {totauxParDateVersement.map((groupe) => (
-                        <tr key={groupe.dateVersement} className="hover:bg-teal-50/50 transition-colors">
-                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {new Date(groupe.dateVersement).toLocaleDateString('fr-FR', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                            {groupe.nombre}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-700">
-                            <div className="flex flex-wrap gap-1">
-                              {Object.entries(groupe.banques).map(([banque, montant]) => (
-                                <span key={banque} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                                  {banque}: {montant.toFixed(2)} DT
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-teal-700 text-right">
-                            {groupe.total.toFixed(3)} DT
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-teal-100">
-                      <tr>
-                        <td className="px-4 py-3 text-sm font-bold text-teal-900" colSpan={3}>Total Général</td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-teal-900 text-right">
-                          {totalGeneralVersements.toFixed(3)} DT
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {['ATTIJARI', 'BIAT', 'Non précisée'].map((banque) => {
-                    const totalBanque = totauxParDateVersement.reduce((sum, g) => sum + (g.banques[banque] || 0), 0);
-                    if (totalBanque === 0) return null;
-                    return (
-                      <div key={banque} className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-lg p-4 border border-teal-200">
-                        <p className="text-xs text-teal-600 font-medium">{banque}</p>
-                        <p className="text-lg font-bold text-teal-800 mt-1">{totalBanque.toFixed(3)} DT</p>
-                      </div>
-                    );
-                  })}
-                  <div className="bg-gradient-to-br from-teal-600 to-teal-700 rounded-lg p-4">
-                    <p className="text-xs text-teal-100 font-medium">Total Général</p>
-                    <p className="text-lg font-bold text-white mt-1">{totalGeneralVersements.toFixed(3)} DT</p>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
       </div>
 
       {showAvisModal && (
