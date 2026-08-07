@@ -73,6 +73,8 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [showTotauxParDate, setShowTotauxParDate] = useState(false);
+  const [totauxDateDebut, setTotauxDateDebut] = useState('');
+  const [totauxDateFin, setTotauxDateFin] = useState('');
 
   useEffect(() => {
     loadSessions();
@@ -483,6 +485,8 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     filteredSessions.forEach((session) => {
       if (!session.date_versement || session.versement <= 0) return;
       const date = session.date_versement;
+      if (totauxDateDebut && date < totauxDateDebut) return;
+      if (totauxDateFin && date > totauxDateFin) return;
       if (!groupes[date]) {
         groupes[date] = { dateVersement: date, banques: {}, total: 0, nombre: 0 };
       }
@@ -492,7 +496,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       groupes[date].banques[banque] = (groupes[date].banques[banque] || 0) + session.versement;
     });
     return Object.values(groupes).sort((a, b) => b.dateVersement.localeCompare(a.dateVersement));
-  }, [filteredSessions]);
+  }, [filteredSessions, totauxDateDebut, totauxDateFin]);
 
   const totalGeneralVersements = totauxParDateVersement.reduce((sum, g) => sum + g.total, 0);
 
@@ -887,11 +891,39 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
 
         {showTotauxParDate && (
           <div className="mt-6">
-            {(dateDebut || dateFin) && (
-              <p className="text-sm text-gray-500 mb-4">
-                Période filtrée : <span className="font-semibold text-gray-700">{dateDebut || 'Début'}</span> → <span className="font-semibold text-gray-700">{dateFin || 'Fin'}</span>
-              </p>
-            )}
+            <div className="bg-teal-50 rounded-lg p-4 mb-4 border border-teal-100">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div>
+                  <label className="block text-sm font-medium text-teal-700 mb-2">Date de versement - Début</label>
+                  <input
+                    type="date"
+                    value={totauxDateDebut}
+                    onChange={(e) => setTotauxDateDebut(e.target.value)}
+                    className="w-full px-4 py-2 border border-teal-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-teal-700 mb-2">Date de versement - Fin</label>
+                  <input
+                    type="date"
+                    value={totauxDateFin}
+                    onChange={(e) => setTotauxDateFin(e.target.value)}
+                    className="w-full px-4 py-2 border border-teal-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
+                  />
+                </div>
+                <button
+                  onClick={() => { setTotauxDateDebut(''); setTotauxDateFin(''); }}
+                  className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
+                >
+                  Réinitialiser le filtre
+                </button>
+              </div>
+              {(totauxDateDebut || totauxDateFin) && (
+                <p className="text-sm text-teal-600 mt-3">
+                  Période affichée : <span className="font-semibold">{totauxDateDebut || 'Début'}</span> → <span className="font-semibold">{totauxDateFin || 'Fin'}</span>
+                </p>
+              )}
+            </div>
 
             {totauxParDateVersement.length === 0 ? (
               <div className="text-center py-8 text-gray-400">
