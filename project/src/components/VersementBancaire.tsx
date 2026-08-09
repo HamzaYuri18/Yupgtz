@@ -477,6 +477,33 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const totalPages = Math.max(1, Math.ceil(filteredSessions.length / itemsPerPage));
   const paginatedSessions = getPaginatedSessions();
 
+  // Agréger les versements par date de versement (sessions versées uniquement)
+  const totauxParDate = (() => {
+    const groupes: Record<string, { date: string; nbSessions: number; totalEspece: number; totalCharges: number; totalVersement: number }> = {};
+    filteredSessions.forEach((session) => {
+      if (!session.date_versement || session.versement <= 0) return;
+      const key = session.date_versement;
+      if (!groupes[key]) {
+        groupes[key] = { date: key, nbSessions: 0, totalEspece: 0, totalCharges: 0, totalVersement: 0 };
+      }
+      groupes[key].nbSessions += 1;
+      groupes[key].totalEspece += session.total_espece || 0;
+      groupes[key].totalCharges += session.charges || 0;
+      groupes[key].totalVersement += session.versement || 0;
+    });
+    return Object.values(groupes).sort((a, b) => a.date.localeCompare(b.date));
+  })();
+
+  const totauxGlobaux = totauxParDate.reduce(
+    (acc, row) => ({
+      nbSessions: acc.nbSessions + row.nbSessions,
+      totalEspece: acc.totalEspece + row.totalEspece,
+      totalCharges: acc.totalCharges + row.totalCharges,
+      totalVersement: acc.totalVersement + row.totalVersement,
+    }),
+    { nbSessions: 0, totalEspece: 0, totalCharges: 0, totalVersement: 0 }
+  );
+
   return (
     <div className="space-y-6">
       {monthlyStats && (
@@ -848,6 +875,55 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-lg p-6 mt-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-bold text-gray-800">Totaux des Versements par Date</h3>
+          <span className="text-sm text-gray-500">
+            {totauxParDate.length} date(s) de versement
+          </span>
+        </div>
+
+        {totauxParDate.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            Aucun versement à afficher pour la période sélectionnée.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date Versement</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nb Sessions</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Espèce</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Charges</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Versement</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {totauxParDate.map((row) => (
+                  <tr key={row.date} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{row.date}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{row.nbSessions}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{row.totalEspece.toFixed(2)} DT</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{row.totalCharges.toFixed(2)} DT</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-green-700">{row.totalVersement.toFixed(2)} DT</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-gray-100">
+                <tr className="font-bold">
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">Total Général</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{totauxGlobaux.nbSessions}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{totauxGlobaux.totalEspece.toFixed(2)} DT</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{totauxGlobaux.totalCharges.toFixed(2)} DT</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-green-700">{totauxGlobaux.totalVersement.toFixed(2)} DT</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </div>
 
       {showAvisModal && (
