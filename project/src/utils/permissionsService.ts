@@ -34,7 +34,7 @@ export const DEFAULT_PERMISSIONS: UserPermissions = {
   encaissement: true,
   reporting: true,
   cheques: false,
-  versement: false,
+  versement: true,
   commissions: false,
   salaires: false,
   attestations: false,
