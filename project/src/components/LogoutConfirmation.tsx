@@ -56,7 +56,7 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
       const dateSession = `${d}/${m}/${y}`; // DD/MM/YYYY comme en base
       const { data, error } = await supabase
         .from('keysconformity')
-        .select('cle')
+        .select('cle, created_at, rapport_modified_at')
         .eq('date_input', dateSession)
         .maybeSingle();
 
@@ -64,6 +64,13 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
 
       if (!data) {
         setCleError('Aucune clé de clôture trouvée pour cette session. Veuillez vérifier la clé de clôture convenablement.');
+        setIsValidatingCle(false);
+        return;
+      }
+
+      // Vérifier si la clé est périmée (rapport modifié après la création de la clé)
+      if (data.rapport_modified_at && data.created_at && new Date(data.rapport_modified_at) > new Date(data.created_at)) {
+        setCleError('Cette clé de clôture est périmée ! Des modifications ont été effectuées sur la session après la génération de la clé. Veuillez demander une nouvelle clé de clôture.');
         setIsValidatingCle(false);
         return;
       }
