@@ -259,24 +259,20 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const handleRetourTechniqueClick = () => {
     if (!isRetourTechniqueMode) {
       setOriginalPremiumAmount(formData.premiumAmount);
-      setIsRetourTechniqueMode(true);
+    }
+    setIsRetourTechniqueMode(!isRetourTechniqueMode);
+    if (isRetourContentieuxMode) {
       setIsRetourContentieuxMode(false);
-    } else {
-      setFormData(prev => ({ ...prev, premiumAmount: '' }));
-      setOriginalPremiumAmount('');
-      setIsRetourTechniqueMode(false);
     }
   };
 
   const handleRetourContentieuxClick = () => {
     if (!isRetourContentieuxMode) {
       setOriginalPremiumAmount(formData.premiumAmount);
-      setIsRetourContentieuxMode(true);
+    }
+    setIsRetourContentieuxMode(!isRetourContentieuxMode);
+    if (isRetourTechniqueMode) {
       setIsRetourTechniqueMode(false);
-    } else {
-      setFormData(prev => ({ ...prev, premiumAmount: '' }));
-      setOriginalPremiumAmount('');
-      setIsRetourContentieuxMode(false);
     }
   };
 
