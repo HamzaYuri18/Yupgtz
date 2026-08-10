@@ -259,20 +259,20 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   const handleRetourTechniqueClick = () => {
     if (!isRetourTechniqueMode) {
       setOriginalPremiumAmount(formData.premiumAmount);
-    }
-    setIsRetourTechniqueMode(!isRetourTechniqueMode);
-    if (isRetourContentieuxMode) {
+      setIsRetourTechniqueMode(true);
       setIsRetourContentieuxMode(false);
+    } else {
+      window.location.reload();
     }
   };
 
   const handleRetourContentieuxClick = () => {
     if (!isRetourContentieuxMode) {
       setOriginalPremiumAmount(formData.premiumAmount);
-    }
-    setIsRetourContentieuxMode(!isRetourContentieuxMode);
-    if (isRetourTechniqueMode) {
+      setIsRetourContentieuxMode(true);
       setIsRetourTechniqueMode(false);
+    } else {
+      window.location.reload();
     }
   };
 
@@ -338,8 +338,11 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
   // Fonction pour déterminer si les champs doivent être verrouillés
   const isFieldLocked = (fieldName: string): boolean => {
     if (formData.type === 'Terme') {
-      // Pour les champs "Nom de l'assuré" et "Montant de la prime", verrouiller sauf en mode retour
-      if (fieldName === 'insuredName' || fieldName === 'premiumAmount') {
+      // En mode Retour Technique/Contentieux, seul le Montant Prime TTC est modifiable
+      if (fieldName === 'insuredName') {
+        return true;
+      }
+      if (fieldName === 'premiumAmount') {
         return !isRetourTechniqueMode && !isRetourContentieuxMode;
       }
     }
@@ -1006,6 +1009,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               <select
                 name="type"
                 value={formData.type}
+                disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                 onChange={(e) => {
                   handleInputChange(e);
                   if (e.target.value === 'Encaissement pour autre code') {
@@ -1058,6 +1062,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="branch"
                 value={formData.branch}
                 onChange={handleInputChange}
+                disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                 className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 required
               >
@@ -1135,6 +1140,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="contractNumber"
                 value={formData.contractNumber}
                 onChange={handleInputChange}
+                disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                 className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
                 placeholder="Entrez le numéro de contrat"
                 required
@@ -1164,6 +1170,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="dateEcheance"
                 value={formData.dateEcheance}
                 onChange={handleInputChange}
+                disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
                 required
               />
@@ -1322,6 +1329,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="telephone"
                 value={formData.telephone}
                 onChange={handleInputChange}
+                disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                 pattern="\+216[0-9]{8}"
                 maxLength={12}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
@@ -1375,6 +1383,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                   name="numeroAttestation"
                   value={formData.numeroAttestation}
                   onChange={handleInputChange}
+                  disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                   className="w-full p-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-green-50"
                   required
                 >
@@ -1391,6 +1400,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                   name="numeroAttestation"
                   value={formData.numeroAttestation}
                   onChange={handleInputChange}
+                  disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
                   placeholder="Ex: 12345"
                   required
@@ -1417,6 +1427,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="paymentMode"
                 value={formData.paymentMode}
                 onChange={handleInputChange}
+                disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                 className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 required
               >
@@ -1434,6 +1445,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="paymentType"
                 value={formData.paymentType}
                 onChange={handleInputChange}
+                disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                 className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 required
               >
@@ -1461,6 +1473,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     name="numeroCheque"
                     value={formData.numeroCheque}
                     onChange={handleInputChange}
+                    disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                     className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
                     placeholder="Numéro du chèque"
                   />
@@ -1475,6 +1488,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     name="banque"
                     value={formData.banque}
                     onChange={handleInputChange}
+                    disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                     className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
                     placeholder="Nom de la banque"
                   />
@@ -1490,6 +1504,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     name="dateEncaissementPrevue"
                     value={formData.dateEncaissementPrevue}
                     onChange={handleInputChange}
+                    disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                     min={new Date().toISOString().split('T')[0]}
                     max={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                     className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
@@ -1521,6 +1536,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     name="creditAmount"
                     value={formData.creditAmount}
                     onChange={handleInputChange}
+                    disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                     step="0.01"
                     min="0"
                     max={formData.premiumAmount || undefined}
@@ -1540,6 +1556,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     name="paymentDate"
                     value={formData.paymentDate}
                     onChange={handleInputChange}
+                    disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                     min={new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                     className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 bg-white"
                     required={isHamza}
@@ -1588,6 +1605,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="customCreatedAt"
                 value={formData.customCreatedAt}
                 onChange={handleInputChange}
+                disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                 className="w-full p-3 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 bg-white"
               />
               <p className="text-xs text-purple-600 mt-1">
