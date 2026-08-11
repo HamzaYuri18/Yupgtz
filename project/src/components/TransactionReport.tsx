@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, Download, TrendingUp, DollarSign, FileText, CreditCard, Trash2, X, Search, ChevronRight, BarChart2, Filter, Receipt, AlertCircle, ArrowDownCircle, RefreshCw, Tag } from 'lucide-react';
+import { Calendar, Download, TrendingUp, DollarSign, FileText, CreditCard, Trash2, X, Search, ChevronRight, BarChart2, Filter, Receipt, AlertCircle, ArrowDownCircle, RefreshCw, Tag, User, Hash } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getSession, getSessionDate } from '../utils/auth';
 import * as XLSX from 'xlsx';
@@ -216,6 +216,13 @@ const TransactionReport: React.FC = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [pendingDeleteTransaction, setPendingDeleteTransaction] = useState<Transaction | null>(null);
 
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchType, setSearchType] = useState<'contrat' | 'assure'>('contrat');
+  const [searchResults, setSearchResults] = useState<Transaction[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+
   const hasAutoLoaded = useRef(false);
 
   useEffect(() => {
@@ -373,6 +380,62 @@ const TransactionReport: React.FC = () => {
     return stats;
   };
 
+  const enrichTransactions = async (data: any[]): Promise<Transaction[]> => {
+    return Promise.all(data.map(async (transaction) => {
+      if (transaction.type === 'Terme' && transaction.numero_contrat && transaction.echeance) {
+        try {
+          const echeanceDate = new Date(transaction.echeance);
+          const echeanceISO = echeanceDate.toISOString().split('T')[0];
+          const { data: termeData } = await supabase
+            .from('terme')
+            .select('"Retour", "Prime avant retour", "Numero Attestation"')
+            .eq('numero_contrat', transaction.numero_contrat)
+            .eq('echeance', echeanceISO)
+            .maybeSingle();
+          if (termeData) return { ...transaction, retour_type: termeData.Retour || null, prime_avant_retour: termeData['Prime avant retour'] || null, numero_attestation: termeData['Numero Attestation'] || null };
+        } catch {}
+      }
+      if (transaction.type === 'Affaire' && transaction.numero_contrat) {
+        try {
+          const createdDate = new Date(transaction.created_at);
+          const createdISO = createdDate.toISOString().split('T')[0];
+          const { data: affaireData } = await supabase
+            .from('affaire')
+            .select('"Numero Attestation"')
+            .eq('numero_contrat', transaction.numero_contrat)
+            .gte('created_at', `${createdISO}T00:00:00`)
+            .lt('created_at', `${createdISO}T23:59:59`)
+            .maybeSingle();
+          if (affaireData) return { ...transaction, numero_attestation: affaireData['Numero Attestation'] || null };
+        } catch {}
+      }
+      return transaction;
+    }));
+  };
+
+  const handleTransactionSearch = async () => {
+    const term = searchTerm.trim();
+    if (!term) { setSearchError('Veuillez saisir un terme de recherche'); return; }
+    setSearching(true);
+    setSearchError('');
+    try {
+      const query = supabase.from('rapport').select('*').order('created_at', { ascending: false }).limit(10000);
+      if (searchType === 'contrat') {
+        query.ilike('numero_contrat', `%${term}%`);
+      } else {
+        query.ilike('assure', `%${term}%`);
+      }
+      const { data, error: fetchError } = await query;
+      if (fetchError) throw fetchError;
+      const enriched = await enrichTransactions(data || []);
+      setSearchResults(enriched);
+    } catch (err) {
+      setSearchError(`Erreur lors de la recherche: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSearching(false);
+    }
+  };
+
   const handleSearch = async () => {
     if (!dateFrom || !dateTo) { setError('Veuillez saisir les dates de début et de fin'); return; }
     if (new Date(dateFrom) > new Date(dateTo)) { setError('La date de début doit être antérieure à la date de fin'); return; }
@@ -391,40 +454,7 @@ const TransactionReport: React.FC = () => {
 
       if (fetchError) throw fetchError;
 
-      const filteredData = data || [];
-
-      const enrichedData = await Promise.all(
-        filteredData.map(async (transaction) => {
-          if (transaction.type === 'Terme' && transaction.numero_contrat && transaction.echeance) {
-            try {
-              const echeanceDate = new Date(transaction.echeance);
-              const echeanceISO = echeanceDate.toISOString().split('T')[0];
-              const { data: termeData } = await supabase
-                .from('terme')
-                .select('"Retour", "Prime avant retour", "Numero Attestation"')
-                .eq('numero_contrat', transaction.numero_contrat)
-                .eq('echeance', echeanceISO)
-                .maybeSingle();
-              if (termeData) return { ...transaction, retour_type: termeData.Retour || null, prime_avant_retour: termeData['Prime avant retour'] || null, numero_attestation: termeData['Numero Attestation'] || null };
-            } catch {}
-          }
-          if (transaction.type === 'Affaire' && transaction.numero_contrat) {
-            try {
-              const createdDate = new Date(transaction.created_at);
-              const createdISO = createdDate.toISOString().split('T')[0];
-              const { data: affaireData } = await supabase
-                .from('affaire')
-                .select('"Numero Attestation"')
-                .eq('numero_contrat', transaction.numero_contrat)
-                .gte('created_at', `${createdISO}T00:00:00`)
-                .lt('created_at', `${createdISO}T23:59:59`)
-                .maybeSingle();
-              if (affaireData) return { ...transaction, numero_attestation: affaireData['Numero Attestation'] || null };
-            } catch {}
-          }
-          return transaction;
-        })
-      );
+      const enrichedData = await enrichTransactions(data || []);
 
       setTransactions(enrichedData);
       setStatistics(calculateStatistics(enrichedData));
@@ -752,6 +782,13 @@ const TransactionReport: React.FC = () => {
               Exporter tout
             </button>
           )}
+          <button
+            onClick={() => { setSearchModalOpen(true); setSearchResults([]); setSearchTerm(''); setSearchError(''); }}
+            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium text-sm transition-all shadow-sm"
+          >
+            <Search className="w-4 h-4" />
+            Rechercher Transaction
+          </button>
         </div>
 
         {error && (
@@ -1001,6 +1038,171 @@ const TransactionReport: React.FC = () => {
         formatCurrency={formatCurrency}
         accentColor={detailModal.accentColor}
       />
+
+      {/* Modal de recherche de transaction */}
+      {searchModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSearchModalOpen(false)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div
+            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="bg-indigo-600 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                  <Search className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Rechercher Transaction</h3>
+                  <p className="text-sm text-white/80">Recherche par numéro de contrat ou nom de l'assuré</p>
+                </div>
+              </div>
+              <button onClick={() => setSearchModalOpen(false)} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-6 py-4 border-b border-gray-100">
+              <div className="flex flex-col sm:flex-row gap-3 items-end">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSearchType('contrat')}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                      searchType === 'contrat' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Hash className="w-4 h-4" />
+                    N° Contrat
+                  </button>
+                  <button
+                    onClick={() => setSearchType('assure')}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                      searchType === 'assure' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <User className="w-4 h-4" />
+                    Nom Assuré
+                  </button>
+                </div>
+                <div className="flex-1 w-full">
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleTransactionSearch(); }}
+                    placeholder={searchType === 'contrat' ? 'Entrez un numéro de contrat...' : 'Entrez un nom d\'assuré...'}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm transition-all"
+                    autoFocus
+                  />
+                </div>
+                <button
+                  onClick={handleTransactionSearch}
+                  disabled={searching}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white rounded-xl font-medium text-sm transition-all shadow-sm"
+                >
+                  {searching ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Search className="w-4 h-4" />
+                  )}
+                  {searching ? 'Recherche...' : 'Chercher'}
+                </button>
+                {searchResults.length > 0 && (
+                  <button
+                    onClick={() => exportTransactions(searchResults, 'recherche_transaction')}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium text-sm transition-all shadow-sm"
+                  >
+                    <Download className="w-4 h-4" />
+                    Exporter
+                  </button>
+                )}
+              </div>
+              {searchError && (
+                <div className="mt-3 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  {searchError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-auto">
+              {searchResults.length === 0 && !searching ? (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                  <Search className="w-12 h-12 mb-3 opacity-40" />
+                  <p className="text-sm">Saisissez un terme et cliquez sur « Chercher »</p>
+                </div>
+              ) : searching ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="w-8 h-8 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Branche</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">N° Contrat</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Assuré</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Prime</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Montant</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Mode</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Créé par</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {searchResults.map(t => (
+                      <tr key={t.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1">
+                            <span className={`px-2 py-0.5 rounded-md text-xs font-medium border ${TYPE_COLORS[t.type] || 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+                              {t.type}
+                            </span>
+                            {t.retour_type && (
+                              <span className={`px-2 py-0.5 rounded-md text-xs font-bold border ${
+                                t.retour_type === 'Technique' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-orange-100 text-orange-700 border-orange-200'
+                              }`}>
+                                {t.retour_type === 'Technique' ? 'RT' : 'RCX'}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">{t.branche}</td>
+                        <td className="px-4 py-3 font-medium text-gray-800">{t.numero_contrat}</td>
+                        <td className="px-4 py-3 text-gray-600 max-w-[140px] truncate">{t.assure}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-gray-800">{formatCurrency(t.prime)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-emerald-600">{formatCurrency(t.montant)}</td>
+                        <td className="px-4 py-3 text-gray-600">{t.mode_paiement}</td>
+                        <td className="px-4 py-3 text-gray-600">{t.cree_par}</td>
+                        <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{new Date(t.created_at).toLocaleDateString('fr-FR')}</td>
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            onClick={() => { setSearchModalOpen(false); initiateDelete(t); }}
+                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Supprimer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {searchResults.length > 0 && (
+              <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between text-sm">
+                <span className="text-gray-500">{searchResults.length} résultat{searchResults.length > 1 ? 's' : ''} trouvé{searchResults.length > 1 ? 's' : ''}</span>
+                <span className="font-semibold text-gray-700">
+                  Total Primes: {formatCurrency(searchResults.reduce((s, t) => s + (t.prime || 0), 0))}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <DeleteMotifModal
         isOpen={deleteModalOpen}
