@@ -413,21 +413,57 @@ const TransactionReport: React.FC = () => {
     }));
   };
 
+  const normalizeSearchText = (value: string): string =>
+    value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+  const levenshteinDistance = (first: string, second: string): number => {
+    const previousRow = Array.from({ length: second.length + 1 }, (_, index) => index);
+
+    for (let rowIndex = 1; rowIndex <= first.length; rowIndex += 1) {
+      let previousDiagonal = previousRow[0];
+      previousRow[0] = rowIndex;
+
+      for (let columnIndex = 1; columnIndex <= second.length; columnIndex += 1) {
+        const currentValue = previousRow[columnIndex];
+        previousRow[columnIndex] = first[rowIndex - 1] === second[columnIndex - 1]
+          ? previousDiagonal
+          : Math.min(previousRow[columnIndex - 1] + 1, currentValue + 1, previousDiagonal + 1);
+        previousDiagonal = currentValue;
+      }
+    }
+
+    return previousRow[second.length];
+  };
+
+  const matchesInsuredName = (insuredName: string | null | undefined, enteredName: string): boolean => {
+    if (!insuredName) return false;
+
+    const normalizedName = normalizeSearchText(insuredName);
+    const normalizedTerm = normalizeSearchText(enteredName);
+    if (!normalizedTerm) return false;
+    if (normalizedName.includes(normalizedTerm)) return true;
+
+    return normalizedName
+      .split(/\s+/)
+      .some((namePart: string) => levenshteinDistance(namePart, normalizedTerm) <= 2);
+  };
+
   const handleTransactionSearch = async () => {
     const term = searchTerm.trim();
     if (!term) { setSearchError('Veuillez saisir un terme de recherche'); return; }
     setSearching(true);
     setSearchError('');
     try {
-      const query = supabase.from('rapport').select('*').order('created_at', { ascending: false }).limit(10000);
-      if (searchType === 'contrat') {
-        query.ilike('numero_contrat', `%${term}%`);
-      } else {
-        query.ilike('assure', `%${term}%`);
-      }
+      const query = searchType === 'contrat'
+        ? supabase.from('rapport').select('*').ilike('numero_contrat', `%${term}%`).order('created_at', { ascending: false }).limit(10000)
+        : supabase.from('rapport').select('*').not('assure', 'is', null).order('created_at', { ascending: false }).limit(10000);
       const { data, error: fetchError } = await query;
       if (fetchError) throw fetchError;
-      const enriched = await enrichTransactions(data || []);
+
+      const filteredData = searchType === 'assure'
+        ? (data || []).filter((transaction: { assure?: string | null }) => matchesInsuredName(transaction.assure, term))
+        : data || [];
+      const enriched = await enrichTransactions(filteredData);
       setSearchResults(enriched);
     } catch (err) {
       setSearchError(`Erreur lors de la recherche: ${err instanceof Error ? err.message : String(err)}`);
