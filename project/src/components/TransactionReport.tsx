@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, Download, TrendingUp, DollarSign, FileText, CreditCard, Trash2, X, Search, ChevronRight, BarChart2, Filter, Receipt, AlertCircle, ArrowDownCircle, RefreshCw, Tag, User, Hash } from 'lucide-react';
+import { Calendar, Download, TrendingUp, DollarSign, FileText, CreditCard, X, Search, ChevronRight, BarChart2, Filter, Receipt, AlertCircle, ArrowDownCircle, RefreshCw, Tag, User, Hash } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getSession, getSessionDate } from '../utils/auth';
 import * as XLSX from 'xlsx';
@@ -63,7 +63,6 @@ interface DetailModalProps {
   title: string;
   subtitle?: string;
   transactions: Transaction[];
-  onDelete: (t: Transaction) => void;
   onExport: (transactions: Transaction[], label: string) => void;
   formatCurrency: (n: number) => string;
   accentColor: string;
@@ -83,7 +82,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 const DetailModal: React.FC<DetailModalProps> = ({
-  isOpen, onClose, title, subtitle, transactions, onDelete, onExport, formatCurrency, accentColor
+  isOpen, onClose, title, subtitle, transactions, onExport, formatCurrency, accentColor
 }) => {
   if (!isOpen) return null;
 
@@ -155,7 +154,6 @@ const DetailModal: React.FC<DetailModalProps> = ({
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Mode</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Créé par</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -184,15 +182,6 @@ const DetailModal: React.FC<DetailModalProps> = ({
                     <td className="px-4 py-3 text-gray-600">{t.cree_par}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
                       {new Date(t.created_at).toLocaleDateString('fr-FR')}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => { onClose(); onDelete(t); }}
-                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Supprimer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
                     </td>
                   </tr>
                 ))}
@@ -1036,15 +1025,6 @@ const TransactionReport: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-gray-600">{transaction.cree_par}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{new Date(transaction.created_at).toLocaleDateString('fr-FR')}</td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => initiateDelete(transaction)}
-                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Supprimer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1069,7 +1049,6 @@ const TransactionReport: React.FC = () => {
         title={detailModal.title}
         subtitle={detailModal.subtitle}
         transactions={detailModal.transactions}
-        onDelete={initiateDelete}
         onExport={exportTransactions}
         formatCurrency={formatCurrency}
         accentColor={detailModal.accentColor}
@@ -1184,7 +1163,6 @@ const TransactionReport: React.FC = () => {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Mode</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Créé par</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -1212,15 +1190,6 @@ const TransactionReport: React.FC = () => {
                         <td className="px-4 py-3 text-gray-600">{t.mode_paiement}</td>
                         <td className="px-4 py-3 text-gray-600">{t.cree_par}</td>
                         <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{new Date(t.created_at).toLocaleDateString('fr-FR')}</td>
-                        <td className="px-4 py-3 text-center">
-                          <button
-                            onClick={() => { setSearchModalOpen(false); initiateDelete(t); }}
-                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Supprimer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </td>
                       </tr>
                     ))}
                   </tbody>
