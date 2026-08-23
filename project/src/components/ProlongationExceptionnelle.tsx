@@ -299,7 +299,7 @@ const ProlongationExceptionnelle: React.FC = () => {
             <Shield className="w-7 h-7 text-violet-300" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">Prolongation Exceptionnelle</h1>
+            <h1 className="text-2xl font-bold">Prolongation</h1>
             <p className="text-slate-400 text-sm mt-0.5">Demande de prolongation de couverture — max. 49 jours</p>
           </div>
         </div>
