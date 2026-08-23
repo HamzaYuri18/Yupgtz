@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Search, AlertTriangle, CheckCircle, Download, FileText, Car, MapPin, Calendar, RotateCcw, Shield } from 'lucide-react';
+import { Search, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, Download, FileText, Car, MapPin, Calendar, RotateCcw, Shield } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 // Noms des mois sans accents pour les noms de tables
 const MOIS_TABLE: Record<number, string> = {
@@ -50,6 +49,7 @@ const daysDiff = (isoA: string, isoB: string): number => {
 // ── Génération PDF — reproduit fidèlement la mise en page du template ──────────
 
 const generateProlongationPDF = async (f: ProlongForm): Promise<void> => {
+  const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
   const response = await fetch('/forms/Mliki_Amel.pdf');
   if (!response.ok) throw new Error('Le modèle PDF est introuvable.');
 
@@ -166,6 +166,7 @@ const ProlongationExceptionnelle: React.FC = () => {
   const [form, setForm]           = useState<ProlongForm | null>(null);
   const [sending, setSending]     = useState(false);
   const [finErr, setFinErr]       = useState<string | null>(null);
+  const [pdfError, setPdfError]   = useState<string | null>(null);
 
   // ── Step 1 : Recherche ──────────────────────────────────────────────────────
 
@@ -278,6 +279,17 @@ const ProlongationExceptionnelle: React.FC = () => {
 
   const upd = (field: keyof ProlongForm, val: string) =>
     setForm(f => f ? { ...f, [field]: val } : f);
+
+  const handleDownloadPDF = async (): Promise<void> => {
+    if (!form) return;
+    setPdfError(null);
+    try {
+      await generateProlongationPDF(form);
+    } catch (err) {
+      console.error('Erreur lors du téléchargement du PDF:', err);
+      setPdfError('Le document PDF n’a pas pu être téléchargé. Veuillez réessayer.');
+    }
+  };
 
   const reset = () => {
     setStep('search');
@@ -570,12 +582,13 @@ const ProlongationExceptionnelle: React.FC = () => {
 
           <div className="flex gap-3 justify-center">
             <button
-              onClick={() => generateProlongationPDF(form)}
+              onClick={handleDownloadPDF}
               className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold px-8 py-3 rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg"
             >
               <Download className="w-4 h-4" />
               Télécharger le document PDF
             </button>
+            {pdfError && <p className="text-sm text-red-600" role="alert">{pdfError}</p>}
             <button
               onClick={reset}
               className="flex items-center gap-2 px-5 py-3 rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-50 transition-all font-medium"
