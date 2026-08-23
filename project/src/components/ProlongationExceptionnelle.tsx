@@ -1,11 +1,7 @@
 import React, { useState } from 'react';
-import {
-  Search, AlertTriangle, CheckCircle, Download,
-  FileText, Car, MapPin, Calendar,
-  RotateCcw, Shield
-} from 'lucide-react';
+import { Search, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, Download, FileText, Car, MapPin, Calendar, RotateCcw, Shield } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import jsPDF from 'jspdf';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 // Noms des mois sans accents pour les noms de tables
 const MOIS_TABLE: Record<number, string> = {
@@ -53,104 +49,83 @@ const daysDiff = (isoA: string, isoB: string): number => {
 
 // ── Génération PDF — reproduit fidèlement la mise en page du template ──────────
 
-const generateProlongationPDF = (f: ProlongForm) => {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+const generateProlongationPDF = async (f: ProlongForm): Promise<void> => {
+  const response = await fetch('/forms/Mliki_Amel.pdf');
+  if (!response.ok) throw new Error('Le modèle PDF est introuvable.');
+
+  const pdf = await PDFDocument.load(await response.arrayBuffer());
+  const page = pdf.getPages()[0];
+  const font = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const white = rgb(1, 1, 1);
+  const black = rgb(0, 0, 0);
+  const scale = 72 / 25.4;
+  const pageHeight = page.getHeight();
   const now = new Date();
   const dateStr = now.toLocaleDateString('fr-FR');
   const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
-  // Helpers : label (normal) et valeur (bold) à la position exacte
-  const L = (text: string, x: number, y: number, sz = 8) => {
-    doc.setFontSize(sz); doc.setFont('helvetica', 'normal'); doc.text(text, x, y);
+  const point = (mm: number): number => mm * scale;
+  const y = (mm: number, size: number): number => pageHeight - point(mm) - size;
+  const clear = (x: number, top: number, width: number, height: number): void => {
+    page.drawRectangle({ x: point(x), y: pageHeight - point(top + height), width: point(width), height: point(height), color: white });
   };
-  const V = (text: string, x: number, y: number, sz = 8) => {
-    doc.setFontSize(sz); doc.setFont('helvetica', 'bold'); doc.text(text || '', x, y);
+  const value = (text: string, x: number, top: number, size = 8): void => {
+    page.drawText(text || '', { x: point(x), y: y(top, size), size, font, color: black });
   };
+  const clearValue = (x: number, top: number, width: number, height = 7): void => clear(x, top - 1, width, height);
 
-  doc.setTextColor(0, 0, 0);
+  clearValue(57, 19, 55); clearValue(68, 26, 25); clearValue(62, 33, 35); clearValue(62, 40, 38);
+  clearValue(25, 58, 75); clearValue(52, 65, 80);
+  clearValue(145, 11, 50); clearValue(148, 25, 30); clearValue(157, 39, 45); clearValue(142, 50, 60); clearValue(138, 61, 35); clearValue(138, 67, 35);
+  clearValue(122, 93, 55); clearValue(111, 105, 35); clearValue(111, 115, 38);
+  clearValue(26, 135, 75); clearValue(52, 146, 80); clearValue(28, 161, 78, 20);
+  clearValue(58, 188, 35); clearValue(58, 194, 35);
+  clearValue(150, 114, 45); clearValue(156, 135, 30); clearValue(165, 148, 45); clearValue(149, 161, 60);
+  clearValue(125, 238, 60, 12); clearValue(130, 261, 65, 14);
 
-  // ══════════════════════════════════════════════════════
-  //  COUPON 1  (calqué sur la moitié haute du template)
-  // ══════════════════════════════════════════════════════
+  value(f.numero_contrat, 57, 19);
+  value(f.classe, 68, 26);
+  value(formatDateFR(f.date_effet), 62, 33);
+  value(formatDateFR(f.date_fin_prolongation), 62, 40);
+  value(f.assure, 25, 58);
+  value(f.pour_le_compte, 52, 65);
+  value(f.marque, 145, 11);
+  value(f.puissance, 148, 25);
+  value(f.immatriculation, 157, 39);
+  value(f.usage, 142, 50);
+  value(dateStr, 138, 61);
+  value(timeStr, 138, 67);
 
-  doc.setDrawColor(160); doc.setLineWidth(0.3);
-  doc.line(10, 8, 200, 8);          // trait supérieur
+  value(f.numero_contrat, 122, 93);
+  value(formatDateFR(f.date_effet), 111, 105);
+  value(formatDateFR(f.date_fin_prolongation), 111, 115);
+  value(f.assure, 26, 135);
+  value(f.pour_le_compte, 52, 146);
+  const addressLines = f.adresse.trim().split(/\\s+/).reduce<string[]>((lines, word) => {
+    const current = lines[lines.length - 1] || '';
+    if ((current + ' ' + word).trim().length > 26) lines.push(word);
+    else if (lines.length === 0) lines.push(word);
+    else lines[lines.length - 1] = `${current} ${word}`.trim();
+    return lines;
+  }, []);
+  addressLines.slice(0, 4).forEach((line, index) => value(line, 28, 161 + index * 6, 7));
+  value(dateStr, 58, 188);
+  value(timeStr, 58, 194);
+  value(f.marque, 150, 114);
+  value(f.puissance, 156, 135);
+  value(f.immatriculation, 165, 148);
+  value(f.usage, 149, 161);
+  value(formatDateFR(f.date_fin_prolongation), 125, 238, 13);
+  value(f.immatriculation, 130, 261, 15);
 
-  // Code compagnie 503 (centre-gauche)
-  L('503', 63, 16, 9);
-
-  // ── Bloc centre-gauche : infos contrat ──────────────
-  L('Numero Contrat', 45, 23);   V(f.numero_contrat,    83, 23);
-  L('Classe',         57, 30);   V(f.classe,            74, 30);
-  L('Date effet',     45, 37);   V(formatDateFR(f.date_effet), 68, 37);
-  // "Date  fin" sur une ligne, "prolongation" sur la suivante
-  L('Date',           45, 44);
-  L('fin',            56, 44);   V(formatDateFR(f.date_fin_prolongation), 67, 44);
-  L('prolongation',   45, 50);
-
-  // ── Bloc bas-gauche : assuré ─────────────────────────
-  L('Assuré',               10, 63);   V(f.assure,                  27, 63);
-  L('Pour le compte de :',  10, 70);   V(f.pour_le_compte || '',    56, 70);
-
-  // ── Bloc droite : infos véhicule ────────────────────
-  L('Marque',          133, 16);   V(f.marque,          152, 16);
-  L('Puissance',       133, 30);   V(f.puissance,       154, 30);
-  L('Immatriculation', 133, 44);   V(f.immatriculation, 163, 44);
-  L('Usage',           133, 55);   V(f.usage,           146, 55);
-  L('Date',            133, 66);   V(dateStr,           141, 66);
-  L('Time',            133, 72);   V(timeStr,           141, 72);
-
-  // Trait de séparation entre les deux coupons
-  doc.setDrawColor(160); doc.setLineWidth(0.3);
-  doc.line(10, 85, 200, 85);
-
-  // ══════════════════════════════════════════════════════
-  //  COUPON 2  (calqué sur la moitié basse du template)
-  // ══════════════════════════════════════════════════════
-
-  // 503 (à gauche, comme dans le template)
-  L('503', 50, 97, 9);
-
-  // ── Bloc centre : infos contrat ─────────────────────
-  L('Numero Contrat', 95, 97);    V(f.numero_contrat,    128, 97);
-  L('ate effet',      95, 109);   V(formatDateFR(f.date_effet), 116, 109);
-  L('Date',           95, 119);
-  L('fin',           105, 119);   V(formatDateFR(f.date_fin_prolongation), 116, 119);
-  L('prolongation',   95, 125);
-
-  // ── Bloc gauche : assuré / adresse ──────────────────
-  L('Assuré',              10, 140);   V(f.assure,                  28, 140);
-  L('Pour le compte de :', 10, 151);   V(f.pour_le_compte || '',    56, 151);
-  L('Assuré',             100, 151);   // "Assuré" répété comme dans le template
-  L('Addresse',            10, 166);   V(f.adresse || '',           32, 166);
-
-  // Date / Time (bas du coupon 2, centre-gauche)
-  L('Date', 50, 192);   V(dateStr, 62, 192);
-  L('Time', 50, 198);   V(timeStr, 62, 198);
-
-  // ── Bloc droite coupon 2 : véhicule ─────────────────
-  L('Marque',          141, 119);   V(f.marque,          157, 119);
-  L('Puissance',       141, 140);   V(f.puissance,       161, 140);
-  L('Immatriculation', 141, 153);   V(f.immatriculation, 169, 153);
-  L('Usage',           141, 166);   V(f.usage,           153, 166);
-
-  // Trait de séparation après coupon 2
-  doc.setDrawColor(160); doc.setLineWidth(0.3);
-  doc.line(10, 212, 200, 212);
-
-  // ══════════════════════════════════════════════════════
-  //  SECTION BAS — grande étiquette détachable
-  // ══════════════════════════════════════════════════════
-
-  // "Date fin prolongation" + valeur  (grande police, centrés)
-  L('Date fin prolongation', 68, 245, 13);
-  V(formatDateFR(f.date_fin_prolongation), 152, 245, 13);
-
-  // "Immatricullation" + valeur  (encore plus grande)
-  L('Immatricullation', 68, 268, 15);
-  V(f.immatriculation,  136, 268, 15);
-
-  doc.save(`prolongation_${f.numero_contrat.replace(/\//g, '-')}.pdf`);
+  const bytes = await pdf.save();
+  const blob = new Blob([bytes], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `prolongation_${f.numero_contrat.replace(/\\//g, '-')}.pdf`;
+  link.click();
+  URL.revokeObjectURL(url);
 };
 
 
