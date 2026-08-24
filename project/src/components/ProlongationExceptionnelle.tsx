@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, Download, FileText, Car, MapPin, Calendar, RotateCcw, Shield } from 'lucide-react';
+import { Search, AlertTriangle, CheckCircle, Download, FileText, Car, MapPin, Calendar, RotateCcw, Shield } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 // Noms des mois sans accents pour les noms de tables
