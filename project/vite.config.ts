@@ -6,6 +6,15 @@ export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
     exclude: ['lucide-react'],
-    include: ['jspdf'],
+    include: ['jspdf', 'pdf-lib'],
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'pdf-lib': ['pdf-lib'],
+        },
+      },
+    },
   },
 });
