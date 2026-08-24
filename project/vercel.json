@@ -1,5 +1,20 @@
 {
   "buildCommand": "npm install && npm run build",
   "outputDirectory": "dist",
-  "installCommand": "echo skip"
+  "installCommand": "echo skip",
+  "headers": [
+    {
+      "source": "/forms/(.*).pdf",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/pdf"
+        },
+        {
+          "key": "Content-Disposition",
+          "value": "inline"
+        }
+      ]
+    }
+  ]
 }

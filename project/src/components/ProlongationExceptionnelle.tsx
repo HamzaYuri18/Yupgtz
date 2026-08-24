@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Search, AlertTriangle, CheckCircle, Download, FileText, Car, MapPin, Calendar, RotateCcw, Shield } from 'lucide-react';
+import { Search, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle, Download, FileText, Car, MapPin, Calendar, RotateCcw, Shield } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 // Noms des mois sans accents pour les noms de tables
 const MOIS_TABLE: Record<number, string> = {
@@ -49,7 +50,6 @@ const daysDiff = (isoA: string, isoB: string): number => {
 // ── Génération PDF — reproduit fidèlement la mise en page du template ──────────
 
 const generateProlongationPDF = async (f: ProlongForm): Promise<void> => {
-  const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
   const response = await fetch('/forms/Mliki_Amel.pdf');
   if (!response.ok) throw new Error('Le modèle PDF est introuvable.');
 

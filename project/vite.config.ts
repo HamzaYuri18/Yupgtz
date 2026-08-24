@@ -9,6 +9,7 @@ export default defineConfig({
     include: ['jspdf', 'pdf-lib'],
   },
   build: {
+    minify: false,
     rollupOptions: {
       output: {
         manualChunks: {
