@@ -78,6 +78,8 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [versementDateFin, setVersementDateFin] = useState('');
   const [versementsParDate, setVersementsParDate] = useState<SessionData[]>([]);
   const [loadingVersements, setLoadingVersements] = useState(false);
+  const [versementPage, setVersementPage] = useState(1);
+  const versementsPerPage = 15;
 
   useEffect(() => {
     loadSessions();
@@ -429,12 +431,14 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   };
 
   const handleFilterVersements = () => {
+    setVersementPage(1);
     loadVersementsParDate();
   };
 
   const handleResetFilterVersements = () => {
     setVersementDateDebut('');
     setVersementDateFin('');
+    setVersementPage(1);
     setVersementsParDate([]);
     setTimeout(() => loadVersementsParDate(), 0);
   };
@@ -450,6 +454,13 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     acc[key] = (acc[key] || 0) + (s.versement || 0);
     return acc;
   }, {});
+
+  // Pagination des versements par date
+  const totalVersementPages = Math.max(1, Math.ceil(versementsParDate.length / versementsPerPage));
+  const paginatedVersements = versementsParDate.slice(
+    (versementPage - 1) * versementsPerPage,
+    versementPage * versementsPerPage
+  );
 
   const handleSaveVersement = async () => {
     if (!formData.versement || !formData.dateVersement || !formData.dateSession) {
@@ -1001,7 +1012,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {versementsParDate.map((session) => {
+                {paginatedVersements.map((session) => {
                   const solde = calculateSolde(session);
                   return (
                     <tr key={session.id} className="hover:bg-indigo-50/30 transition-colors duration-150">
@@ -1043,6 +1054,34 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
             </table>
           )}
         </div>
+
+        {/* Pagination des versements par date */}
+        {!loadingVersements && versementsParDate.length > versementsPerPage && (
+          <div className="flex items-center justify-between mt-6 px-4">
+            <div className="text-sm text-gray-600">
+              Affichage {(versementPage - 1) * versementsPerPage + 1} à {Math.min(versementPage * versementsPerPage, versementsParDate.length)} sur {versementsParDate.length} versements
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setVersementPage(prev => Math.max(1, prev - 1))}
+                disabled={versementPage === 1}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white font-semibold rounded-lg transition-colors duration-200"
+              >
+                ← Précédent
+              </button>
+              <span className="px-3 py-2 bg-gray-100 rounded-lg text-sm font-semibold text-gray-700">
+                Page {versementPage} / {totalVersementPages}
+              </span>
+              <button
+                onClick={() => setVersementPage(prev => Math.min(totalVersementPages, prev + 1))}
+                disabled={versementPage === totalVersementPages}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white font-semibold rounded-lg transition-colors duration-200"
+              >
+                Suivant →
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Récapitulatif par date de versement */}
         {!loadingVersements && versementsParDate.length > 0 && (
