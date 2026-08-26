@@ -73,10 +73,17 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // État pour la sous-rubrique « Versements par date »
+  const [versementDateDebut, setVersementDateDebut] = useState('');
+  const [versementDateFin, setVersementDateFin] = useState('');
+  const [versementsParDate, setVersementsParDate] = useState<SessionData[]>([]);
+  const [loadingVersements, setLoadingVersements] = useState(false);
+
   useEffect(() => {
     loadSessions();
     loadMonthlyStats();
     calculateTotalAVerserAujourdhui();
+    loadVersementsParDate();
   }, [selectedMonth, selectedYear]);
 
   useEffect(() => {
@@ -387,6 +394,62 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     setFilteredSessions(sessions);
     setCurrentPage(1);
   };
+
+  // ── Versements par date : chargement et filtres ───────────────────────────────
+  const loadVersementsParDate = async () => {
+    setLoadingVersements(true);
+    try {
+      let query = supabase
+        .from('sessions')
+        .select('*')
+        .gt('versement', 0)
+        .not('date_versement', 'is', null)
+        .order('date_versement', { ascending: false });
+
+      if (versementDateDebut) {
+        query = query.gte('date_versement', versementDateDebut);
+      }
+      if (versementDateFin) {
+        query = query.lte('date_versement', versementDateFin);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('❌ Erreur chargement versements par date:', error);
+        setVersementsParDate([]);
+      } else {
+        setVersementsParDate(data || []);
+      }
+    } catch (err) {
+      console.error('❌ Erreur chargement versements par date:', err);
+      setVersementsParDate([]);
+    } finally {
+      setLoadingVersements(false);
+    }
+  };
+
+  const handleFilterVersements = () => {
+    loadVersementsParDate();
+  };
+
+  const handleResetFilterVersements = () => {
+    setVersementDateDebut('');
+    setVersementDateFin('');
+    setVersementsParDate([]);
+    setTimeout(() => loadVersementsParDate(), 0);
+  };
+
+  // Total des versements affichés (par date de versement)
+  const totalVersementsAffiches = versementsParDate.reduce(
+    (sum, s) => sum + (s.versement || 0),
+    0
+  );
+  // Regroupement par date_versement pour les totaux journaliers
+  const versementsGroupesParDate = versementsParDate.reduce<Record<string, number>>((acc, s) => {
+    const key = s.date_versement || '—';
+    acc[key] = (acc[key] || 0) + (s.versement || 0);
+    return acc;
+  }, {});
 
   const handleSaveVersement = async () => {
     if (!formData.versement || !formData.dateVersement || !formData.dateSession) {
@@ -848,6 +911,156 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* ── Sous-rubrique : Versements par date ───────────────────────────── */}
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-indigo-100 rounded-lg">
+              <Calendar className="w-6 h-6 text-indigo-600" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-800">Versements par date</h3>
+              <p className="text-sm text-gray-500">
+                {versementsParDate.length} versement{versementsParDate.length !== 1 ? 's' : ''} •
+                Total : {totalVersementsAffiches.toFixed(3)} DT
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => loadVersementsParDate()}
+            className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors duration-200"
+            title="Rafraîchir"
+          >
+            <RefreshCw className={`w-5 h-5 ${loadingVersements ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+
+        {/* Filtres par date de versement */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date versement début</label>
+            <input
+              type="date"
+              value={versementDateDebut}
+              onChange={(e) => setVersementDateDebut(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date versement fin</label>
+            <input
+              type="date"
+              value={versementDateFin}
+              onChange={(e) => setVersementDateFin(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+          </div>
+          <div className="flex items-end space-x-2">
+            <button
+              onClick={handleFilterVersements}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
+            >
+              Filtrer
+            </button>
+            <button
+              onClick={handleResetFilterVersements}
+              className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
+            >
+              Réinitialiser
+            </button>
+          </div>
+        </div>
+
+        {/* Tableau des versements par date */}
+        <div className="overflow-x-auto">
+          {loadingVersements ? (
+            <div className="flex items-center justify-center py-12 text-gray-400">
+              <RefreshCw className="w-6 h-6 animate-spin mr-3" />
+              <span className="text-sm">Chargement des versements…</span>
+            </div>
+          ) : versementsParDate.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-12 text-gray-400">
+              <Calendar className="w-10 h-10 opacity-30" />
+              <p className="text-sm font-medium">Aucun versement trouvé</p>
+              <p className="text-xs">Modifiez les filtres ou enregistrez un versement</p>
+            </div>
+          ) : (
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-blue-900">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Date Versement</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Date Session</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Banque</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Total Espèce</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Charges</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Versement</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Solde</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Créé par</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {versementsParDate.map((session) => {
+                  const solde = calculateSolde(session);
+                  return (
+                    <tr key={session.id} className="hover:bg-indigo-50/30 transition-colors duration-150">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-indigo-700">
+                        {session.date_versement || '—'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                        {session.date_session}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                        {session.banque || '—'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {session.total_espece.toFixed(2)} DT
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {session.charges.toFixed(2)} DT
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-green-700">
+                        {session.versement.toFixed(2)} DT
+                      </td>
+                      <td className={`px-4 py-3 whitespace-nowrap text-sm font-semibold ${solde < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {solde.toFixed(2)} DT
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                        {session.cree_par}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="bg-gray-50">
+                <tr>
+                  <td colSpan={5} className="px-4 py-3 text-sm font-bold text-gray-700 text-right">Total général :</td>
+                  <td className="px-4 py-3 text-sm font-bold text-green-700">{totalVersementsAffiches.toFixed(2)} DT</td>
+                  <td colSpan={2}></td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+
+        {/* Récapitulatif par date de versement */}
+        {!loadingVersements && versementsParDate.length > 0 && (
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <h4 className="text-sm font-bold text-gray-700 mb-3">Récapitulatif par date de versement</h4>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(versementsGroupesParDate)
+                .sort(([a], [b]) => b.localeCompare(a))
+                .map(([date, total]) => (
+                  <div key={date} className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-lg">
+                    <Calendar className="w-4 h-4 text-indigo-500" />
+                    <span className="text-sm font-medium text-gray-700">{date}</span>
+                    <span className="text-sm font-bold text-indigo-700">{total.toFixed(2)} DT</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {showAvisModal && (
