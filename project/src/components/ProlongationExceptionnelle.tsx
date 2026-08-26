@@ -101,7 +101,7 @@ const generateProlongationPDF = async (f: ProlongForm): Promise<void> => {
   value(formatDateFR(f.date_fin_prolongation), 111, 115);
   value(f.assure, 26, 135);
   value(f.pour_le_compte, 52, 146);
-  const addressLines = f.adresse.trim().split(/\\s+/).reduce<string[]>((lines, word) => {
+  const addressLines = f.adresse.trim().split(/\s+/).reduce<string[]>((lines, word) => {
     const current = lines[lines.length - 1] || '';
     if ((current + ' ' + word).trim().length > 26) lines.push(word);
     else if (lines.length === 0) lines.push(word);
@@ -123,7 +123,7 @@ const generateProlongationPDF = async (f: ProlongForm): Promise<void> => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `prolongation_${f.numero_contrat.replace(/\\//g, '-')}.pdf`;
+  link.download = `prolongation_${f.numero_contrat.replace(/\//g, '-')}.pdf`;
   link.click();
   URL.revokeObjectURL(url);
 };
