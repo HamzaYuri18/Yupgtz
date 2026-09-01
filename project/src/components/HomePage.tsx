@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, DollarSign, X, Tag } from 'lucide-react';
+import { CircleAlert as AlertCircle, Calendar, CircleCheck as CheckCircle, Clock, TrendingUp, ListFilter as Filter, DollarSign, X, Tag } from 'lucide-react';
 import { getAvailableMonths, getUnpaidTermesByMonth, getOverdueUnpaidTermes, getPaidTermesByMonth, getUpcomingTermes, getCreditsDueToday, getTotalTermesByMonth, getRemarqueStatsByMonth, getRemarqueContractsByMonth, RemarqueMonthStats } from '../utils/supabaseService';
 import { getSessionDate } from '../utils/auth';
 import { isSessionClosed } from '../utils/sessionService';
@@ -1154,7 +1154,15 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     <tbody className="divide-y divide-gray-200">
                       {sortByEcheance(filterTermes(overdueTermes, searchOverdue)).map((terme, index) => {
                         const remarqueLower = terme.remarque?.toLowerCase() || '';
-                        const bgColor = remarqueLower === 'vendu' ? 'bg-yellow-100 hover:bg-yellow-200' :
+
+                        const sessionDateStr = getSessionDate();
+                        const echeanceDate = new Date(terme.echeance);
+                        const sessionDate = sessionDateStr ? new Date(sessionDateStr) : new Date();
+                        const diffMonths = (sessionDate.getFullYear() - echeanceDate.getFullYear()) * 12 + (sessionDate.getMonth() - echeanceDate.getMonth());
+                        const isContentieux = terme.echeance && diffMonths >= 2;
+
+                        const bgColor = isContentieux ? 'bg-red-600 hover:bg-red-700 text-white' :
+                                       remarqueLower === 'vendu' ? 'bg-yellow-100 hover:bg-yellow-200' :
                                        remarqueLower === 'rt' ? 'bg-blue-100 hover:bg-blue-200' :
                                        remarqueLower === 'a récupérer' ? 'bg-purple-100 hover:bg-purple-200' :
                                        'hover:bg-red-50';
@@ -1169,17 +1177,23 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                             <td className="px-4 py-3 text-sm font-medium">{terme.numero_contrat}</td>
                             <td className="px-4 py-3 text-sm">{terme.assure}</td>
                             {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
-                            <td className="px-4 py-3 text-sm text-red-600 font-medium">{formatDate(terme.echeance)}</td>
+                            <td className={`px-4 py-3 text-sm font-medium ${isContentieux ? 'text-white' : 'text-red-600'}`}>{formatDate(terme.echeance)}</td>
                             <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
                             <td className="px-4 py-3 text-sm">
-                              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                !terme.remarque ? 'bg-gray-100 text-gray-800' :
-                                terme.remarque.toLowerCase() === 'vendu' ? 'bg-yellow-100 text-yellow-800' :
-                                terme.remarque.toLowerCase() === 'rt' ? 'bg-blue-100 text-blue-800' :
-                                'bg-green-100 text-green-800'
-                              }`}>
-                                {terme.remarque || 'Aucune'}
-                              </span>
+                              {isContentieux ? (
+                                <span className="px-2 py-1 text-xs font-bold rounded-full bg-white text-red-600 animate-pulse">
+                                  ⚠ Retour Contentieux
+                                </span>
+                              ) : (
+                                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                  !terme.remarque ? 'bg-gray-100 text-gray-800' :
+                                  terme.remarque.toLowerCase() === 'vendu' ? 'bg-yellow-100 text-yellow-800' :
+                                  terme.remarque.toLowerCase() === 'rt' ? 'bg-blue-100 text-blue-800' :
+                                  'bg-green-100 text-green-800'
+                                }`}>
+                                  {terme.remarque || 'Aucune'}
+                                </span>
+                              )}
                             </td>
                           </tr>
                         );
