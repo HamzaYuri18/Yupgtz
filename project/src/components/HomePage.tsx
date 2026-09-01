@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CircleAlert as AlertCircle, Calendar, CircleCheck as CheckCircle, Clock, TrendingUp, ListFilter as Filter, DollarSign, X, Tag } from 'lucide-react';
+import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, DollarSign, X, Tag } from 'lucide-react';
 import { getAvailableMonths, getUnpaidTermesByMonth, getOverdueUnpaidTermes, getPaidTermesByMonth, getUpcomingTermes, getCreditsDueToday, getTotalTermesByMonth, getRemarqueStatsByMonth, getRemarqueContractsByMonth, RemarqueMonthStats } from '../utils/supabaseService';
 import { getSessionDate } from '../utils/auth';
 import { isSessionClosed } from '../utils/sessionService';
