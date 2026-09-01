@@ -1158,7 +1158,10 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                         const sessionDateStr = getSessionDate();
                         const echeanceDate = new Date(terme.echeance);
                         const sessionDate = sessionDateStr ? new Date(sessionDateStr) : new Date();
-                        const diffMonths = (sessionDate.getFullYear() - echeanceDate.getFullYear()) * 12 + (sessionDate.getMonth() - echeanceDate.getMonth());
+                        let diffMonths = (sessionDate.getFullYear() - echeanceDate.getFullYear()) * 12 + (sessionDate.getMonth() - echeanceDate.getMonth());
+                        if (sessionDate.getDate() < echeanceDate.getDate()) {
+                          diffMonths--;
+                        }
                         const isContentieux = terme.echeance && diffMonths >= 2;
 
                         const bgColor = isContentieux ? 'bg-red-600 hover:bg-red-700 text-white' :
