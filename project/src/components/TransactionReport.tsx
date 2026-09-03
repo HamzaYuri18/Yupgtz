@@ -615,6 +615,17 @@ const TransactionReport: React.FC = () => {
               if (ristourneToDelete) {
                 const { error: ristourneError } = await supabase.from('ristournes').delete().eq('id', ristourneToDelete.id);
                 sourceDeleteSuccess = !ristourneError;
+                if (sourceDeleteSuccess) {
+                  // Rétablir le statut dans AvenantPDF
+                  await supabase
+                    .from('AvenantPDF')
+                    .update({
+                      'Statut de paiement': 'Non Payé',
+                      'Mode de paiement': null,
+                      'Date de paiement': null
+                    })
+                    .eq('numContrat', transaction.numero_contrat);
+                }
               }
             }
           }
@@ -632,6 +643,38 @@ const TransactionReport: React.FC = () => {
           }
           break;
         case 'Paiement Crédit':
+          // Rétablir le statut du crédit dans liste_credits
+          if (transaction.numero_contrat) {
+            const montantPaiement = Math.abs(transaction.montant || 0);
+            const { data: creditRow } = await supabase
+              .from('liste_credits')
+              .select('*')
+              .eq('numero_contrat', transaction.numero_contrat)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (creditRow) {
+              const paiementActuel = creditRow.paiement || 0;
+              const soldeActuel = creditRow.solde ?? creditRow.montant_credit ?? 0;
+              const nouveauPaiement = Math.max(0, paiementActuel - montantPaiement);
+              const nouveauSolde = soldeActuel + montantPaiement;
+              let nouveauStatut = 'Non payé';
+              if (nouveauSolde <= 0) {
+                nouveauStatut = 'Payé en total';
+              } else if (nouveauPaiement > 0) {
+                nouveauStatut = 'Payé partiellement';
+              }
+              await supabase
+                .from('liste_credits')
+                .update({
+                  paiement: nouveauPaiement,
+                  solde: nouveauSolde,
+                  statut: nouveauStatut,
+                  date_paiement_effectif: nouveauPaiement > 0 ? creditRow.date_paiement_effectif : null
+                })
+                .eq('id', creditRow.id);
+            }
+          }
           sourceDeleteSuccess = true;
           break;
         case 'Encaissement pour autre code':

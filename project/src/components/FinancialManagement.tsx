@@ -1069,7 +1069,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
     const success = await saveRistourne(ristourne);
     if (success) {
-      // Mettre à jour le statut dans AvenantPDF si une ristourne a été trouvée via la recherche
+      // Mettre à jour le statut dans AvenantPDF
       if (foundAvenantId !== null) {
         await supabase
           .from('AvenantPDF')
@@ -1079,6 +1079,16 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
             'Date de paiement': newRistourne.date_paiement_ristourne
           })
           .eq('id', foundAvenantId);
+      } else {
+        // Même sans recherche préalable, mettre à jour par numéro de contrat
+        await supabase
+          .from('AvenantPDF')
+          .update({
+            'Statut de paiement': 'Payé',
+            'Mode de paiement': newRistourne.type_paiement,
+            'Date de paiement': newRistourne.date_paiement_ristourne
+          })
+          .eq('numContrat', newRistourne.numero_contrat);
       }
 
       setMessage('✅ Ristourne enregistrée avec succès');

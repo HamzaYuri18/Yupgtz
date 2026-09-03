@@ -2769,6 +2769,87 @@ export const syncMissingCredits = async (): Promise<number> => {
   }
 };
 
+// Synchronise les statuts des crédits dans liste_credits avec les paiements enregistrés dans rapport
+export const syncCreditPaymentStatuses = async (): Promise<number> => {
+  try {
+    // 1. Récupérer tous les paiements de crédit dans rapport
+    const { data: paiementRecords, error: rapportError } = await supabase
+      .from('rapport')
+      .select('numero_contrat, montant, type')
+      .eq('type', 'Paiement Crédit');
+
+    if (rapportError) {
+      console.error('❌ syncCreditPaymentStatuses: erreur lecture rapport:', rapportError);
+      return 0;
+    }
+
+    if (!paiementRecords || paiementRecords.length === 0) return 0;
+
+    // Grouper les paiements par numéro de contrat
+    const paiementsParContrat = new Map<string, number>();
+    for (const row of paiementRecords) {
+      if (!row.numero_contrat) continue;
+      const num = row.numero_contrat.trim().toUpperCase();
+      const montant = Math.abs(Number(row.montant) || 0);
+      paiementsParContrat.set(num, (paiementsParContrat.get(num) || 0) + montant);
+    }
+
+    // 2. Récupérer tous les crédits dans liste_credits
+    const { data: credits, error: creditsError } = await supabase
+      .from('liste_credits')
+      .select('*');
+
+    if (creditsError) {
+      console.error('❌ syncCreditPaymentStatuses: erreur lecture liste_credits:', creditsError);
+      return 0;
+    }
+
+    if (!credits || credits.length === 0) return 0;
+
+    let updated = 0;
+    for (const credit of credits) {
+      const num = (credit.numero_contrat || '').trim().toUpperCase();
+      const totalPaiements = paiementsParContrat.get(num) || 0;
+      const montantCredit = Number(credit.montant_credit) || 0;
+
+      if (totalPaiements <= 0) continue;
+
+      const nouveauSolde = Math.max(0, montantCredit - totalPaiements);
+      const nouveauPaiement = Math.min(totalPaiements, montantCredit);
+
+      let nouveauStatut = 'Non payé';
+      if (nouveauSolde <= 0) {
+        nouveauStatut = 'Payé en total';
+      } else if (nouveauPaiement > 0) {
+        nouveauStatut = 'Payé partiellement';
+      }
+
+      // Ne mettre à jour que si le statut est différent
+      if (credit.statut !== nouveauStatut) {
+        const { error: updateError } = await supabase
+          .from('liste_credits')
+          .update({
+            paiement: nouveauPaiement,
+            solde: nouveauSolde,
+            statut: nouveauStatut,
+            date_paiement_effectif: nouveauPaiement > 0 ? (credit.date_paiement_effectif || new Date().toISOString().split('T')[0]) : null
+          })
+          .eq('id', credit.id);
+
+        if (!updateError) {
+          updated++;
+        }
+      }
+    }
+
+    console.log(`✅ syncCreditPaymentStatuses: ${updated} crédit(s) mis à jour`);
+    return updated;
+  } catch (error) {
+    console.error('❌ Erreur syncCreditPaymentStatuses:', error);
+    return 0;
+  }
+};
+
 export const getDuplicateCredits = async (monthFilter?: string): Promise<DuplicateCreditGroup[]> => {
   try {
     let query = supabase
@@ -2891,6 +2972,7 @@ export default {
   syncTermeStatusesWithMainTable,
   verifyTermeStatusWithEcheance,
   syncMissingCredits,
+  syncCreditPaymentStatuses,
   getDuplicateCredits,
   deleteDuplicateCredits
 };
