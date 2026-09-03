@@ -1091,6 +1091,16 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
           .eq('numContrat', newRistourne.numero_contrat);
       }
 
+      // Synchroniser aussi la table rapport avec les informations de paiement
+      await supabase
+        .from('rapport')
+        .update({
+          mode_paiement: newRistourne.type_paiement,
+          date_paiement_ristourne: newRistourne.date_paiement_ristourne
+        })
+        .eq('numero_contrat', newRistourne.numero_contrat)
+        .eq('type', 'Ristourne');
+
       setMessage('✅ Ristourne enregistrée avec succès');
       setNewRistourne({
         numero_contrat: '',
