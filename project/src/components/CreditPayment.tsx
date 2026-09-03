@@ -152,7 +152,7 @@ const CreditPayment: React.FC = () => {
     setVerificationDetails(null);
 
     try {
-      const success = await updateCreditPayment(
+      const result = await updateCreditPayment(
         creditData.id,
         amount,
         creditData.assure,
@@ -165,7 +165,7 @@ const CreditPayment: React.FC = () => {
         } : undefined
       );
 
-      if (success) {
+      if (result.success) {
         // Vérification supplémentaire pour confirmer l'enregistrement
         const verification = await verifyPaymentInBothTables(creditData.id, amount);
         
@@ -189,7 +189,7 @@ const CreditPayment: React.FC = () => {
           setMessage('⚠️ Paiement enregistré mais vérification incomplète');
         }
       } else {
-        setMessage('❌ Erreur lors de l\'enregistrement du paiement');
+        setMessage('❌ ' + (result.error || 'Erreur lors de l\'enregistrement du paiement'));
       }
     } catch (error) {
       setMessage('❌ Erreur lors du traitement du paiement');

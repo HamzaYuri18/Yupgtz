@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { X, DollarSign, Banknote, CheckCircle, AlertCircle, Calendar, CreditCard } from 'lucide-react';
-import { updateCreditPayment } from '../utils/supabaseService';
+import { updateCreditPayment, type CreditPaymentResult } from '../utils/supabaseService';
 
 interface CreditPaymentModalProps {
   isOpen: boolean;
@@ -76,7 +76,7 @@ const CreditPaymentModal: React.FC<CreditPaymentModalProps> = ({
     setMessage('');
 
     try {
-      const success = await updateCreditPayment(
+      const result: CreditPaymentResult = await updateCreditPayment(
         credit.id,
         amount,
         credit.assure,
@@ -86,12 +86,12 @@ const CreditPaymentModal: React.FC<CreditPaymentModalProps> = ({
         isHamza && customDatePaiement ? customDatePaiement : undefined,
       );
 
-      if (success) {
+      if (result.success) {
         setMessage('✅ Paiement enregistré avec succès');
         onPaymentSuccess();
         setTimeout(() => handleClose(), 1500);
       } else {
-        setMessage("❌ Erreur lors de l'enregistrement du paiement");
+        setMessage('❌ ' + (result.error || 'Erreur lors de l\'enregistrement du paiement'));
       }
     } catch {
       setMessage('❌ Erreur lors du traitement du paiement');

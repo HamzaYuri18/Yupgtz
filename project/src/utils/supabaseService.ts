@@ -193,6 +193,11 @@ export const saveContractToRapport = async (contractData: ContractData): Promise
 };
 
 // FONCTION CRITIQUE : Mise à jour du paiement de crédit avec double vérification
+export interface CreditPaymentResult {
+  success: boolean;
+  error?: string;
+}
+
 export const updateCreditPayment = async (
   id: number,
   montantPaiement: number,
@@ -201,10 +206,8 @@ export const updateCreditPayment = async (
   numeroContrat?: string,
   chequeData?: ChequeData,
   customDatePaiement?: string
-): Promise<boolean> => {
+): Promise<CreditPaymentResult> => {
   try {
-    console.log('💳 Début de la mise à jour du paiement crédit...');
-
     // 1. Récupérer le crédit actuel
     const { data: creditActuel, error: fetchError } = await supabase
       .from('liste_credits')
@@ -213,26 +216,23 @@ export const updateCreditPayment = async (
       .maybeSingle();
 
     if (fetchError || !creditActuel) {
-      console.error('❌ Erreur récupération crédit:', fetchError);
-      return false;
+      return { success: false, error: 'Impossible de récupérer les informations du crédit' };
     }
 
     // 2. Calculer les nouveaux montants
     const paiementActuel = creditActuel.paiement || 0;
     const soldeActuel = creditActuel.solde || creditActuel.montant_credit;
-    
+
     const nouveauPaiementTotal = paiementActuel + montantPaiement;
     const nouveauSolde = soldeActuel - montantPaiement;
 
     // 3. Validation des montants
     if (montantPaiement <= 0) {
-      console.error('❌ Montant de paiement invalide:', montantPaiement);
-      return false;
+      return { success: false, error: 'Montant de paiement invalide' };
     }
 
     if (montantPaiement > soldeActuel) {
-      console.error('❌ Montant supérieur au solde:', { montantPaiement, soldeActuel });
-      return false;
+      return { success: false, error: `Le montant dépasse le solde restant (${soldeActuel.toLocaleString('fr-FR')} DT)` };
     }
 
     // 4. Déterminer le nouveau statut
@@ -265,25 +265,10 @@ export const updateCreditPayment = async (
       .eq('id', id);
 
     if (updateError) {
-      console.error('❌ Erreur mise à jour liste_credits:', updateError);
-      return false;
+      return { success: false, error: 'Erreur lors de la mise à jour du crédit: ' + updateError.message };
     }
 
-    console.log('✅ Crédit mis à jour dans liste_credits');
-
-    // 6. VÉRIFICATION CRITIQUE : Vérifier que la mise à jour a bien été effectuée
-    const { data: creditVerifie, error: verifyError } = await supabase
-      .from('liste_credits')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
-
-    if (verifyError) {
-      console.error('❌ Erreur vérification mise à jour liste_credits:', verifyError);
-      return false;
-    }
-
-    // 7. Enregistrer le paiement dans la table rapport
+    // 6. Enregistrer le paiement dans la table rapport
     const datePaiement = new Date().toISOString();
     const sessionDate = getSessionDate();
 
@@ -315,19 +300,34 @@ export const updateCreditPayment = async (
       created_at: datePaiement
     };
 
-    const { data: rapportInsert, error: rapportError } = await supabase
+    const { error: rapportError } = await supabase
       .from('rapport')
-      .insert([rapportData])
-      .select();
+      .insert([rapportData]);
 
     if (rapportError) {
-      console.error('❌ Erreur enregistrement dans rapport:', rapportError);
-      return false;
+      // Rollback: restaurer les anciennes valeurs du crédit
+      const { error: rollbackError } = await supabase
+        .from('liste_credits')
+        .update({
+          paiement: paiementActuel,
+          solde: soldeActuel,
+          statut: creditActuel.statut,
+          date_paiement_effectif: creditActuel.date_paiement_effectif,
+          mode_paiement: creditActuel.mode_paiement,
+          numero_cheque: creditActuel.numero_cheque,
+          banque_cheque: creditActuel.banque_cheque,
+          date_encaissement_prevue: creditActuel.date_encaissement_prevue
+        })
+        .eq('id', id);
+
+      if (rollbackError) {
+        console.error('❌ ERREUR CRITIQUE: Rollback échoué pour le crédit', id, ':', rollbackError);
+      }
+
+      return { success: false, error: 'Erreur lors de l\'enregistrement dans le rapport: ' + rapportError.message };
     }
 
-    console.log('✅ Paiement enregistré dans rapport avec succès');
-
-    // 8. Si paiement par chèque, enregistrer dans la table Cheques
+    // 7. Si paiement par chèque, enregistrer dans la table Cheques
     if (modePaiement === 'Cheque' && chequeData && numeroContrat) {
       const { error: chequeError } = await supabase
         .from('Cheques')
@@ -344,18 +344,38 @@ export const updateCreditPayment = async (
         }]);
 
       if (chequeError) {
-        console.error('⚠️ Erreur enregistrement chèque:', chequeError);
-      } else {
-        console.log('✅ Chèque enregistré dans la table Cheques');
+        // Le chèque n'a pas pu être enregistré — on rollback le rapport et le crédit
+        await supabase
+          .from('rapport')
+          .delete()
+          .eq('numero_contrat', creditActuel.numero_contrat)
+          .eq('type', 'Paiement Crédit')
+          .eq('montant', montantPaiement)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        await supabase
+          .from('liste_credits')
+          .update({
+            paiement: paiementActuel,
+            solde: soldeActuel,
+            statut: creditActuel.statut,
+            date_paiement_effectif: creditActuel.date_paiement_effectif,
+            mode_paiement: creditActuel.mode_paiement,
+            numero_cheque: creditActuel.numero_cheque,
+            banque_cheque: creditActuel.banque_cheque,
+            date_encaissement_prevue: creditActuel.date_encaissement_prevue
+          })
+          .eq('id', id);
+
+        return { success: false, error: 'Erreur lors de l\'enregistrement du chèque: ' + chequeError.message };
       }
     }
 
-    console.log('🎉 Paiement crédit traité avec succès dans les deux tables');
-    return true;
-
+    return { success: true };
   } catch (error) {
     console.error('❌ Erreur générale lors de la mise à jour du paiement:', error);
-    return false;
+    return { success: false, error: 'Erreur inattendue lors du traitement du paiement' };
   }
 };
 
