@@ -1151,6 +1151,9 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       let notFoundCount = 0;
 
       for (const rp of rapportRistournes) {
+        // Une ristourne est considérée "payé" si elle a un mode_paiement ou date_paiement_ristourne
+        const isPaid = !!rp.mode_paiement || !!rp.date_paiement_ristourne;
+
         // Chercher la ristourne correspondante par numero_contrat et montant
         const match = ristournes?.find(r =>
           r.numero_contrat === rp.numero_contrat &&
@@ -1170,6 +1173,18 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         } else {
           notFoundCount++;
         }
+
+        // Mettre à jour le statut "Payé" dans AvenantPDF si la ristourne est payée dans rapport
+        if (isPaid && rp.numero_contrat) {
+          await supabase
+            .from('AvenantPDF')
+            .update({
+              'Statut de paiement': 'Payé',
+              'Mode de paiement': rp.mode_paiement || null,
+              'Date de paiement': rp.date_paiement_ristourne || null
+            })
+            .eq('numContrat', rp.numero_contrat);
+        }
       }
 
       setSyncRistournesRapportMsg(
@@ -1177,6 +1192,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         (notFoundCount > 0 ? ` — ${notFoundCount} non trouvée(s) dans ristournes` : '')
       );
       loadData();
+      loadAvenantPDF(1, avenantPDFDateFilter.dateFrom, avenantPDFDateFilter.dateTo);
     } catch (error) {
       console.error('Erreur lors de la synchronisation:', error);
       setSyncRistournesRapportMsg('❌ Erreur lors de la synchronisation');
