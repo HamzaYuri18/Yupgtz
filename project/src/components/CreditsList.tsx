@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, User, Download, MessageSquare, BarChart3, Trash2, X, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
-import { getCredits, updateCreditStatus, deleteCredit, syncMissingCredits, syncCreditPaymentStatuses, getDuplicateCredits, deleteDuplicateCredits, type DuplicateCreditGroup } from '../utils/supabaseService';
+import { getCredits, updateCreditStatus, deleteCredit, syncMissingCredits, getDuplicateCredits, deleteDuplicateCredits, type DuplicateCreditGroup } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
 import * as XLSX from 'xlsx';
 import SMSModal from './SMSModal';
@@ -75,7 +75,6 @@ const CreditsList: React.FC = () => {
     setSyncing(true);
     try {
       const count = await syncMissingCredits();
-      await syncCreditPaymentStatuses();
       if (count > 0) {
         setSyncMsg(`✅ ${count} crédit(s) manquant(s) ajouté(s) à la liste`);
         await loadCredits();
@@ -97,8 +96,6 @@ const CreditsList: React.FC = () => {
   const loadCredits = async () => {
     try {
       setIsLoading(true);
-      // Synchroniser les statuts de paiement avec les entrées du rapport
-      await syncCreditPaymentStatuses();
       const data = await getCredits();
       const formattedData = data.map(credit => ({
         id: credit.id,
