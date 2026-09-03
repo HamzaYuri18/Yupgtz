@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Gift, AlertTriangle, Save, Plus, Trash2, Search, Calendar, FileSpreadsheet, Eye, FileText, X } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Gift, AlertTriangle, Save, Plus, Trash2, Search, Calendar, FileSpreadsheet, Eye, FileText, X, RefreshCw } from 'lucide-react';
 import { getSessionDate } from '../utils/auth';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
@@ -1122,6 +1122,75 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     setTimeout(() => setMessage(''), 3000);
   };
 
+  const [syncingRistournesRapport, setSyncingRistournesRapport] = useState(false);
+  const [syncRistournesRapportMsg, setSyncRistournesRapportMsg] = useState('');
+
+  const handleSyncRistournesToRapport = async () => {
+    setSyncingRistournesRapport(true);
+    setSyncRistournesRapportMsg('');
+    try {
+      const { data: ristournes, error: ristourneError } = await supabase
+        .from('ristournes')
+        .select('*');
+      if (ristourneError) throw ristourneError;
+      if (!ristournes || ristournes.length === 0) {
+        setSyncRistournesRapportMsg('Aucune ristourne à synchroniser');
+        setTimeout(() => setSyncRistournesRapportMsg(''), 4000);
+        return;
+      }
+      let syncedCount = 0;
+      for (const r of ristournes) {
+        const { data: existing } = await supabase
+          .from('rapport')
+          .select('id')
+          .eq('numero_contrat', r.numero_contrat)
+          .eq('type', 'Ristourne')
+          .maybeSingle();
+        if (existing) {
+          const { error: updateError } = await supabase
+            .from('rapport')
+            .update({
+              mode_paiement: r.type_paiement || 'Espece',
+              date_paiement_ristourne: r.date_paiement_ristourne,
+              date_ristourne: r.date_ristourne,
+              client: r.client
+            })
+            .eq('id', existing.id);
+          if (!updateError) syncedCount++;
+        } else {
+          const { error: insertError } = await supabase
+            .from('rapport')
+            .insert([{
+              type: 'Ristourne',
+              branche: 'Financier',
+              numero_contrat: r.numero_contrat,
+              prime: -Math.abs(r.montant_ristourne),
+              montant: -Math.abs(r.montant_ristourne),
+              montant_recu: -Math.abs(r.montant_ristourne),
+              assure: r.client,
+              mode_paiement: r.type_paiement || 'Espece',
+              type_paiement: 'Au comptant',
+              cree_par: r.cree_par,
+              date_operation: r.date_ristourne || r.created_at,
+              created_at: r.created_at,
+              date_ristourne: r.date_ristourne,
+              date_paiement_ristourne: r.date_paiement_ristourne,
+              client: r.client
+            }]);
+          if (!insertError) syncedCount++;
+        }
+      }
+      setSyncRistournesRapportMsg(`✅ ${syncedCount} ristourne(s) synchronisée(s) avec la table rapport`);
+      loadData();
+    } catch (error) {
+      console.error('Erreur lors de la synchronisation:', error);
+      setSyncRistournesRapportMsg('❌ Erreur lors de la synchronisation avec la table rapport');
+    } finally {
+      setSyncingRistournesRapport(false);
+      setTimeout(() => setSyncRistournesRapportMsg(''), 5000);
+    }
+  };
+
   const handleSaveSinistre = async () => {
     if (!newSinistre.numero_sinistre || !newSinistre.client || !newSinistre.montant) {
       setMessage('Veuillez remplir tous les champs');
@@ -1989,14 +2058,29 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     <div className="bg-purple-50 rounded-lg p-6">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold text-purple-800">Gestion des Ristournes</h3>
-        <button
-          onClick={exportRistournes}
-          className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-        >
-          <FileSpreadsheet className="w-4 h-4" />
-          <span>Exporter Excel</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleSyncRistournesToRapport}
+            disabled={syncingRistournesRapport}
+            className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncingRistournesRapport ? 'animate-spin' : ''}`} />
+            <span>{syncingRistournesRapport ? 'Synchronisation...' : 'Sync Rapport'}</span>
+          </button>
+          <button
+            onClick={exportRistournes}
+            className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Exporter Excel</span>
+          </button>
+        </div>
       </div>
+      {syncRistournesRapportMsg && (
+        <div className={`mb-4 p-3 rounded-lg text-sm ${syncRistournesRapportMsg.includes('✅') ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>
+          {syncRistournesRapportMsg}
+        </div>
+      )}
 
       {/* Formulaire de saisie */}
       <div className="bg-white rounded-lg p-4 mb-6 border border-purple-200">
