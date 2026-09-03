@@ -2775,7 +2775,7 @@ export const syncCreditPaymentStatuses = async (): Promise<number> => {
     // 1. Récupérer tous les paiements de crédit dans rapport
     const { data: paiementRecords, error: rapportError } = await supabase
       .from('rapport')
-      .select('numero_contrat, montant, type')
+      .select('id, numero_contrat, montant, mode_paiement, type, created_at, date_operation')
       .eq('type', 'Paiement Crédit');
 
     if (rapportError) {
@@ -2786,12 +2786,21 @@ export const syncCreditPaymentStatuses = async (): Promise<number> => {
     if (!paiementRecords || paiementRecords.length === 0) return 0;
 
     // Grouper les paiements par numéro de contrat
-    const paiementsParContrat = new Map<string, number>();
+    const paiementsParContrat = new Map<string, { total: number; modePaiement: string | null; datePaiement: string | null }>();
     for (const row of paiementRecords) {
       if (!row.numero_contrat) continue;
       const num = row.numero_contrat.trim().toUpperCase();
       const montant = Math.abs(Number(row.montant) || 0);
-      paiementsParContrat.set(num, (paiementsParContrat.get(num) || 0) + montant);
+      const existing = paiementsParContrat.get(num);
+      if (existing) {
+        existing.total += montant;
+      } else {
+        paiementsParContrat.set(num, {
+          total: montant,
+          modePaiement: row.mode_paiement || null,
+          datePaiement: row.date_operation || row.created_at || null
+        });
+      }
     }
 
     // 2. Récupérer tous les crédits dans liste_credits
@@ -2806,16 +2815,24 @@ export const syncCreditPaymentStatuses = async (): Promise<number> => {
 
     if (!credits || credits.length === 0) return 0;
 
+    // 3. Récupérer tous les chèques existants pour éviter les doublons
+    const { data: existingCheques } = await supabase
+      .from('Cheques')
+      .select('"Numero_Contrat"');
+
+    const chequesExistants = new Set(
+      (existingCheques || []).map((c: any) => (c.Numero_Contrat || '').trim().toUpperCase())
+    );
+
     let updated = 0;
     for (const credit of credits) {
       const num = (credit.numero_contrat || '').trim().toUpperCase();
-      const totalPaiements = paiementsParContrat.get(num) || 0;
+      const paiementInfo = paiementsParContrat.get(num);
+      if (!paiementInfo || paiementInfo.total <= 0) continue;
+
       const montantCredit = Number(credit.montant_credit) || 0;
-
-      if (totalPaiements <= 0) continue;
-
-      const nouveauSolde = Math.max(0, montantCredit - totalPaiements);
-      const nouveauPaiement = Math.min(totalPaiements, montantCredit);
+      const nouveauSolde = Math.max(0, montantCredit - paiementInfo.total);
+      const nouveauPaiement = Math.min(paiementInfo.total, montantCredit);
 
       let nouveauStatut = 'Non payé';
       if (nouveauSolde <= 0) {
@@ -2824,20 +2841,54 @@ export const syncCreditPaymentStatuses = async (): Promise<number> => {
         nouveauStatut = 'Payé partiellement';
       }
 
-      // Ne mettre à jour que si le statut est différent
-      if (credit.statut !== nouveauStatut) {
+      // Mettre à jour si le statut ou le mode_paiement est différent
+      const needUpdate = credit.statut !== nouveauStatut ||
+        (!credit.mode_paiement && paiementInfo.modePaiement);
+
+      if (needUpdate) {
+        const updateData: Record<string, any> = {
+          paiement: nouveauPaiement,
+          solde: nouveauSolde,
+          statut: nouveauStatut,
+          date_paiement_effectif: nouveauPaiement > 0 ? (credit.date_paiement_effectif || paiementInfo.datePaiement?.split('T')[0] || new Date().toISOString().split('T')[0]) : null
+        };
+
+        // Sync mode_paiement from rapport if not already set
+        if (!credit.mode_paiement && paiementInfo.modePaiement) {
+          updateData.mode_paiement = paiementInfo.modePaiement;
+        }
+
         const { error: updateError } = await supabase
           .from('liste_credits')
-          .update({
-            paiement: nouveauPaiement,
-            solde: nouveauSolde,
-            statut: nouveauStatut,
-            date_paiement_effectif: nouveauPaiement > 0 ? (credit.date_paiement_effectif || new Date().toISOString().split('T')[0]) : null
-          })
+          .update(updateData)
           .eq('id', credit.id);
 
         if (!updateError) {
           updated++;
+        }
+      }
+
+      // 4. Si paiement par chèque et pas encore enregistré dans Cheques, le créer
+      if (paiementInfo.modePaiement === 'Cheque' && !chequesExistants.has(num)) {
+        const { error: chequeError } = await supabase
+          .from('Cheques')
+          .insert([{
+            Numero_Contrat: credit.numero_contrat,
+            Assure: credit.assure,
+            Numero_Cheque: credit.numero_cheque || null,
+            Titulaire_Cheque: credit.assure,
+            Montant: String(paiementInfo.total),
+            Date_Encaissement_prévue: credit.date_encaissement_prevue || null,
+            Banque: credit.banque_cheque || null,
+            Statut: 'Non Encaissé',
+            created_at: new Date().toISOString()
+          }]);
+
+        if (chequeError) {
+          console.error('⚠️ Erreur création chèque pour', num, ':', chequeError);
+        } else {
+          console.log('✅ Chèque créé pour', num);
+          chequesExistants.add(num);
         }
       }
     }

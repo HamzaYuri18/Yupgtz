@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, User, Download, MessageSquare, BarChart3, Trash2, X, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
-import { getCredits, updateCreditStatus, deleteCredit, syncMissingCredits, getDuplicateCredits, deleteDuplicateCredits, type DuplicateCreditGroup } from '../utils/supabaseService';
+import { getCredits, updateCreditStatus, deleteCredit, syncMissingCredits, syncCreditPaymentStatuses, getDuplicateCredits, deleteDuplicateCredits, type DuplicateCreditGroup } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
 import * as XLSX from 'xlsx';
 import SMSModal from './SMSModal';
@@ -69,6 +69,13 @@ const CreditsList: React.FC = () => {
         localStorage.setItem('lastCreditsSyncDate', today);
       });
     }
+    // Synchroniser les statuts de paiement depuis rapport vers liste_credits
+    syncCreditPaymentStatuses().then((count) => {
+      if (count > 0) {
+        console.log(`✅ ${count} crédit(s) synchronisé(s) depuis rapport`);
+        loadCredits();
+      }
+    });
   }, []);
 
   const handleSync = async (silent = false) => {
