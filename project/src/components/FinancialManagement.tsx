@@ -1129,62 +1129,57 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     setSyncingRistournesRapport(true);
     setSyncRistournesRapportMsg('');
     try {
+      // 1. Lire les ristournes depuis la table rapport
+      const { data: rapportRistournes, error: rapportError } = await supabase
+        .from('rapport')
+        .select('*')
+        .eq('type', 'Ristourne');
+      if (rapportError) throw rapportError;
+      if (!rapportRistournes || rapportRistournes.length === 0) {
+        setSyncRistournesRapportMsg('Aucune ristourne trouvée dans la table rapport');
+        setTimeout(() => setSyncRistournesRapportMsg(''), 4000);
+        return;
+      }
+
+      // 2. Lire toutes les ristournes pour le matching
       const { data: ristournes, error: ristourneError } = await supabase
         .from('ristournes')
         .select('*');
       if (ristourneError) throw ristourneError;
-      if (!ristournes || ristournes.length === 0) {
-        setSyncRistournesRapportMsg('Aucune ristourne à synchroniser');
-        setTimeout(() => setSyncRistournesRapportMsg(''), 4000);
-        return;
-      }
+
       let syncedCount = 0;
-      for (const r of ristournes) {
-        const { data: existing } = await supabase
-          .from('rapport')
-          .select('id')
-          .eq('numero_contrat', r.numero_contrat)
-          .eq('type', 'Ristourne')
-          .maybeSingle();
-        if (existing) {
+      let notFoundCount = 0;
+
+      for (const rp of rapportRistournes) {
+        // Chercher la ristourne correspondante par numero_contrat et montant
+        const match = ristournes?.find(r =>
+          r.numero_contrat === rp.numero_contrat &&
+          Math.abs(Math.abs(r.montant_ristourne) - Math.abs(rp.montant || rp.prime || 0)) < 0.01
+        );
+
+        if (match) {
+          // Mettre à jour la ristourne avec les infos de paiement depuis rapport
           const { error: updateError } = await supabase
-            .from('rapport')
+            .from('ristournes')
             .update({
-              mode_paiement: r.type_paiement || 'Espece',
-              date_paiement_ristourne: r.date_paiement_ristourne,
-              date_ristourne: r.date_ristourne,
-              client: r.client
+              type_paiement: rp.mode_paiement || match.type_paiement || 'Espece',
+              date_paiement_ristourne: rp.date_paiement_ristourne || match.date_paiement_ristourne
             })
-            .eq('id', existing.id);
+            .eq('id', match.id);
           if (!updateError) syncedCount++;
         } else {
-          const { error: insertError } = await supabase
-            .from('rapport')
-            .insert([{
-              type: 'Ristourne',
-              branche: 'Financier',
-              numero_contrat: r.numero_contrat,
-              prime: -Math.abs(r.montant_ristourne),
-              montant: -Math.abs(r.montant_ristourne),
-              montant_recu: -Math.abs(r.montant_ristourne),
-              assure: r.client,
-              mode_paiement: r.type_paiement || 'Espece',
-              type_paiement: 'Au comptant',
-              cree_par: r.cree_par,
-              date_operation: r.date_ristourne || r.created_at,
-              created_at: r.created_at,
-              date_ristourne: r.date_ristourne,
-              date_paiement_ristourne: r.date_paiement_ristourne,
-              client: r.client
-            }]);
-          if (!insertError) syncedCount++;
+          notFoundCount++;
         }
       }
-      setSyncRistournesRapportMsg(`✅ ${syncedCount} ristourne(s) synchronisée(s) avec la table rapport`);
+
+      setSyncRistournesRapportMsg(
+        `✅ ${syncedCount} ristourne(s) synchronisée(s) depuis rapport` +
+        (notFoundCount > 0 ? ` — ${notFoundCount} non trouvée(s) dans ristournes` : '')
+      );
       loadData();
     } catch (error) {
       console.error('Erreur lors de la synchronisation:', error);
-      setSyncRistournesRapportMsg('❌ Erreur lors de la synchronisation avec la table rapport');
+      setSyncRistournesRapportMsg('❌ Erreur lors de la synchronisation');
     } finally {
       setSyncingRistournesRapport(false);
       setTimeout(() => setSyncRistournesRapportMsg(''), 5000);
