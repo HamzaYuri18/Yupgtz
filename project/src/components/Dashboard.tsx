@@ -25,6 +25,7 @@ import Productivite from './Productivite';
 import ProductiviteNotification from './ProductiviteNotification';
 import MemoireReglementNotification from './MemoireReglementNotification';
 import ProlongationExceptionnelle from './ProlongationExceptionnelle';
+import VerificationEncaissements from './VerificationEncaissements';
 import { getUserPermissions, UserPermissions, DEFAULT_PERMISSIONS } from '../utils/permissionsService';
 import { syncMissingCredits } from '../utils/supabaseService';
 
@@ -33,7 +34,7 @@ type TabId =
   | 'terme' | 'transactions' | 'cheques' | 'versement'
   | 'encaissement' | 'commissions' | 'statistics' | 'salaires'
   | 'attestations' | 'reporting' | 'gestion_acces' | 'smsing' | 'productivite'
-  | 'prolongation';
+  | 'prolongation' | 'verification_encaissements';
 
 interface DashboardProps {
   username: string;
@@ -172,6 +173,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
             {canAccess('contract') && navBtn('contract', 'Nouveau Contrat', <FileText className="w-4 h-4" />)}
 
             {isUserAdmin && navBtn('xml', 'Import XLSX', <Upload className="w-4 h-4" />)}
+            {isUserAdmin && navBtn('verification_encaissements', 'Vérification des encaissements', <Search className="w-4 h-4" />)}
 
             {canAccess('reports') && navBtn('reports', 'Rapports', <BarChart3 className="w-4 h-4" />)}
 
@@ -211,6 +213,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
         {activeTab === 'home' && <HomePage username={username} />}
         {activeTab === 'contract' && canAccess('contract') && <ContractForm username={username} />}
         {activeTab === 'xml' && isUserAdmin && <XLSXUploader />}
+        {activeTab === 'verification_encaissements' && isUserAdmin && <VerificationEncaissements />}
         {activeTab === 'reports' && canAccess('reports') && <ReportGenerator />}
         {activeTab === 'statistics' && canAccess('statistics') && <StatisticsChart username={username} />}
         {activeTab === 'credits' && canAccess('credits') && <CreditsList />}
