@@ -71,14 +71,29 @@ const parseFile = (file: File): Promise<ImportRow[]> => new Promise((resolve, re
       const workbook = XLSX.read(new Uint8Array(event.target?.result as ArrayBuffer), { type: 'array', cellDates: false });
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, raw: true });
-      const headers = (rows[0] || []).map(normalizeHeader);
-      const souscripteurIndex = findColumn(headers, ['Souscripteur', 'Assuré', 'Assure']) ?? 0;
+
+      // Trouver la ligne d'en-tête: celle qui contient "Souscripteur"
+      let headerRowIndex = -1;
+      for (let i = 0; i < Math.min(rows.length, 20); i += 1) {
+        const rowCells = (rows[i] || []).map(normalizeHeader);
+        if (rowCells.some((cell) => cell === 'souscripteur' || cell === 'assure' || cell === 'assure')) {
+          headerRowIndex = i;
+          break;
+        }
+      }
+
+      const headers = headerRowIndex >= 0
+        ? (rows[headerRowIndex] || []).map(normalizeHeader)
+        : (rows[0] || []).map(normalizeHeader);
+      const start = headerRowIndex >= 0 ? headerRowIndex + 1 : 0;
+
+      const souscripteurIndex = findColumn(headers, ['Souscripteur', 'Assuré', 'Assure']);
       const policeIndex = findColumn(headers, ['Police', 'Numéro police', 'Numero contrat', 'Contrat']);
       const dateIndex = findColumn(headers, ['Date effective', 'Date effet', 'Date']);
       const montantIndex = findColumn(headers, ['Montant TTC', 'Montant']);
       const commissionsIndex = findColumn(headers, ['Comissions', 'Commissions', 'Commission']);
-      const hasHeaders = policeIndex >= 0 || dateIndex >= 0 || montantIndex >= 0;
-      const start = hasHeaders ? 1 : 0;
+
+      const resolvedSouscripteurIndex = souscripteurIndex >= 0 ? souscripteurIndex : 0;
       const resolvedPoliceIndex = policeIndex >= 0 ? policeIndex : 1;
       const resolvedDateIndex = dateIndex >= 0 ? dateIndex : 2;
       const resolvedMontantIndex = montantIndex >= 0 ? montantIndex : 3;
@@ -90,7 +105,7 @@ const parseFile = (file: File): Promise<ImportRow[]> => new Promise((resolve, re
         const police = normalizeContract(row[resolvedPoliceIndex]);
         if (!police) continue;
         importedRows.push({
-          souscripteur: String(row[souscripteurIndex >= 0 ? souscripteurIndex : 0] ?? '').trim(),
+          souscripteur: String(row[resolvedSouscripteurIndex] ?? '').trim(),
           police,
           dateEffective: parseDate(row[resolvedDateIndex]),
           montantTTC: parseAmount(row[resolvedMontantIndex]),
