@@ -11,6 +11,7 @@ interface ImportRow {
   dateEffective: string;
   montantTTC: number | null;
   commissions: number | null;
+  sousType: string;
   ligne: number;
 }
 
@@ -92,12 +93,14 @@ const parseFile = (file: File): Promise<ImportRow[]> => new Promise((resolve, re
       const dateIndex = findColumn(headers, ['Date effective', 'Date effet', 'Date']);
       const montantIndex = findColumn(headers, ['Montant TTC', 'Montant']);
       const commissionsIndex = findColumn(headers, ['Comissions', 'Commissions', 'Commission']);
+      const sousTypeIndex = findColumn(headers, ['Sous-type', 'Sous type', 'Soustype']);
 
       const resolvedSouscripteurIndex = souscripteurIndex >= 0 ? souscripteurIndex : 0;
       const resolvedPoliceIndex = policeIndex >= 0 ? policeIndex : 1;
       const resolvedDateIndex = dateIndex >= 0 ? dateIndex : 2;
       const resolvedMontantIndex = montantIndex >= 0 ? montantIndex : 3;
       const resolvedCommissionsIndex = commissionsIndex >= 0 ? commissionsIndex : 4;
+      const resolvedSousTypeIndex = sousTypeIndex >= 0 ? sousTypeIndex : 5;
 
       const importedRows: ImportRow[] = [];
       for (let index = start; index < rows.length; index += 1) {
@@ -110,6 +113,7 @@ const parseFile = (file: File): Promise<ImportRow[]> => new Promise((resolve, re
           dateEffective: parseDate(row[resolvedDateIndex]),
           montantTTC: parseAmount(row[resolvedMontantIndex]),
           commissions: parseAmount(row[resolvedCommissionsIndex]),
+          sousType: String(row[resolvedSousTypeIndex] ?? '').trim(),
           ligne: index + 1
         });
       }
@@ -239,13 +243,13 @@ const VerificationEncaissements: React.FC = () => {
 
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between"><h3 className="font-bold text-slate-900">Résultats de la vérification</h3><span className="text-sm text-slate-500">{filteredResults.length} ligne(s)</span></div>
-          <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead className="bg-slate-50"><tr>{['Ligne', 'Souscripteur', 'Police', 'Date effective PI', 'Date encaissement application', 'Montant TTC PI', 'Prime nette application', 'Commissions PI', 'Résultat'].map((heading) => <th key={heading} className="px-4 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">
+          <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead className="bg-slate-50"><tr>{['Ligne', 'Souscripteur', 'Police', 'Sous-type', 'Date effective PI', 'Date encaissement application', 'Montant TTC PI', 'Prime nette application', 'Commissions PI', 'Résultat'].map((heading) => <th key={heading} className="px-4 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">
             {filteredResults.map((result) => {
               const amountAlert = result.montantStatus === 'alerte';
               const isGood = result.dateStatus === 'bon' && !amountAlert;
               const isMissing = result.dateStatus === 'non-encaisse';
               return <tr key={`${result.police}-${result.ligne}`} className={isGood ? 'bg-emerald-50/40' : isMissing ? 'bg-amber-50/50' : 'bg-red-50/50'}>
-                <td className="px-4 py-3 text-slate-500">{result.ligne}</td><td className="px-4 py-3 font-medium text-slate-900">{result.souscripteur || '—'}</td><td className="px-4 py-3 font-semibold text-slate-900 whitespace-nowrap">{result.police}</td><td className="px-4 py-3 whitespace-nowrap">{formatDate(result.dateEffective)}</td><td className="px-4 py-3 whitespace-nowrap">{formatDate(result.dateEncaissement)}</td><td className="px-4 py-3 whitespace-nowrap">{formatAmount(result.montantTTC)}</td><td className="px-4 py-3 whitespace-nowrap">{formatAmount(result.primeNette)}</td><td className="px-4 py-3 whitespace-nowrap">{formatAmount(result.commissions)}</td>
+                <td className="px-4 py-3 text-slate-500">{result.ligne}</td><td className="px-4 py-3 font-medium text-slate-900">{result.souscripteur || '—'}</td><td className="px-4 py-3 font-semibold text-slate-900 whitespace-nowrap">{result.police}</td><td className="px-4 py-3 whitespace-nowrap">{result.sousType || '—'}</td><td className="px-4 py-3 whitespace-nowrap">{formatDate(result.dateEffective)}</td><td className="px-4 py-3 whitespace-nowrap">{formatDate(result.dateEncaissement)}</td><td className="px-4 py-3 whitespace-nowrap">{formatAmount(result.montantTTC)}</td><td className="px-4 py-3 whitespace-nowrap">{formatAmount(result.primeNette)}</td><td className="px-4 py-3 whitespace-nowrap">{formatAmount(result.commissions)}</td>
                 <td className="px-4 py-3 min-w-[280px]">{result.dateStatus === 'introuvable' ? <span className="inline-flex items-center gap-1.5 text-gray-700 font-semibold"><XCircle className="w-4 h-4" />Police introuvable dans terme</span> : <div className="space-y-1">{isGood ? <span className="inline-flex items-center gap-1.5 text-emerald-700 font-semibold"><CheckCircle2 className="w-4 h-4" />Bon: dates et montant concordants</span> : isMissing ? <span className="inline-flex items-center gap-1.5 text-amber-700 font-semibold"><AlertCircle className="w-4 h-4" />Non encaissé sur l’application mais encaissé sur PI</span> : <span className="inline-flex items-center gap-1.5 text-red-700 font-semibold"><XCircle className="w-4 h-4" />Alerte: vérification à corriger</span>}{result.dateStatus === 'alerte' && <p className="text-xs text-red-700">Dates différentes: PI {formatDate(result.dateEffective)} / application {formatDate(result.dateEncaissement)}</p>}{amountAlert && <p className="text-xs text-red-700">Montants différents: PI {formatAmount(result.montantTTC)} / application {formatAmount(result.primeNette)}</p>}</div>}</td>
               </tr>;
             })}
