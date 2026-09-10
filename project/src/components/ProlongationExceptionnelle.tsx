@@ -61,7 +61,11 @@ const daysDiff = (isoA: string, isoB: string): number => {
 // plus bas, et un volet récapitulatif en grand format tout en bas — chacun de
 // ces emplacements doit être rempli.
 
-const buildProlongationPDFBytes = async (f: ProlongForm): Promise<Uint8Array> => {
+const buildProlongationPDFBytes = async (form: ProlongForm): Promise<Uint8Array> => {
+  // L'immatriculation doit toujours s'afficher en majuscules (ex: "TU", pas "tu"),
+  // y compris pour d'anciennes prolongations enregistrées avant cette normalisation.
+  const f: ProlongForm = { ...form, immatriculation: form.immatriculation.toUpperCase() };
+
   const response = await fetch('/forms/Mliki_Amel.pdf');
   if (!response.ok) throw new Error('Le modèle PDF est introuvable.');
 
@@ -136,11 +140,16 @@ const buildProlongationPDFBytes = async (f: ProlongForm): Promise<Uint8Array> =>
     else lines[lines.length - 1] = `${current} ${word}`.trim();
     return lines;
   }, []);
-  addressLines.slice(0, 4).forEach((line, index) => {
+  // On efface systématiquement les 4 emplacements de ligne, même ceux sans
+  // nouvelle valeur : le modèle contient jusqu'à 4 lignes d'adresse et une
+  // adresse plus courte que l'original doit quand même couvrir les lignes
+  // en trop (ex: l'ancienne adresse du contrat "Mliki Amel" utilisée comme
+  // modèle de base).
+  for (let index = 0; index < 4; index++) {
     const top = 172.1 + index * 3.44;
     clearValue(30, top, 100);
-    value(line, 30, top);
-  });
+    if (addressLines[index]) value(addressLines[index], 30, top);
+  }
 
   clearValue(47, 189.7, 25);     value(dateStr, 47, 189.7);
   clearValue(50.5, 193.7, 15);   value(timeStr, 50.5, 193.7);
@@ -178,7 +187,7 @@ const saveProlongation = async (f: ProlongForm): Promise<void> => {
     date_fin_prolongation: f.date_fin_prolongation,
     marque: f.marque,
     puissance: f.puissance,
-    immatriculation: f.immatriculation,
+    immatriculation: f.immatriculation.toUpperCase(),
     usage: f.usage,
     adresse: f.adresse,
     date_demande: now.toISOString().split('T')[0],
@@ -503,7 +512,7 @@ const ProlongationExceptionnelle: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <Field label="Marque *" value={form.marque} onChange={v => upd('marque', v)} placeholder="ex: Peugeot" />
               <Field label="Puissance" value={form.puissance} onChange={v => upd('puissance', v)} placeholder="ex: 5 CV" />
-              <Field label="Immatriculation *" value={form.immatriculation} onChange={v => upd('immatriculation', v)} placeholder="ex: 123 TU 4567" mono />
+              <Field label="Immatriculation *" value={form.immatriculation} onChange={v => upd('immatriculation', v.toUpperCase())} placeholder="ex: 123 TU 4567" mono />
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Usage</label>
                 <select
