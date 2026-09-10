@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
-import { Search, AlertTriangle, CheckCircle, Download, FileText, Car, MapPin, Calendar, RotateCcw, Shield } from 'lucide-react';
+import { Search, AlertTriangle, CheckCircle, Download, FileText, Car, MapPin, Calendar, RotateCcw, Shield, ListChecks } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import ProlongationsList from './ProlongationsList';
 
 // Noms des mois sans accents pour les noms de tables
 const MOIS_TABLE: Record<number, string> = {
   0: 'janvier', 1: 'fevrier', 2: 'mars', 3: 'avril', 4: 'mai', 5: 'juin',
   6: 'juillet', 7: 'aout', 8: 'septembre', 9: 'octobre', 10: 'novembre', 11: 'decembre'
 };
+
+const USAGE_OPTIONS = ['210_Privé ou affaire Classique'];
 
 
 
@@ -75,21 +78,30 @@ const generateProlongationPDF = async (f: ProlongForm): Promise<void> => {
   // bord gauche / le haut de la page.
   const baselineY = (topMM: number): number => pageHeight - topMM * scale;
 
+  // Le texte est redessiné avec un léger décalage horizontal ("faux gras")
+  // pour un rendu bien noir et épais, quelle que soit la police du visualiseur.
   const value = (text: string, xMM: number, topMM: number, size = 8): void => {
-    page.drawText(text || '', { x: xMM * scale, y: baselineY(topMM), size, font, color: black });
+    if (!text) return;
+    const x = xMM * scale;
+    const yPos = baselineY(topMM);
+    page.drawText(text, { x, y: yPos, size, font, color: black });
+    page.drawText(text, { x: x + 0.35, y: yPos, size, font, color: black });
   };
 
   // Efface la zone occupée par l'ancienne valeur (au-dessus et en-dessous de
-  // la ligne de base, pour couvrir hampes et jambages) avant d'écrire la nouvelle.
-  const clearValue = (xMM: number, topMM: number, widthMM: number, size = 8): void => {
-    const ascentMM = (size * 0.8 * 25.4) / 72;
-    const descentMM = (size * 0.3 * 25.4) / 72;
+  // la ligne de base, pour couvrir hampes et jambages) avant d'écrire la
+  // nouvelle. `padMM` ajoute une marge de sécurité tout autour, utile pour
+  // les champs où l'ancien texte pourrait déborder légèrement de la zone
+  // mesurée (ex : immatriculation, dont la largeur varie d'un contrat à l'autre).
+  const clearValue = (xMM: number, topMM: number, widthMM: number, size = 8, padMM = 0): void => {
+    const ascentMM = (size * 0.85 * 25.4) / 72 + padMM;
+    const descentMM = (size * 0.35 * 25.4) / 72 + padMM;
     const boxTopMM = topMM - ascentMM;
     const boxHeightMM = ascentMM + descentMM;
     page.drawRectangle({
-      x: xMM * scale,
+      x: (xMM - padMM) * scale,
       y: pageHeight - (boxTopMM + boxHeightMM) * scale,
-      width: widthMM * scale,
+      width: (widthMM + padMM * 2) * scale,
       height: boxHeightMM * scale,
       color: white,
     });
@@ -102,7 +114,7 @@ const generateProlongationPDF = async (f: ProlongForm): Promise<void> => {
   clearValue(59.5, 50.1, 25);    value(formatDateFR(f.date_fin_prolongation), 59.5, 50.1);
   clearValue(146.5, 32.0, 40);   value(f.marque, 146.5, 32.0);
   clearValue(154.5, 45.4, 15);   value(f.puissance, 154.5, 45.4);
-  clearValue(147.5, 54.4, 35);   value(f.immatriculation, 147.5, 54.4);
+  clearValue(147.5, 54.4, 35, 8, 1.5); value(f.immatriculation, 147.5, 54.4);
   clearValue(140, 60.6, 55);     value(f.usage, 140, 60.6);
   clearValue(29.5, 64.7, 75);    value(f.assure, 29.5, 64.7);
   clearValue(29.5, 68.1, 100);   value(`Pour le compte de :${f.pour_le_compte}`, 29.5, 68.1);
@@ -117,7 +129,7 @@ const generateProlongationPDF = async (f: ProlongForm): Promise<void> => {
   clearValue(30.5, 149.8, 75);   value(f.assure, 30.5, 149.8);
   clearValue(153.5, 154.6, 15);  value(f.puissance, 153.5, 154.6);
   clearValue(30.5, 158.2, 100);  value(`Pour le compte de :${f.pour_le_compte}`, 30.5, 158.2);
-  clearValue(141.5, 166.7, 35);  value(f.immatriculation, 141.5, 166.7);
+  clearValue(141.5, 166.7, 35, 8, 1.5); value(f.immatriculation, 141.5, 166.7);
   clearValue(136.5, 173.7, 55);  value(f.usage, 136.5, 173.7);
 
   const addressLines = f.adresse.trim().split(/\s+/).reduce<string[]>((lines, word) => {
@@ -137,8 +149,8 @@ const generateProlongationPDF = async (f: ProlongForm): Promise<void> => {
   clearValue(50.5, 193.7, 15);   value(timeStr, 50.5, 193.7);
 
   // ── Bloc 3 (volet récapitulatif en grand format, bas de page) ──────────
-  clearValue(95, 254.5, 45, 11.5); value(formatDateFR(f.date_fin_prolongation), 95, 254.5, 11.5);
-  clearValue(94, 267.1, 45, 12.5); value(f.immatriculation, 94, 267.1, 12.5);
+  clearValue(95, 254.5, 45, 11.5, 2); value(formatDateFR(f.date_fin_prolongation), 95, 254.5, 11.5);
+  clearValue(94, 267.1, 45, 12.5, 3); value(f.immatriculation, 94, 267.1, 12.5);
 
   const bytes = await pdf.save();
   const blob = new Blob([bytes], { type: 'application/pdf' });
@@ -180,6 +192,7 @@ const saveProlongation = async (f: ProlongForm): Promise<void> => {
 type Step = 'search' | 'form' | 'done';
 
 const ProlongationExceptionnelle: React.FC = () => {
+  const [showList, setShowList]   = useState(false);
   const [step, setStep]           = useState<Step>('search');
   const [searchNum, setSearchNum] = useState('');
   const [searchDate, setSearchDate] = useState('');
@@ -247,7 +260,7 @@ const ProlongationExceptionnelle: React.FC = () => {
         marque: '',
         puissance: '',
         immatriculation: '',
-        usage: '',
+        usage: USAGE_OPTIONS[0],
         adresse: '',
       });
       setStep('form');
@@ -328,17 +341,27 @@ const ProlongationExceptionnelle: React.FC = () => {
     <div className="space-y-6">
       {/* En-tête */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-violet-900 rounded-2xl p-6 text-white shadow-2xl">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-xl bg-white/10 flex items-center justify-center border border-white/20">
-            <Shield className="w-7 h-7 text-violet-300" />
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-xl bg-white/10 flex items-center justify-center border border-white/20">
+              <Shield className="w-7 h-7 text-violet-300" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Prolongation</h1>
+              <p className="text-slate-400 text-sm mt-0.5">Demande de prolongation de couverture — max. 49 jours</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">Prolongation</h1>
-            <p className="text-slate-400 text-sm mt-0.5">Demande de prolongation de couverture — max. 49 jours</p>
-          </div>
+          <button
+            onClick={() => setShowList(v => !v)}
+            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-medium px-4 py-2.5 rounded-xl transition-all text-sm shrink-0"
+          >
+            <ListChecks className="w-4 h-4" />
+            {showList ? 'Nouvelle prolongation' : 'Liste des prolongations'}
+          </button>
         </div>
 
         {/* Étapes */}
+        {!showList && (
         <div className="mt-5 flex items-center gap-3">
           {(['search', 'form', 'done'] as Step[]).map((s, i) => {
             const labels = ['Recherche', 'Formulaire', 'Confirmation'];
@@ -363,10 +386,13 @@ const ProlongationExceptionnelle: React.FC = () => {
             );
           })}
         </div>
+        )}
       </div>
 
+      {showList && <ProlongationsList onBack={() => setShowList(false)} />}
+
       {/* ── ÉTAPE 1 : RECHERCHE ─────────────────────────────────────────────── */}
-      {step === 'search' && (
+      {!showList && step === 'search' && (
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
           <h2 className="text-lg font-semibold text-slate-800 mb-5 flex items-center gap-2">
             <Search className="w-5 h-5 text-violet-600" />
@@ -431,7 +457,7 @@ const ProlongationExceptionnelle: React.FC = () => {
       )}
 
       {/* ── ÉTAPE 2 : FORMULAIRE ────────────────────────────────────────────── */}
-      {step === 'form' && form && (
+      {!showList && step === 'form' && form && (
         <div className="space-y-5">
           {/* Récapitulatif contrat */}
           <div className="bg-violet-50 border border-violet-200 rounded-2xl p-5">
@@ -464,7 +490,18 @@ const ProlongationExceptionnelle: React.FC = () => {
               <Field label="Marque *" value={form.marque} onChange={v => upd('marque', v)} placeholder="ex: Peugeot" />
               <Field label="Puissance" value={form.puissance} onChange={v => upd('puissance', v)} placeholder="ex: 5 CV" />
               <Field label="Immatriculation *" value={form.immatriculation} onChange={v => upd('immatriculation', v)} placeholder="ex: 123 TU 4567" mono />
-              <Field label="Usage" value={form.usage} onChange={v => upd('usage', v)} placeholder="ex: Voiture de tourisme" />
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Usage</label>
+                <select
+                  value={form.usage}
+                  onChange={e => upd('usage', e.target.value)}
+                  className="w-full border border-slate-300 rounded-xl px-4 py-3 text-slate-800 focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none bg-white"
+                >
+                  {USAGE_OPTIONS.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
               <Field label="Classe *" value={form.classe} onChange={v => upd('classe', v)} placeholder="ex: Classe A" />
               <Field label="Pour le compte de" value={form.pour_le_compte} onChange={v => upd('pour_le_compte', v)} placeholder="Nom de la compagnie" />
             </div>
@@ -575,7 +612,7 @@ const ProlongationExceptionnelle: React.FC = () => {
       )}
 
       {/* ── ÉTAPE 3 : CONFIRMATION ──────────────────────────────────────────── */}
-      {step === 'done' && form && (
+      {!showList && step === 'done' && form && (
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8 text-center space-y-6">
           <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
             <CheckCircle className="w-10 h-10 text-emerald-500" />
