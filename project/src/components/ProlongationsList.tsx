@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, Send, RefreshCw, X, AlertCircle, Filter, ArrowLeft } from 'lucide-react';
+import { Calendar, Send, RefreshCw, X, AlertCircle, Filter, ArrowLeft, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getSession } from '../utils/auth';
 
@@ -41,6 +41,10 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [smsTarget, setSmsTarget] = useState<ProlongationRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProlongationRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const isHamza = getSession()?.username === 'Hamza';
 
   const load = async () => {
     setLoading(true);
@@ -67,6 +71,21 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
   const resetFilter = () => {
     setDateFrom('');
     setDateTo('');
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const { error: err } = await supabase.from('prolongation').delete().eq('id', deleteTarget.id);
+      if (err) throw err;
+      setDeleteTarget(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur lors de la suppression.');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -171,13 +190,24 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
                         </span>
                       </td>
                       <td className="py-2.5 pr-3">
-                        <button
-                          onClick={() => setSmsTarget(row)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors"
-                        >
-                          <Send className="w-3.5 h-3.5" />
-                          SMS
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setSmsTarget(row)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            SMS
+                          </button>
+                          {isHamza && (
+                            <button
+                              onClick={() => setDeleteTarget(row)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-200 text-xs font-medium hover:bg-red-100 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Supprimer
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -189,6 +219,41 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
       </div>
 
       {smsTarget && <ProlongationSMSModal row={smsTarget} onClose={() => setSmsTarget(null)} />}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4" onClick={() => setDeleteTarget(null)}>
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-600" />
+              Supprimer la prolongation
+            </h3>
+            <p className="text-sm text-slate-600">
+              Confirmez la suppression de la prolongation du contrat{' '}
+              <span className="font-semibold">{deleteTarget.numero_contrat}</span> ({deleteTarget.assure}).
+              Cette action est irréversible.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {deleting ? 'Suppression…' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

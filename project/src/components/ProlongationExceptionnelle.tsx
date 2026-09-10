@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Search, AlertTriangle, CheckCircle, Download, FileText, Car, MapPin, Calendar, RotateCcw, Shield, ListChecks } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { getSession } from '../utils/auth';
 import ProlongationsList from './ProlongationsList';
+import ProlongationValidationModal from './ProlongationValidationModal';
 
 // Noms des mois sans accents pour les noms de tables
 const MOIS_TABLE: Record<number, string> = {
@@ -14,7 +16,7 @@ const USAGE_OPTIONS = ['210_Privé ou affaire Classique'];
 
 
 
-interface ProlongForm {
+export interface ProlongForm {
   numero_contrat: string;
   assure: string;
   prime: number;
@@ -59,13 +61,13 @@ const daysDiff = (isoA: string, isoB: string): number => {
 // plus bas, et un volet récapitulatif en grand format tout en bas — chacun de
 // ces emplacements doit être rempli.
 
-const generateProlongationPDF = async (f: ProlongForm): Promise<void> => {
+const buildProlongationPDFBytes = async (f: ProlongForm): Promise<Uint8Array> => {
   const response = await fetch('/forms/Mliki_Amel.pdf');
   if (!response.ok) throw new Error('Le modèle PDF est introuvable.');
 
   const pdf = await PDFDocument.load(await response.arrayBuffer());
   const page = pdf.getPages()[0];
-  const font = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
   const white = rgb(1, 1, 1);
   const black = rgb(0, 0, 0);
   const scale = 72 / 25.4; // points par mm
@@ -78,14 +80,9 @@ const generateProlongationPDF = async (f: ProlongForm): Promise<void> => {
   // bord gauche / le haut de la page.
   const baselineY = (topMM: number): number => pageHeight - topMM * scale;
 
-  // Le texte est redessiné avec un léger décalage horizontal ("faux gras")
-  // pour un rendu bien noir et épais, quelle que soit la police du visualiseur.
   const value = (text: string, xMM: number, topMM: number, size = 8): void => {
     if (!text) return;
-    const x = xMM * scale;
-    const yPos = baselineY(topMM);
-    page.drawText(text, { x, y: yPos, size, font, color: black });
-    page.drawText(text, { x: x + 0.35, y: yPos, size, font, color: black });
+    page.drawText(text, { x: xMM * scale, y: baselineY(topMM), size, font, color: black });
   };
 
   // Efface la zone occupée par l'ancienne valeur (au-dessus et en-dessous de
@@ -152,12 +149,15 @@ const generateProlongationPDF = async (f: ProlongForm): Promise<void> => {
   clearValue(95, 254.5, 45, 11.5, 2); value(formatDateFR(f.date_fin_prolongation), 95, 254.5, 11.5);
   clearValue(94, 267.1, 45, 12.5, 3); value(f.immatriculation, 94, 267.1, 12.5);
 
-  const bytes = await pdf.save();
+  return pdf.save();
+};
+
+const downloadPDFBytes = (bytes: Uint8Array, numeroContrat: string): void => {
   const blob = new Blob([bytes], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `prolongation_${f.numero_contrat.replace(/\//g, '-')}.pdf`;
+  link.download = `prolongation_${numeroContrat.replace(/\//g, '-')}.pdf`;
   link.click();
   URL.revokeObjectURL(url);
 };
@@ -202,6 +202,8 @@ const ProlongationExceptionnelle: React.FC = () => {
   const [sending, setSending]     = useState(false);
   const [finErr, setFinErr]       = useState<string | null>(null);
   const [pdfError, setPdfError]   = useState<string | null>(null);
+  const [buildingPdf, setBuildingPdf] = useState(false);
+  const [pendingValidation, setPendingValidation] = useState<{ bytes: Uint8Array; numeroContrat: string } | null>(null);
 
   // ── Step 1 : Recherche ──────────────────────────────────────────────────────
 
@@ -315,14 +317,26 @@ const ProlongationExceptionnelle: React.FC = () => {
   const upd = (field: keyof ProlongForm, val: string) =>
     setForm(f => f ? { ...f, [field]: val } : f);
 
+  // Hamza télécharge directement. Les autres utilisateurs (Ahlem, Rouae...)
+  // doivent d'abord saisir le code de validation envoyé à Hamza par Telegram.
   const handleDownloadPDF = async (): Promise<void> => {
     if (!form) return;
     setPdfError(null);
+    setBuildingPdf(true);
     try {
-      await generateProlongationPDF(form);
+      const bytes = await buildProlongationPDFBytes(form);
+      const username = getSession()?.username || '';
+
+      if (username === 'Hamza') {
+        downloadPDFBytes(bytes, form.numero_contrat);
+      } else {
+        setPendingValidation({ bytes, numeroContrat: form.numero_contrat });
+      }
     } catch (err) {
       console.error('Erreur lors du téléchargement du PDF:', err);
       setPdfError('Le document PDF n’a pas pu être téléchargé. Veuillez réessayer.');
+    } finally {
+      setBuildingPdf(false);
     }
   };
 
@@ -642,10 +656,11 @@ const ProlongationExceptionnelle: React.FC = () => {
           <div className="flex gap-3 justify-center">
             <button
               onClick={handleDownloadPDF}
-              className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold px-8 py-3 rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg"
+              disabled={buildingPdf}
+              className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold px-8 py-3 rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all disabled:opacity-60 shadow-lg"
             >
               <Download className="w-4 h-4" />
-              Télécharger le document PDF
+              {buildingPdf ? 'Préparation…' : 'Télécharger le document PDF'}
             </button>
             {pdfError && <p className="text-sm text-red-600" role="alert">{pdfError}</p>}
             <button
@@ -657,6 +672,18 @@ const ProlongationExceptionnelle: React.FC = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {pendingValidation && form && (
+        <ProlongationValidationModal
+          form={form}
+          pdfBytes={pendingValidation.bytes}
+          onClose={() => setPendingValidation(null)}
+          onValidated={() => {
+            downloadPDFBytes(pendingValidation.bytes, pendingValidation.numeroContrat);
+            setPendingValidation(null);
+          }}
+        />
       )}
     </div>
   );
