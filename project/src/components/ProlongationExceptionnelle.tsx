@@ -48,6 +48,13 @@ const daysDiff = (isoA: string, isoB: string): number => {
 };
 
 // ── Génération PDF — reproduit fidèlement la mise en page du template ──────────
+//
+// Les coordonnées ci-dessous ont été relevées directement sur deux documents
+// réels (mêmes positions à la décimale près sur les deux), en mesurant la
+// position de base ("baseline") de chaque valeur en mm depuis le haut de page.
+// Le document comporte 3 zones : un bloc haut, un bloc "duplicata" identique
+// plus bas, et un volet récapitulatif en grand format tout en bas — chacun de
+// ces emplacements doit être rempli.
 
 const generateProlongationPDF = async (f: ProlongForm): Promise<void> => {
   const response = await fetch('/forms/Mliki_Amel.pdf');
@@ -58,65 +65,80 @@ const generateProlongationPDF = async (f: ProlongForm): Promise<void> => {
   const font = await pdf.embedFont(StandardFonts.HelveticaBold);
   const white = rgb(1, 1, 1);
   const black = rgb(0, 0, 0);
-  const scale = 72 / 25.4;
+  const scale = 72 / 25.4; // points par mm
   const pageHeight = page.getHeight();
   const now = new Date();
   const dateStr = now.toLocaleDateString('fr-FR');
   const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
-  const point = (mm: number): number => mm * scale;
-  const y = (mm: number, size: number): number => pageHeight - point(mm) - size;
-  const clear = (x: number, top: number, width: number, height: number): void => {
-    page.drawRectangle({ x: point(x), y: pageHeight - point(top + height), width: point(width), height: point(height), color: white });
+  // xMM / topMM : position de la ligne de base du texte, en mm depuis le
+  // bord gauche / le haut de la page.
+  const baselineY = (topMM: number): number => pageHeight - topMM * scale;
+
+  const value = (text: string, xMM: number, topMM: number, size = 8): void => {
+    page.drawText(text || '', { x: xMM * scale, y: baselineY(topMM), size, font, color: black });
   };
-  const value = (text: string, x: number, top: number, size = 8): void => {
-    page.drawText(text || '', { x: point(x), y: y(top, size), size, font, color: black });
+
+  // Efface la zone occupée par l'ancienne valeur (au-dessus et en-dessous de
+  // la ligne de base, pour couvrir hampes et jambages) avant d'écrire la nouvelle.
+  const clearValue = (xMM: number, topMM: number, widthMM: number, size = 8): void => {
+    const ascentMM = (size * 0.8 * 25.4) / 72;
+    const descentMM = (size * 0.3 * 25.4) / 72;
+    const boxTopMM = topMM - ascentMM;
+    const boxHeightMM = ascentMM + descentMM;
+    page.drawRectangle({
+      x: xMM * scale,
+      y: pageHeight - (boxTopMM + boxHeightMM) * scale,
+      width: widthMM * scale,
+      height: boxHeightMM * scale,
+      color: white,
+    });
   };
-  const clearValue = (x: number, top: number, width: number, height = 7): void => clear(x, top - 1, width, height);
 
-  clearValue(57, 19, 55); clearValue(68, 26, 25); clearValue(62, 33, 35); clearValue(62, 40, 38);
-  clearValue(25, 58, 75); clearValue(52, 65, 80);
-  clearValue(145, 11, 50); clearValue(148, 25, 30); clearValue(157, 39, 45); clearValue(142, 50, 60); clearValue(138, 61, 35); clearValue(138, 67, 35);
-  clearValue(122, 93, 55); clearValue(111, 105, 35); clearValue(111, 115, 38);
-  clearValue(26, 135, 75); clearValue(52, 146, 80); clearValue(28, 161, 78, 20);
-  clearValue(58, 188, 35); clearValue(58, 194, 35);
-  clearValue(150, 114, 45); clearValue(156, 135, 30); clearValue(165, 148, 45); clearValue(149, 161, 60);
-  clearValue(125, 238, 60, 12); clearValue(130, 261, 65, 14);
+  // ── Bloc 1 (haut de page) ────────────────────────────────────────────────
+  clearValue(57.5, 36.9, 60);    value(f.numero_contrat, 57.5, 36.9);
+  clearValue(65.5, 41.6, 15);    value(f.classe, 65.5, 41.6);
+  clearValue(59.5, 46.4, 25);    value(formatDateFR(f.date_effet), 59.5, 46.4);
+  clearValue(59.5, 50.1, 25);    value(formatDateFR(f.date_fin_prolongation), 59.5, 50.1);
+  clearValue(146.5, 32.0, 40);   value(f.marque, 146.5, 32.0);
+  clearValue(154.5, 45.4, 15);   value(f.puissance, 154.5, 45.4);
+  clearValue(147.5, 54.4, 35);   value(f.immatriculation, 147.5, 54.4);
+  clearValue(140, 60.6, 55);     value(f.usage, 140, 60.6);
+  clearValue(29.5, 64.7, 75);    value(f.assure, 29.5, 64.7);
+  clearValue(29.5, 68.1, 100);   value(`Pour le compte de :${f.pour_le_compte}`, 29.5, 68.1);
+  clearValue(145.5, 71.6, 20);   value(dateStr, 145.5, 71.6);
+  clearValue(149, 75.3, 15);     value(timeStr, 149, 75.3);
 
-  value(f.numero_contrat, 57, 19);
-  value(f.classe, 68, 26);
-  value(formatDateFR(f.date_effet), 62, 33);
-  value(formatDateFR(f.date_fin_prolongation), 62, 40);
-  value(f.assure, 25, 58);
-  value(f.pour_le_compte, 52, 65);
-  value(f.marque, 145, 11);
-  value(f.puissance, 148, 25);
-  value(f.immatriculation, 157, 39);
-  value(f.usage, 142, 50);
-  value(dateStr, 138, 61);
-  value(timeStr, 138, 67);
+  // ── Bloc 2 (duplicata, mêmes informations plus bas) ─────────────────────
+  clearValue(104, 114.2, 60);    value(f.numero_contrat, 104, 114.2);
+  clearValue(98.5, 121.4, 30);   value(formatDateFR(f.date_effet), 98.5, 121.4);
+  clearValue(98.5, 125.7, 30);   value(formatDateFR(f.date_fin_prolongation), 98.5, 125.7);
+  clearValue(144.5, 138.1, 40);  value(f.marque, 144.5, 138.1);
+  clearValue(30.5, 149.8, 75);   value(f.assure, 30.5, 149.8);
+  clearValue(153.5, 154.6, 15);  value(f.puissance, 153.5, 154.6);
+  clearValue(30.5, 158.2, 100);  value(`Pour le compte de :${f.pour_le_compte}`, 30.5, 158.2);
+  clearValue(141.5, 166.7, 35);  value(f.immatriculation, 141.5, 166.7);
+  clearValue(136.5, 173.7, 55);  value(f.usage, 136.5, 173.7);
 
-  value(f.numero_contrat, 122, 93);
-  value(formatDateFR(f.date_effet), 111, 105);
-  value(formatDateFR(f.date_fin_prolongation), 111, 115);
-  value(f.assure, 26, 135);
-  value(f.pour_le_compte, 52, 146);
   const addressLines = f.adresse.trim().split(/\s+/).reduce<string[]>((lines, word) => {
     const current = lines[lines.length - 1] || '';
-    if ((current + ' ' + word).trim().length > 26) lines.push(word);
+    if ((current + ' ' + word).trim().length > 28) lines.push(word);
     else if (lines.length === 0) lines.push(word);
     else lines[lines.length - 1] = `${current} ${word}`.trim();
     return lines;
   }, []);
-  addressLines.slice(0, 4).forEach((line, index) => value(line, 28, 161 + index * 6, 7));
-  value(dateStr, 58, 188);
-  value(timeStr, 58, 194);
-  value(f.marque, 150, 114);
-  value(f.puissance, 156, 135);
-  value(f.immatriculation, 165, 148);
-  value(f.usage, 149, 161);
-  value(formatDateFR(f.date_fin_prolongation), 125, 238, 13);
-  value(f.immatriculation, 130, 261, 15);
+  addressLines.slice(0, 4).forEach((line, index) => {
+    const top = 172.1 + index * 3.44;
+    clearValue(30, top, 100);
+    value(line, 30, top);
+  });
+
+  clearValue(47, 189.7, 25);     value(dateStr, 47, 189.7);
+  clearValue(50.5, 193.7, 15);   value(timeStr, 50.5, 193.7);
+
+  // ── Bloc 3 (volet récapitulatif en grand format, bas de page) ──────────
+  clearValue(95, 254.5, 45, 11.5); value(formatDateFR(f.date_fin_prolongation), 95, 254.5, 11.5);
+  clearValue(94, 267.1, 45, 12.5); value(f.immatriculation, 94, 267.1, 12.5);
 
   const bytes = await pdf.save();
   const blob = new Blob([bytes], { type: 'application/pdf' });
