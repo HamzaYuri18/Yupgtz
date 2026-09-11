@@ -771,8 +771,8 @@ const EtatCommissions: React.FC = () => {
                       editing
                         ? 'bg-sky-50 border-l-sky-500 ring-1 ring-inset ring-sky-200'
                         : quinzaine.statut === 'Liquidée'
-                          ? 'bg-lime-300 border-l-green-500 hover:bg-lime-200 shadow-[inset_0_0_14px_rgba(101,163,13,0.35)]'
-                          : 'bg-yellow-300 border-l-yellow-500 hover:bg-yellow-200 shadow-[inset_0_0_14px_rgba(202,138,4,0.35)]'
+                          ? 'bg-lime-100 border-l-green-500 hover:bg-lime-200/70 shadow-[inset_0_0_14px_rgba(163,230,53,0.4)]'
+                          : 'bg-yellow-100 border-l-yellow-500 hover:bg-yellow-200/70 shadow-[inset_0_0_14px_rgba(250,204,21,0.4)]'
                     }`}
                   >
                     {/* Période */}
