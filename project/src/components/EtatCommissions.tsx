@@ -762,7 +762,7 @@ const EtatCommissions: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100/60">
-              {filteredQuinzaines.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((quinzaine, rowIdx) => {
+              {filteredQuinzaines.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((quinzaine) => {
                 const editing = isEditing(quinzaine);
                 return (
                   <tr
@@ -771,8 +771,8 @@ const EtatCommissions: React.FC = () => {
                       editing
                         ? 'bg-sky-50 border-l-sky-500 ring-1 ring-inset ring-sky-200'
                         : quinzaine.statut === 'Liquidée'
-                          ? `${rowIdx % 2 === 0 ? 'bg-emerald-50/40' : 'bg-white'} border-l-emerald-500 hover:bg-emerald-100/50`
-                          : `${rowIdx % 2 === 0 ? 'bg-white' : 'bg-amber-50/20'} border-l-amber-400 hover:bg-amber-50/60`
+                          ? 'bg-lime-300 border-l-green-500 hover:bg-lime-200 shadow-[inset_0_0_14px_rgba(101,163,13,0.35)]'
+                          : 'bg-yellow-300 border-l-yellow-500 hover:bg-yellow-200 shadow-[inset_0_0_14px_rgba(202,138,4,0.35)]'
                     }`}
                   >
                     {/* Période */}
@@ -894,8 +894,8 @@ const EtatCommissions: React.FC = () => {
                           <option value="Liquidée">Liquidée</option>
                         </select>
                       ) : (
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          quinzaine.statut === 'Liquidée' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold shadow-sm ${
+                          quinzaine.statut === 'Liquidée' ? 'bg-green-700 text-white' : 'bg-yellow-700 text-white'
                         }`}>
                           {quinzaine.statut}
                         </span>
