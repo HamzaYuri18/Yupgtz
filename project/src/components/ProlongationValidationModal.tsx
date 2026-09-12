@@ -94,6 +94,10 @@ const ProlongationValidationModal: React.FC<Props> = ({ form, pdfBytes, onClose,
         throw new Error(result.error || "Échec de l'envoi Telegram à Mr Hamza.");
       }
 
+      // 4. Le lien a été transmis : le PDF n'a plus besoin de rester sur le
+      // stockage Supabase, on le supprime pour ne pas accumuler d'espace.
+      await supabase.storage.from('prolongations').remove([fileName]);
+
       setPhase('awaiting_code');
     } catch (err) {
       setInitError(err instanceof Error ? err.message : 'Erreur lors de la préparation de la demande.');
