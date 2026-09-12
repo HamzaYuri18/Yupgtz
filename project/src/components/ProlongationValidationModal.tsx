@@ -5,6 +5,7 @@ import { getSession } from '../utils/auth';
 import type { ProlongForm } from './ProlongationExceptionnelle';
 
 const CODE_VALIDITY_MINUTES = 30;
+const PDF_RETENTION_MINUTES = 10;
 
 const formatDateFR = (iso: string): string => {
   if (!iso) return '';
@@ -13,6 +14,25 @@ const formatDateFR = (iso: string): string => {
 };
 
 const generateCode = (): string => String(Math.floor(100000 + Math.random() * 900000));
+
+// Best-effort : supprime aussi tout PDF de demande oublié (ex: onglet fermé
+// avant l'expiration de son propre délai) datant de plus de 10 minutes,
+// pour ne jamais laisser le bucket accumuler d'espace inutilement.
+const cleanupOldPdfs = async (): Promise<void> => {
+  try {
+    const { data: files } = await supabase.storage.from('prolongations').list();
+    if (!files) return;
+    const cutoff = Date.now() - PDF_RETENTION_MINUTES * 60000;
+    const stale = files
+      .filter(f => f.created_at && new Date(f.created_at).getTime() < cutoff)
+      .map(f => f.name);
+    if (stale.length > 0) {
+      await supabase.storage.from('prolongations').remove(stale);
+    }
+  } catch {
+    // Nettoyage best-effort : une erreur ici ne doit jamais bloquer la demande.
+  }
+};
 
 interface Props {
   form: ProlongForm;
@@ -38,6 +58,9 @@ const ProlongationValidationModal: React.FC<Props> = ({ form, pdfBytes, onClose,
     setVerifyError(null);
 
     try {
+      // Nettoie au passage d'éventuels PDF de demandes précédentes oubliés.
+      void cleanupOldPdfs();
+
       // 1. Héberger le PDF pour que Mr Hamza puisse le consulter avant de valider.
       const fileName = `prolongation_${form.numero_contrat.replace(/\//g, '-')}_${Date.now()}.pdf`;
       const { error: uploadErr } = await supabase.storage
@@ -94,9 +117,13 @@ const ProlongationValidationModal: React.FC<Props> = ({ form, pdfBytes, onClose,
         throw new Error(result.error || "Échec de l'envoi Telegram à Mr Hamza.");
       }
 
-      // 4. Le lien a été transmis : le PDF n'a plus besoin de rester sur le
-      // stockage Supabase, on le supprime pour ne pas accumuler d'espace.
-      await supabase.storage.from('prolongations').remove([fileName]);
+      // 4. Le lien a été transmis : Mr Hamza dispose de 10 minutes pour
+      // consulter le PDF avant qu'il soit retiré du stockage Supabase (pour
+      // ne pas accumuler d'espace). Filet de sécurité : cleanupOldPdfs()
+      // rattrapera ce fichier même si cet onglet est fermé avant l'échéance.
+      setTimeout(() => {
+        supabase.storage.from('prolongations').remove([fileName]);
+      }, PDF_RETENTION_MINUTES * 60000);
 
       setPhase('awaiting_code');
     } catch (err) {
