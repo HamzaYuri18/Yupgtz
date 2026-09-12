@@ -1233,7 +1233,8 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
           .update({
             'Mode de paiement': newSinistre.type_paiement,
             'Date de paiement': newSinistre.date_paiement_sinistre,
-            'Statut de paiement': 'Payé'
+            'Statut de paiement': 'Payé',
+            'Payé par': username
           })
           .eq('id', foundSinistrePDFId);
       }
@@ -2785,10 +2786,12 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                     <thead className="bg-orange-50">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">N° Sinistre</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">Date Liquidation</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">Montant (DT)</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">Souscripteur</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">Statut</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">Mode Paiement</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">Payé par</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-orange-600 uppercase">Date Paiement</th>
                       </tr>
                     </thead>
@@ -2802,6 +2805,9 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                           >
                             <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-900">{row.NumSinistre || '-'}</td>
                             <td className="px-4 py-3 whitespace-nowrap text-gray-900">
+                              {row['Date'] ? new Date(row['Date']).toLocaleDateString('fr-FR') : '-'}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-gray-900">
                               {row.MontantSinistre != null ? Number(row.MontantSinistre).toLocaleString('fr-FR') : '-'}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-gray-900">{row.souscripteur || '-'}</td>
@@ -2811,6 +2817,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                               </span>
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-gray-900">{row['Mode de paiement'] || '-'}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-gray-900">{row['Payé par'] || '-'}</td>
                             <td className="px-4 py-3 whitespace-nowrap text-gray-900">
                               {row['Date de paiement'] ? new Date(row['Date de paiement']).toLocaleDateString('fr-FR') : '-'}
                             </td>
@@ -2987,15 +2994,18 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     }
   };
 
-  const loadSinistrePDF = async (page = 1, _dateFrom = '', _dateTo = '') => {
+  const loadSinistrePDF = async (page = 1, dateFrom = '', dateTo = '') => {
     setSinistrePDFLoading(true);
     try {
-      // Requête paginée pour l'affichage
+      // Requête paginée pour l'affichage, triée par ordre chronologique (Date de liquidation)
       const from = (page - 1) * 10;
-      const { data, error, count } = await supabase
+      let query = supabase
         .from('SinistrPDF')
-        .select('id, NumSinistre, souscripteur, MontantSinistre, "Statut de paiement", "Mode de paiement", "Date de paiement"', { count: 'exact' })
-        .order('id', { ascending: false })
+        .select('id, NumSinistre, souscripteur, MontantSinistre, "Statut de paiement", "Mode de paiement", "Date de paiement", "Date", "Payé par"', { count: 'exact' });
+      if (dateFrom) query = query.gte('Date', dateFrom);
+      if (dateTo) query = query.lte('Date', dateTo);
+      const { data, error, count } = await query
+        .order('Date', { ascending: true })
         .range(from, from + 9);
 
       if (error) throw error;
@@ -3027,16 +3037,18 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     try {
       const { data, error } = await supabase
         .from('SinistrPDF')
-        .select('NumSinistre, souscripteur, MontantSinistre, "Statut de paiement", "Mode de paiement", "Date de paiement"')
-        .order('id', { ascending: false });
+        .select('NumSinistre, souscripteur, MontantSinistre, "Statut de paiement", "Mode de paiement", "Date de paiement", "Date", "Payé par"')
+        .order('Date', { ascending: true });
       if (error) throw error;
 
       const dataToExport = (data || []).map((r: any) => ({
         'N° Sinistre': r.NumSinistre || '',
+        'Date de liquidation': r['Date'] || '',
         'Souscripteur': r.souscripteur || '',
         'Montant': r.MontantSinistre || '',
         'Statut': r['Statut de paiement'] || '',
-        'Mode de paiement': r['Modede paiement'] || '',
+        'Mode de paiement': r['Mode de paiement'] || '',
+        'Payé par': r['Payé par'] || '',
         'Date de paiement': r['Date de paiement'] || ''
       }));
       exportToExcel(dataToExport, 'sinistres_pdf', 'Sinistres PDF');
