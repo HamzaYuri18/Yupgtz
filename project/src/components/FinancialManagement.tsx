@@ -2997,7 +2997,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
   const loadSinistrePDF = async (page = 1, dateFrom = '', dateTo = '') => {
     setSinistrePDFLoading(true);
     try {
-      // Requête paginée pour l'affichage, triée par ordre chronologique (Date de liquidation)
+      // Requête paginée pour l'affichage, triée par Date de liquidation (plus récent au plus ancien)
       const from = (page - 1) * 10;
       let query = supabase
         .from('SinistrPDF')
@@ -3005,7 +3005,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       if (dateFrom) query = query.gte('Date', dateFrom);
       if (dateTo) query = query.lte('Date', dateTo);
       const { data, error, count } = await query
-        .order('Date', { ascending: true })
+        .order('Date', { ascending: false })
         .range(from, from + 9);
 
       if (error) throw error;
@@ -3038,7 +3038,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       const { data, error } = await supabase
         .from('SinistrPDF')
         .select('NumSinistre, souscripteur, MontantSinistre, "Statut de paiement", "Mode de paiement", "Date de paiement", "Date", "Payé par"')
-        .order('Date', { ascending: true });
+        .order('Date', { ascending: false });
       if (error) throw error;
 
       const dataToExport = (data || []).map((r: any) => ({
