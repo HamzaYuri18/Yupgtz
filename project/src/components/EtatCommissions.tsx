@@ -119,7 +119,7 @@ const EtatCommissions: React.FC = () => {
 
   const calculateDepenses = async (dateDebut: string, dateFin: string): Promise<number> => {
     try {
-      const excluded = ['Versement Bancaire', 'A/S Ahlem', 'A/S Rouae', 'Reprise sur Avance Client'];
+      const excluded = ['Versement Bancaire', 'A/S Ahlem', 'A/S Rouae', 'Reprise sur Avance Client', 'Dépense Récupérable'];
       const { data, error } = await supabase
         .from('depenses')
         .select('montant, type_depense, statut_depense')
@@ -128,7 +128,6 @@ const EtatCommissions: React.FC = () => {
       if (error) throw error;
       return data?.reduce((sum, d) => {
         if (excluded.includes(d.type_depense)) return sum;
-        if (d.type_depense === 'Dépense Récupérable' && d.statut_depense === 'Payé') return sum;
         return sum + (Number(d.montant) || 0);
       }, 0) || 0;
     } catch { return 0; }
@@ -353,17 +352,13 @@ const EtatCommissions: React.FC = () => {
 
   const exportDepenses = async (quinzaine: QuinzaineData) => {
     try {
-      const excluded = ['Versement Bancaire', 'A/S Ahlem', 'A/S Rouae', 'Reprise sur Avance Client'];
+      const excluded = ['Versement Bancaire', 'A/S Ahlem', 'A/S Rouae', 'Reprise sur Avance Client', 'Dépense Récupérable'];
       const { data, error } = await supabase
         .from('depenses').select('*')
         .gte('date_depense', quinzaine.date_debut).lte('date_depense', quinzaine.date_fin)
         .order('date_depense', { ascending: false });
       if (error) throw error;
-      const filtered = data?.filter(d => {
-        if (excluded.includes(d.type_depense)) return false;
-        if (d.type_depense === 'Dépense Récupérable' && d.statut_depense === 'Payé') return false;
-        return true;
-      });
+      const filtered = data?.filter(d => !excluded.includes(d.type_depense));
       if (!filtered || filtered.length === 0) { setError('Aucune dépense trouvée'); return; }
       const ws = XLSX.utils.json_to_sheet(filtered.map(d => ({
         'Date Dépense': d.date_depense, 'Type': d.type_depense,
