@@ -121,10 +121,16 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     return () => { cancelled = true; };
   }, [filteredSessions, versementsParDate]);
 
-  // Total des charges d'une session = valeur enregistrée manuellement +
-  // somme des lignes de la table "expenses" de l'autre projet pour cette date.
-  const getTotalCharges = (session: SessionData): number =>
-    (Number(session.charges) || 0) + (externalChargesByDate[session.date_session] || 0);
+  // Total des charges d'une session : dès que la table "expenses" de l'autre
+  // projet a des lignes pour cette date, elle fait foi (elle seule) — sinon
+  // on retombe sur la valeur enregistrée manuellement dans sessions.charges.
+  // Les deux ne sont PAS additionnées : la valeur manuelle a souvent été
+  // saisie à la main pour représenter le même total que celui de la table
+  // "expenses", donc les additionner comptait deux fois la même charge.
+  const getTotalCharges = (session: SessionData): number => {
+    const externalTotal = externalChargesByDate[session.date_session];
+    return externalTotal !== undefined ? externalTotal : (Number(session.charges) || 0);
+  };
 
   useEffect(() => {
     loadSessions();
