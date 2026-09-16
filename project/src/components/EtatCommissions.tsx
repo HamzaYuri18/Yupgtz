@@ -119,7 +119,7 @@ const EtatCommissions: React.FC = () => {
 
   const calculateDepenses = async (dateDebut: string, dateFin: string): Promise<number> => {
     try {
-      const excluded = ['Versement Bancaire', 'A/S Ahlem', 'A/S Rouae', 'Reprise sur Avance Client', 'Dépense Récupérable'];
+      const excluded = ['Versement Bancaire', 'A/S Ahlem', 'A/S Rouae', 'Reprise sur Avance Client', 'Depense Recuperable'];
       const { data, error } = await supabase
         .from('depenses')
         .select('montant, type_depense, statut_depense')
@@ -352,7 +352,7 @@ const EtatCommissions: React.FC = () => {
 
   const exportDepenses = async (quinzaine: QuinzaineData) => {
     try {
-      const excluded = ['Versement Bancaire', 'A/S Ahlem', 'A/S Rouae', 'Reprise sur Avance Client', 'Dépense Récupérable'];
+      const excluded = ['Versement Bancaire', 'A/S Ahlem', 'A/S Rouae', 'Reprise sur Avance Client', 'Depense Recuperable'];
       const { data, error } = await supabase
         .from('depenses').select('*')
         .gte('date_depense', quinzaine.date_debut).lte('date_depense', quinzaine.date_fin)
