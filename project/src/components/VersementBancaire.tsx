@@ -12,6 +12,7 @@ import {
 import * as XLSX from 'xlsx';
 import { generateAvisVersementPDF } from '../utils/avisVersementPDF';
 import { supabase } from '../lib/supabase';
+import { expensesSupabase } from '../lib/expensesSupabase';
 import { numberToWords } from '../utils/numberToWords';
 import ChargesDetailModal from './ChargesDetailModal';
 
@@ -82,6 +83,48 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [loadingVersements, setLoadingVersements] = useState(false);
   const [versementPage, setVersementPage] = useState(1);
   const versementsPerPage = 15;
+
+  // Charges détaillées de l'autre projet Supabase (table "expenses"),
+  // regroupées et sommées par date de session, pour compléter la valeur
+  // manuellement enregistrée dans sessions.charges.
+  const [externalChargesByDate, setExternalChargesByDate] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const dates = Array.from(new Set([
+      ...filteredSessions.map(s => s.date_session),
+      ...versementsParDate.map(s => s.date_session),
+    ])).filter(Boolean);
+
+    if (dates.length === 0) {
+      setExternalChargesByDate({});
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await expensesSupabase
+          .from('expenses')
+          .select('expense_date, amount')
+          .in('expense_date', dates);
+        if (error || cancelled) return;
+        const sums: Record<string, number> = {};
+        (data || []).forEach(row => {
+          sums[row.expense_date] = (sums[row.expense_date] || 0) + (Number(row.amount) || 0);
+        });
+        if (!cancelled) setExternalChargesByDate(sums);
+      } catch {
+        // Best-effort : une erreur ici ne doit pas bloquer l'affichage.
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [filteredSessions, versementsParDate]);
+
+  // Total des charges d'une session = valeur enregistrée manuellement +
+  // somme des lignes de la table "expenses" de l'autre projet pour cette date.
+  const getTotalCharges = (session: SessionData): number =>
+    (Number(session.charges) || 0) + (externalChargesByDate[session.date_session] || 0);
 
   useEffect(() => {
     loadSessions();
@@ -198,9 +241,9 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       const day = sessionDate.getDate();
       
       if (day <= 15) {
-        premiereQuinzaine += session.charges;
+        premiereQuinzaine += getTotalCharges(session);
       } else {
-        deuxiemeQuinzaine += session.charges;
+        deuxiemeQuinzaine += getTotalCharges(session);
       }
     });
 
@@ -530,7 +573,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   };
 
   const calculateSolde = (session: SessionData): number => {
-    const netEspece = session.total_espece - session.charges;
+    const netEspece = session.total_espece - getTotalCharges(session);
     return session.versement - netEspece;
   };
 
@@ -538,8 +581,8 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     const dataToExport = filteredSessions.map(session => ({
       'Date Session': session.date_session,
       'Total Espèce': session.total_espece,
-      'Charges': session.charges,
-      'Net': session.total_espece - session.charges,
+      'Charges': getTotalCharges(session),
+      'Net': session.total_espece - getTotalCharges(session),
       'Versement': session.versement,
       'Date Versement': session.date_versement || '',
       'Banque': session.banque || '',
@@ -845,7 +888,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                       onClick={() => setChargesDetailDate(session.date_session)}
                       title="Voir le détail des charges"
                     >
-                      {session.charges.toFixed(2)} DT
+                      {getTotalCharges(session).toFixed(2)} DT
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.versement.toFixed(2)} DT</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.date_versement || '-'}</td>
@@ -1054,7 +1097,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                         onClick={() => setChargesDetailDate(session.date_session)}
                         title="Voir le détail des charges"
                       >
-                        {session.charges.toFixed(2)} DT
+                        {getTotalCharges(session).toFixed(2)} DT
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-green-700">
                         {session.versement.toFixed(2)} DT
