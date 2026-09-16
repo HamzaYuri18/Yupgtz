@@ -488,12 +488,25 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       session = data as SessionData;
     }
 
+    // La charge saisie ici s'ajoute à la charge déjà enregistrée pour la
+    // session au lieu de l'écraser. On relit la valeur actuelle en base
+    // juste avant d'additionner, pour ne pas repartir d'un état local
+    // potentiellement obsolète.
+    const { data: currentSessionData } = await supabase
+      .from('sessions')
+      .select('charges')
+      .eq('id', session.id)
+      .maybeSingle();
+    const chargesActuelles = Number(currentSessionData?.charges ?? session.charges) || 0;
+    const chargesAAjouter = parseFloat(formData.charges) || 0;
+    const nouvellesCharges = chargesActuelles + chargesAAjouter;
+
     const success = await updateSessionVersement(
       session.id,
       parseFloat(formData.versement),
       formData.dateVersement,
       formData.banque,
-      parseFloat(formData.charges) || 0
+      nouvellesCharges
     );
 
     if (success) {
