@@ -7,6 +7,14 @@ interface Props {
   onClose: () => void;
 }
 
+const formatDateTimeFR = (iso: string): string => {
+  if (!iso) return '-';
+  return new Date(iso).toLocaleString('fr-FR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+};
+
 const ChargesDetailModal: React.FC<Props> = ({ dateSession, onClose }) => {
   const [rows, setRows] = useState<ExpenseDetail[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +78,7 @@ const ChargesDetailModal: React.FC<Props> = ({ dateSession, onClose }) => {
                       <th className="py-2 pr-3">Description</th>
                       <th className="py-2 pr-3">Catégorie</th>
                       <th className="py-2 pr-3">Source</th>
+                      <th className="py-2 pr-3">Créée le</th>
                       <th className="py-2 pr-3 text-right">Montant</th>
                     </tr>
                   </thead>
@@ -79,6 +88,7 @@ const ChargesDetailModal: React.FC<Props> = ({ dateSession, onClose }) => {
                         <td className="py-2.5 pr-3 text-gray-900">{r.description || '-'}</td>
                         <td className="py-2.5 pr-3 text-gray-600">{r.category || '-'}</td>
                         <td className="py-2.5 pr-3 text-gray-600">{r.source || '-'}</td>
+                        <td className="py-2.5 pr-3 text-gray-600 whitespace-nowrap">{formatDateTimeFR(r.created_at)}</td>
                         <td className="py-2.5 pr-3 text-right font-medium text-gray-900">
                           {Number(r.amount).toFixed(2)} DT
                         </td>
