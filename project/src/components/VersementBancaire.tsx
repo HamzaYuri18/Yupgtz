@@ -13,6 +13,7 @@ import * as XLSX from 'xlsx';
 import { generateAvisVersementPDF } from '../utils/avisVersementPDF';
 import { supabase } from '../lib/supabase';
 import { numberToWords } from '../utils/numberToWords';
+import ChargesDetailModal from './ChargesDetailModal';
 
 interface VersementBancaireProps {
   username: string;
@@ -40,6 +41,7 @@ interface QuinzaineStats {
 const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [filteredSessions, setFilteredSessions] = useState<SessionData[]>([]);
+  const [chargesDetailDate, setChargesDetailDate] = useState<string | null>(null);
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [message, setMessage] = useState('');
@@ -825,7 +827,13 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                   <tr key={session.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.date_session}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.total_espece.toFixed(2)} DT</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.charges.toFixed(2)} DT</td>
+                    <td
+                      className="px-4 py-3 whitespace-nowrap text-sm text-blue-700 underline decoration-dotted cursor-pointer hover:text-blue-900 hover:bg-blue-50"
+                      onClick={() => setChargesDetailDate(session.date_session)}
+                      title="Voir le détail des charges"
+                    >
+                      {session.charges.toFixed(2)} DT
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.versement.toFixed(2)} DT</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.date_versement || '-'}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.banque || '-'}</td>
@@ -1028,7 +1036,11 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {session.total_espece.toFixed(2)} DT
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      <td
+                        className="px-4 py-3 whitespace-nowrap text-sm text-blue-700 underline decoration-dotted cursor-pointer hover:text-blue-900 hover:bg-blue-50"
+                        onClick={() => setChargesDetailDate(session.date_session)}
+                        title="Voir le détail des charges"
+                      >
                         {session.charges.toFixed(2)} DT
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-green-700">
@@ -1192,6 +1204,13 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {chargesDetailDate && (
+        <ChargesDetailModal
+          dateSession={chargesDetailDate}
+          onClose={() => setChargesDetailDate(null)}
+        />
       )}
     </div>
   );
