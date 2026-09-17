@@ -52,11 +52,17 @@ const TermesSmsModal: React.FC<Props> = ({ targets, username, isHamza, onClose }
   const [lang, setLang] = useState<Lang>('fr');
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState<SendResult[] | null>(null);
+  // Numéros ajoutés/corrigés manuellement (Hamza uniquement) pour les
+  // contrats sans téléphone enregistré, le temps de cet envoi.
+  const [phoneOverrides, setPhoneOverrides] = useState<Record<string, string>>({});
   const maxChars = 160;
 
   // Pour les utilisateurs non-Hamza, le message effectif est toujours l'un
   // des 4 modèles fixes (2 modèles x 2 langues) — jamais du texte libre.
   const effectiveMessage = isHamza ? message : TEMPLATES[templateId][lang];
+
+  const phoneFor = (target: SmsTarget): string =>
+    phoneOverrides[target.numero_contrat] || target.telephone || '';
 
   const buildMessage = (target: SmsTarget): string =>
     effectiveMessage
@@ -71,7 +77,7 @@ const TermesSmsModal: React.FC<Props> = ({ targets, username, isHamza, onClose }
     const newResults: SendResult[] = [];
 
     for (const target of targets) {
-      const cleanedPhone = (target.telephone || '').replace(/\s+/g, '');
+      const cleanedPhone = phoneFor(target).replace(/\s+/g, '');
       const finalMessage = buildMessage(target);
 
       if (!cleanedPhone || cleanedPhone.length < 8) {
@@ -207,15 +213,28 @@ const TermesSmsModal: React.FC<Props> = ({ targets, username, isHamza, onClose }
                 {previewLength}/{maxChars} caractères (aperçu du 1er destinataire)
               </p>
 
-              <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
-                {targets.map(t => (
-                  <div key={t.numero_contrat} className="px-3 py-2 text-xs flex justify-between items-center">
-                    <span className="text-gray-700">{t.assure} — {t.numero_contrat}</span>
-                    <span className={t.telephone ? 'text-gray-500' : 'text-red-500 font-medium'}>
-                      {t.telephone || 'sans numéro'}
-                    </span>
-                  </div>
-                ))}
+              <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                {targets.map(t => {
+                  const hasNumber = !!phoneFor(t);
+                  return (
+                    <div key={t.numero_contrat} className="px-3 py-2 text-xs flex justify-between items-center gap-2">
+                      <span className="text-gray-700 truncate">{t.assure} — {t.numero_contrat}</span>
+                      {!t.telephone && isHamza ? (
+                        <input
+                          type="tel"
+                          value={phoneOverrides[t.numero_contrat] || ''}
+                          onChange={e => setPhoneOverrides(prev => ({ ...prev, [t.numero_contrat]: e.target.value }))}
+                          placeholder="Ajouter un numéro"
+                          className="w-32 shrink-0 px-2 py-1 border border-red-300 bg-red-50 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                        />
+                      ) : (
+                        <span className={`shrink-0 ${hasNumber ? 'text-gray-500' : 'text-red-500 font-medium'}`}>
+                          {phoneFor(t) || 'sans numéro'}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="flex gap-3">
