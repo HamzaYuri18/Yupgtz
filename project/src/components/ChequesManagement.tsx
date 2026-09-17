@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { Check, X, Filter, Calendar, TrendingUp, CreditCard, CheckCircle, Clock, ChevronDown } from 'lucide-react';
+import { Check, X, Filter, Calendar, TrendingUp, CreditCard, CheckCircle, Clock, ChevronDown, Plus } from 'lucide-react';
+import { getSession } from '../utils/auth';
 
 interface Cheque {
   id: number;
@@ -26,13 +27,30 @@ function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('fr-FR');
 }
 
+const emptyAddForm = {
+  numeroContrat: '',
+  assure: '',
+  numeroCheque: '',
+  montant: '',
+  banque: '',
+  dateEncaissementPrevue: '',
+};
+
 export default function ChequesManagement() {
+  const isHamza = getSession()?.username === 'Hamza';
+
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCheque, setSelectedCheque] = useState<Cheque | null>(null);
   const [encaissementDate, setEncaissementDate] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // ── Ajout manuel d'un chèque (Hamza uniquement) ─────────────────────────
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState(emptyAddForm);
+  const [addSaving, setAddSaving] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   // ── Filtres ──────────────────────────────────────────────────────────────
   const [statusFilter, setStatusFilter] = useState('all');
@@ -114,6 +132,42 @@ export default function ChequesManagement() {
     finally { setSaving(false); }
   };
 
+  // ── Ajouter un chèque manquant (Hamza uniquement) ───────────────────────
+  const openAddModal = () => {
+    setAddForm(emptyAddForm);
+    setAddError(null);
+    setShowAddModal(true);
+  };
+
+  const handleAddCheque = async () => {
+    if (!addForm.numeroContrat || !addForm.assure || !addForm.numeroCheque || !addForm.montant || !addForm.banque || !addForm.dateEncaissementPrevue) {
+      setAddError('Veuillez remplir tous les champs.');
+      return;
+    }
+    setAddSaving(true);
+    setAddError(null);
+    try {
+      const { error } = await supabase.from('Cheques').insert([{
+        Numero_Contrat: addForm.numeroContrat.trim(),
+        Assure: addForm.assure.trim(),
+        Numero_Cheque: addForm.numeroCheque.trim(),
+        Titulaire_Cheque: addForm.assure.trim(),
+        Montant: parseFloat(addForm.montant),
+        Date_Encaissement_prévue: addForm.dateEncaissementPrevue,
+        Banque: addForm.banque.trim(),
+        Statut: 'Non Encaissé',
+      }]);
+      if (error) throw error;
+      setShowAddModal(false);
+      setAddForm(emptyAddForm);
+      await loadCheques();
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : 'Erreur lors de l\'enregistrement du chèque.');
+    } finally {
+      setAddSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -130,14 +184,25 @@ export default function ChequesManagement() {
       {/* ── En-tête ── */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-900 px-6 py-6 shadow-xl">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
-              <CreditCard className="w-5 h-5 text-white" />
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
+                <CreditCard className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white">Gestion des Chèques</h1>
+                <p className="text-slate-400 text-sm">Suivi et encaissement des chèques reçus</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white">Gestion des Chèques</h1>
-              <p className="text-slate-400 text-sm">Suivi et encaissement des chèques reçus</p>
-            </div>
+            {isHamza && (
+              <button
+                onClick={openAddModal}
+                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-medium px-4 py-2.5 rounded-xl transition-all text-sm shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                Ajouter un chèque
+              </button>
+            )}
           </div>
           <div className="mt-4 flex flex-wrap gap-3">
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 rounded-lg text-white text-sm">
@@ -512,6 +577,109 @@ export default function ChequesManagement() {
                     Fermer
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal : ajouter un chèque manquant (Hamza uniquement) ── */}
+      {showAddModal && isHamza && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-indigo-700">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-bold text-white">Ajouter un chèque</h3>
+                <button
+                  onClick={() => setShowAddModal(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">N° Contrat *</label>
+                <input
+                  type="text"
+                  value={addForm.numeroContrat}
+                  onChange={e => setAddForm({ ...addForm, numeroContrat: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Assuré *</label>
+                <input
+                  type="text"
+                  value={addForm.assure}
+                  onChange={e => setAddForm({ ...addForm, assure: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">N° Chèque *</label>
+                  <input
+                    type="text"
+                    value={addForm.numeroCheque}
+                    onChange={e => setAddForm({ ...addForm, numeroCheque: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Montant (DT) *</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    value={addForm.montant}
+                    onChange={e => setAddForm({ ...addForm, montant: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Banque *</label>
+                <input
+                  type="text"
+                  value={addForm.banque}
+                  onChange={e => setAddForm({ ...addForm, banque: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Date d'encaissement prévue *</label>
+                <input
+                  type="date"
+                  value={addForm.dateEncaissementPrevue}
+                  onChange={e => setAddForm({ ...addForm, dateEncaissementPrevue: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+
+              {addError && (
+                <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl p-3">
+                  {addError}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={handleAddCheque}
+                  disabled={addSaving}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-semibold rounded-xl hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 transition-all shadow-sm"
+                >
+                  {addSaving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Enregistrer
+                </button>
+                <button
+                  onClick={() => setShowAddModal(false)}
+                  disabled={addSaving}
+                  className="px-5 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  Annuler
+                </button>
               </div>
             </div>
           </div>
