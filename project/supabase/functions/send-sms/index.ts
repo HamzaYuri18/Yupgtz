@@ -34,10 +34,18 @@ Deno.serve(async (req: Request) => {
     const formattedMobile = mobile.startsWith("216") ? mobile : `216${mobile}`;
     const encodedMessage = encodeURIComponent(message);
 
-    const smsUrl = `${SMS_API_URL}?fct=sms&key=${SMS_API_KEY}&mobile=${formattedMobile}&sms=${encodedMessage}&sender=${encodeURIComponent(SMS_SENDER)}`;
+    // Un message contenant des caractères hors GSM 7-bit (ex: arabe) doit être
+    // envoyé en Unicode/UCS-2, sinon certaines passerelles SMS répondent un
+    // succès (status_code=200) sans jamais délivrer réellement le message.
+    // eslint-disable-next-line no-control-regex
+    const isUnicode = /[^\x00-\x7F]/.test(message);
+    const unicodeParam = isUnicode ? "&unicode=1" : "";
+
+    const smsUrl = `${SMS_API_URL}?fct=sms&key=${SMS_API_KEY}&mobile=${formattedMobile}&sms=${encodedMessage}&sender=${encodeURIComponent(SMS_SENDER)}${unicodeParam}`;
 
     const response = await fetch(smsUrl);
     const xmlText = await response.text();
+    console.log(`📨 Envoi SMS (unicode=${isUnicode}) → réponse brute:`, xmlText);
 
     const statusCodeMatch = xmlText.match(/<status_code>(\d+)<\/status_code>/);
     const statusMsgMatch = xmlText.match(/<status_msg>!\[CDATA\[(.*?)\]\]<\/status_msg>/);
