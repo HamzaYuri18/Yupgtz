@@ -219,13 +219,15 @@ const TermesSmsModal: React.FC<Props> = ({ targets, username, isHamza, onClose }
                   return (
                     <div key={t.numero_contrat} className="px-3 py-2 text-xs flex justify-between items-center gap-2">
                       <span className="text-gray-700 truncate">{t.assure} — {t.numero_contrat}</span>
-                      {!t.telephone && isHamza ? (
+                      {isHamza ? (
                         <input
                           type="tel"
-                          value={phoneOverrides[t.numero_contrat] || ''}
+                          value={phoneOverrides[t.numero_contrat] ?? t.telephone ?? ''}
                           onChange={e => setPhoneOverrides(prev => ({ ...prev, [t.numero_contrat]: e.target.value }))}
                           placeholder="Ajouter un numéro"
-                          className="w-32 shrink-0 px-2 py-1 border border-red-300 bg-red-50 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                          className={`w-32 shrink-0 px-2 py-1 border rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none ${
+                            hasNumber ? 'border-gray-300' : 'border-red-300 bg-red-50'
+                          }`}
                         />
                       ) : (
                         <span className={`shrink-0 ${hasNumber ? 'text-gray-500' : 'text-red-500 font-medium'}`}>
