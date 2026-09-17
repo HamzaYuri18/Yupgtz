@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, DollarSign, X, Tag } from 'lucide-react';
+import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, DollarSign, X, Tag, Send, MessageSquare } from 'lucide-react';
 import { getAvailableMonths, getUnpaidTermesByMonth, getOverdueUnpaidTermes, getPaidTermesByMonth, getUpcomingTermes, getCreditsDueToday, getTotalTermesByMonth, getRemarqueStatsByMonth, getRemarqueContractsByMonth, RemarqueMonthStats } from '../utils/supabaseService';
 import { getSessionDate } from '../utils/auth';
 import { isSessionClosed } from '../utils/sessionService';
 import { supabase } from '../lib/supabase';
 import TaskManagement from './TaskManagement';
 import RemarqueModal from './RemarqueModal';
+import TermesSmsModal, { SmsTarget } from './TermesSmsModal';
 
 interface CircularStatCardProps {
   title: string;
@@ -129,6 +130,11 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [remarqueStatsLoading, setRemarqueStatsLoading] = useState(false);
   const [remarqueDrillDown, setRemarqueDrillDown] = useState<{ month: string; type: string; contracts: any[] } | null>(null);
   const [remarqueDrillLoading, setRemarqueDrillLoading] = useState(false);
+
+  // Sélection pour l'envoi de SMS de rappel (Termes Échus / Non Payés)
+  const [selectedOverdue, setSelectedOverdue] = useState<Set<string>>(new Set());
+  const [selectedUnpaid, setSelectedUnpaid] = useState<Set<string>>(new Set());
+  const [smsTargets, setSmsTargets] = useState<SmsTarget[] | null>(null);
 
   const isHamza = username?.toLowerCase() === 'hamza';
 
@@ -488,6 +494,43 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
       const dateB = new Date(b.echeance || '9999-12-31').getTime();
       return dateA - dateB;
     });
+  };
+
+  // ── Sélection & SMS de rappel (Termes Échus / Non Payés) ──────────────────
+  const termeKey = (terme: any): string => `${terme.numero_contrat}|${terme.echeance}`;
+
+  const toggleSelection = (set: 'overdue' | 'unpaid', key: string) => {
+    const setter = set === 'overdue' ? setSelectedOverdue : setSelectedUnpaid;
+    setter(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (set: 'overdue' | 'unpaid', termes: any[]) => {
+    const setter = set === 'overdue' ? setSelectedOverdue : setSelectedUnpaid;
+    const current = set === 'overdue' ? selectedOverdue : selectedUnpaid;
+    const allKeys = termes.map(termeKey);
+    const allSelected = allKeys.length > 0 && allKeys.every(k => current.has(k));
+    setter(allSelected ? new Set() : new Set(allKeys));
+  };
+
+  const termeToSmsTarget = (terme: any): SmsTarget => ({
+    numero_contrat: terme.numero_contrat,
+    assure: terme.assure,
+    telephone: terme.num_tel || terme.num_tel_2 || '',
+  });
+
+  const openSmsForSelection = (set: 'overdue' | 'unpaid', termes: any[]) => {
+    const selected = set === 'overdue' ? selectedOverdue : selectedUnpaid;
+    const targets = termes.filter(t => selected.has(termeKey(t))).map(termeToSmsTarget);
+    if (targets.length > 0) setSmsTargets(targets);
+  };
+
+  const openSmsForOne = (terme: any) => {
+    setSmsTargets([termeToSmsTarget(terme)]);
   };
 
   return (
@@ -1138,17 +1181,44 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     onChange={(e) => setSearchOverdue(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
                   />
+                  {selectedOverdue.size > 0 && (
+                    <div className="mt-3 flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5">
+                      <span className="text-sm font-medium text-red-700">{selectedOverdue.size} sélectionné{selectedOverdue.size > 1 ? 's' : ''}</span>
+                      <button
+                        onClick={() => openSmsForSelection('overdue', filterTermes(overdueTermes, searchOverdue))}
+                        className="ml-auto flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        Envoyer SMS
+                      </button>
+                      <button
+                        onClick={() => setSelectedOverdue(new Set())}
+                        className="text-sm text-red-600 hover:text-red-800"
+                      >
+                        Désélectionner
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-red-50">
                       <tr>
+                        <th className="px-4 py-3 text-left">
+                          <input
+                            type="checkbox"
+                            checked={(() => { const t = filterTermes(overdueTermes, searchOverdue); return t.length > 0 && t.every(x => selectedOverdue.has(termeKey(x))); })()}
+                            onChange={() => toggleSelectAll('overdue', filterTermes(overdueTermes, searchOverdue))}
+                            className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                          />
+                        </th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
                         {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Remarque</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -1177,6 +1247,14 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                             onClick={() => handleTermeClick(terme)}
                             title="Cliquez pour ajouter/modifier une remarque"
                           >
+                            <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={selectedOverdue.has(termeKey(terme))}
+                                onChange={() => toggleSelection('overdue', termeKey(terme))}
+                                className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                              />
+                            </td>
                             <td className="px-4 py-3 text-sm font-medium">{terme.numero_contrat}</td>
                             <td className="px-4 py-3 text-sm">{terme.assure}</td>
                             {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
@@ -1197,6 +1275,15 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                                   {terme.remarque || 'Aucune'}
                                 </span>
                               )}
+                            </td>
+                            <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                              <button
+                                onClick={() => openSmsForOne(terme)}
+                                title="Envoyer un SMS de rappel"
+                                className={`p-1.5 rounded-lg transition-colors ${isContentieux ? 'text-white hover:bg-white/20' : 'text-red-600 hover:bg-red-100'}`}
+                              >
+                                <MessageSquare className="w-4 h-4" />
+                              </button>
                             </td>
                           </tr>
                         );
@@ -1221,17 +1308,44 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     onChange={(e) => setSearchUnpaid(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
                   />
+                  {selectedUnpaid.size > 0 && (
+                    <div className="mt-3 flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-lg px-4 py-2.5">
+                      <span className="text-sm font-medium text-orange-700">{selectedUnpaid.size} sélectionné{selectedUnpaid.size > 1 ? 's' : ''}</span>
+                      <button
+                        onClick={() => openSmsForSelection('unpaid', filterTermes(unpaidTermes, searchUnpaid))}
+                        className="ml-auto flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        Envoyer SMS
+                      </button>
+                      <button
+                        onClick={() => setSelectedUnpaid(new Set())}
+                        className="text-sm text-orange-600 hover:text-orange-800"
+                      >
+                        Désélectionner
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-orange-50">
                       <tr>
+                        <th className="px-4 py-3 text-left">
+                          <input
+                            type="checkbox"
+                            checked={(() => { const t = filterTermes(unpaidTermes, searchUnpaid); return t.length > 0 && t.every(x => selectedUnpaid.has(termeKey(x))); })()}
+                            onChange={() => toggleSelectAll('unpaid', filterTermes(unpaidTermes, searchUnpaid))}
+                            className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                          />
+                        </th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
                         {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Remarque</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -1249,6 +1363,14 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                             onClick={() => handleTermeClick(terme)}
                             title="Cliquez pour ajouter/modifier une remarque"
                           >
+                            <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={selectedUnpaid.has(termeKey(terme))}
+                                onChange={() => toggleSelection('unpaid', termeKey(terme))}
+                                className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                              />
+                            </td>
                             <td className="px-4 py-3 text-sm font-medium">{terme.numero_contrat}</td>
                             <td className="px-4 py-3 text-sm">{terme.assure}</td>
                             {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
@@ -1263,6 +1385,15 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                               }`}>
                                 {terme.remarque || 'Aucune'}
                               </span>
+                            </td>
+                            <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                              <button
+                                onClick={() => openSmsForOne(terme)}
+                                title="Envoyer un SMS de rappel"
+                                className="p-1.5 rounded-lg text-orange-600 hover:bg-orange-100 transition-colors"
+                              >
+                                <MessageSquare className="w-4 h-4" />
+                              </button>
                             </td>
                           </tr>
                         );
@@ -1573,6 +1704,18 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
           </div>
         )}
       </div>
+
+      {smsTargets && (
+        <TermesSmsModal
+          targets={smsTargets}
+          username={username || 'Inconnu'}
+          onClose={() => {
+            setSmsTargets(null);
+            setSelectedOverdue(new Set());
+            setSelectedUnpaid(new Set());
+          }}
+        />
+      )}
     </div>
   );
 };
