@@ -148,7 +148,7 @@ export default function ChequesManagement() {
     setAddError(null);
     try {
       const { error } = await supabase.from('Cheques').insert([{
-        Numero_Contrat: addForm.numeroContrat.trim(),
+        Numero_Contrat: addForm.numeroContrat.trim().toUpperCase(),
         Assure: addForm.assure.trim(),
         Numero_Cheque: addForm.numeroCheque.trim(),
         Titulaire_Cheque: addForm.assure.trim(),

@@ -753,10 +753,16 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     isSubmittingRef.current = true;
 
     try {
-    // Nettoyer uniquement le numéro de contrat avant validation
+    // Nettoyer le numéro de contrat avant validation. La casse est normalisée
+    // en majuscules ici (point unique d'enregistrement, avant écriture dans
+    // rapport/Terme/Affaire/Chèques) pour qu'un même contrat ne puisse jamais
+    // se retrouver stocké sous deux casses différentes selon la table — ce
+    // qui empêche silencieusement les jointures/recherches de le retrouver
+    // (ex: chèque enregistré avec "n" minuscule introuvable pour un contrat
+    // enregistré partout ailleurs avec "N" majuscule).
     const cleanedFormData = {
       ...formData,
-      contractNumber: trimSpaces(formData.contractNumber)
+      contractNumber: trimSpaces(formData.contractNumber).toUpperCase()
     };
 
     // Mettre à jour le state avec les valeurs nettoyées
