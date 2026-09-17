@@ -668,7 +668,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
       if (contract.paymentMode === 'Cheque') {
         try {
-          const chequeSuccess = await saveCheque({
+          const chequeResult = await saveCheque({
             numeroContrat: contract.contractNumber,
             assure: contract.insuredName,
             montant: contract.premiumAmount,
@@ -678,12 +678,18 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             creePar: username
           });
 
-          if (!chequeSuccess) {
-            setMessage(prev => prev + ' (erreur chèque)');
+          if (!chequeResult.success) {
+            // Erreur visible et distincte du message de succès du contrat :
+            // le contrat est enregistré mais le chèque, lui, ne l'est pas,
+            // il ne faut donc jamais laisser passer ça inaperçu.
+            setMessage(`⚠️ Contrat enregistré, mais ÉCHEC de l'enregistrement du chèque : ${chequeResult.error || 'erreur inconnue'}. Notez le numéro de contrat ${contract.contractNumber} et enregistrez ce chèque manuellement dans la rubrique Chèques.`);
+            setTimeout(() => setMessage(''), 15000);
           }
         } catch (chequeError) {
           console.error('❌ Erreur chèque:', chequeError);
-          setMessage(prev => prev + ' (erreur chèque)');
+          const details = chequeError instanceof Error ? chequeError.message : String(chequeError);
+          setMessage(`⚠️ Contrat enregistré, mais ÉCHEC de l'enregistrement du chèque : ${details}. Notez le numéro de contrat ${contract.contractNumber} et enregistrez ce chèque manuellement dans la rubrique Chèques.`);
+          setTimeout(() => setMessage(''), 15000);
         }
       }
 

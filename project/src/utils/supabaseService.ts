@@ -1318,7 +1318,7 @@ export const saveCheque = async (chequeData: {
   dateEncaissementPrevue: string;
   banque: string;
   creePar: string;
-}): Promise<boolean> => {
+}): Promise<{ success: boolean; error?: string }> => {
   try {
     console.log('💳 Enregistrement du chèque...');
 
@@ -1338,14 +1338,14 @@ export const saveCheque = async (chequeData: {
 
     if (error) {
       console.error('❌ Erreur lors de l\'enregistrement du chèque:', error);
-      return false;
+      return { success: false, error: error.message };
     }
 
     console.log('✅ Chèque enregistré avec succès');
-    return true;
+    return { success: true };
   } catch (error) {
     console.error('❌ Erreur générale lors de l\'enregistrement du chèque:', error);
-    return false;
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 };
 
