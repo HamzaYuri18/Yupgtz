@@ -17,6 +17,30 @@ interface Props {
 
 const DEFAULT_MESSAGE = "Cher Assuré {assure}, votre contrat {contrat} est arrivé à échéance. Merci de régulariser votre situation dans les meilleurs délais. STAR 72486210";
 
+// Nettoie un texte copie-colle (ex: depuis une conversation, un document) des
+// artefacts Unicode invisibles qui passent inapercus a l'ecran mais peuvent
+// faire echouer silencieusement l'envoi cote passerelle SMS : marques de
+// direction de texte (bidi), caracteres de largeur nulle, espace insecable,
+// guillemets/tirets typographiques. Le contenu visible (y compris l'arabe)
+// n'est jamais altere. Regex construites via RegExp(String) pour ne stocker
+// que des sequences d'echappement lisibles dans le fichier source (pas de
+// caracteres invisibles litteraux dans le code).
+const INVISIBLE_CHARS_RE = new RegExp('[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]', 'g');
+const NBSP_RE = new RegExp('\u00A0', 'g');
+const SMART_SINGLE_QUOTES_RE = new RegExp('[\u2018\u2019]', 'g');
+const SMART_DOUBLE_QUOTES_RE = new RegExp('[\u201C\u201D]', 'g');
+const DASHES_RE = new RegExp('[\u2013\u2014]', 'g');
+
+const sanitizeSmsText = (text: string): string =>
+  text
+    .normalize('NFC')
+    .replace(INVISIBLE_CHARS_RE, '')
+    .replace(NBSP_RE, ' ')
+    .replace(SMART_SINGLE_QUOTES_RE, "'")
+    .replace(SMART_DOUBLE_QUOTES_RE, '"')
+    .replace(DASHES_RE, '-')
+    .trim();
+
 type TemplateId = 'echeance' | 'impaye';
 type Lang = 'fr' | 'ar';
 
@@ -86,9 +110,11 @@ const TermesSmsModal: React.FC<Props> = ({ targets, username, isHamza, onClose }
   };
 
   const buildMessage = (target: SmsTarget): string =>
-    effectiveMessage
-      .replace(/\{assure\}/gi, target.assure || '')
-      .replace(/\{contrat\}/gi, target.numero_contrat || '');
+    sanitizeSmsText(
+      effectiveMessage
+        .replace(/\{assure\}/gi, target.assure || '')
+        .replace(/\{contrat\}/gi, target.numero_contrat || '')
+    );
 
   const handleSend = async () => {
     if (!effectiveMessage.trim()) return;
