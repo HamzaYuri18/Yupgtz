@@ -227,7 +227,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
         {activeTab === 'commissions' && (isHamza || canAccess('commissions')) && <EtatCommissions />}
         {activeTab === 'salaires' && (isHamza || canAccess('salaires')) && <SalairesLoyer />}
         {activeTab === 'attestations' && (isHamza || canAccess('attestations')) && <AttestationSequences />}
-        {activeTab === 'smsing' && (isHamza || canAccess('smsing')) && <SMSingHistory />}
+        {activeTab === 'smsing' && (isHamza || canAccess('smsing')) && <SMSingHistory username={username} />}
         {activeTab === 'productivite' && (isHamza || canAccess('productivite')) && <Productivite />}
         {activeTab === 'gestion_acces' && isHamza && <GestionAcces currentUser={username} />}
         {activeTab === 'prolongation' && <ProlongationExceptionnelle />}

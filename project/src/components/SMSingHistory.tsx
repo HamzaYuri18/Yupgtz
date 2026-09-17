@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, User, Calendar, Clock, FileText, Phone, ChevronLeft, ChevronRight, Filter, X } from 'lucide-react';
+import { MessageSquare, User, Calendar, Clock, FileText, Phone, ChevronLeft, ChevronRight, Filter, X, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface SMSRecord {
@@ -13,7 +13,15 @@ interface SMSRecord {
   created_at: string;
 }
 
-const SMSingHistory: React.FC = () => {
+interface SMSingHistoryProps {
+  username?: string;
+}
+
+const emptyManualEntry = { destinataire: '', client: '', numeroContrat: '', description: '' };
+
+const SMSingHistory: React.FC<SMSingHistoryProps> = ({ username }) => {
+  const isHamza = username?.toLowerCase() === 'hamza';
+
   const [smsHistory, setSmsHistory] = useState<SMSRecord[]>([]);
   const [filteredHistory, setFilteredHistory] = useState<SMSRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -21,6 +29,14 @@ const SMSingHistory: React.FC = () => {
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Ajout manuel et suppression (Hamza uniquement)
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [manualEntry, setManualEntry] = useState(emptyManualEntry);
+  const [addSaving, setAddSaving] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const itemsPerPage = 5;
 
@@ -52,6 +68,56 @@ const SMSingHistory: React.FC = () => {
       console.error('Erreur:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // ── Ajout manuel d'une entrée (Hamza uniquement) ────────────────────────
+  const openAddModal = () => {
+    setManualEntry(emptyManualEntry);
+    setAddError(null);
+    setShowAddModal(true);
+  };
+
+  const handleAddManualEntry = async () => {
+    if (!manualEntry.destinataire.trim() || !manualEntry.client.trim() || !manualEntry.description.trim()) {
+      setAddError('Veuillez renseigner au moins le destinataire, le client et le message.');
+      return;
+    }
+    setAddSaving(true);
+    setAddError(null);
+    try {
+      const { error } = await supabase.from('smsing').insert({
+        date_envoi: new Date().toISOString(),
+        description: manualEntry.description.trim(),
+        destinataire: manualEntry.destinataire.trim().replace(/\s+/g, ''),
+        client: manualEntry.client.trim(),
+        numero_contrat: manualEntry.numeroContrat.trim() || null,
+        utilisateur: username || 'Hamza',
+        statut: 'Envoyé',
+      });
+      if (error) throw error;
+      setShowAddModal(false);
+      setManualEntry(emptyManualEntry);
+      await loadSMSHistory();
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : 'Erreur lors de l\'enregistrement.');
+    } finally {
+      setAddSaving(false);
+    }
+  };
+
+  // ── Suppression (Hamza uniquement) ──────────────────────────────────────
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    try {
+      const { error } = await supabase.from('smsing').delete().eq('id', id);
+      if (error) throw error;
+      setConfirmDeleteId(null);
+      await loadSMSHistory();
+    } catch (error) {
+      console.error('Erreur suppression SMS:', error);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -142,12 +208,23 @@ const SMSingHistory: React.FC = () => {
               </p>
             </div>
           </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-3 transition-colors"
-          >
-            <Filter className="w-6 h-6" />
-          </button>
+          <div className="flex items-center gap-2">
+            {isHamza && (
+              <button
+                onClick={openAddModal}
+                className="flex items-center gap-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg px-4 py-3 transition-colors text-sm font-medium"
+              >
+                <Plus className="w-5 h-5" />
+                Ajouter un SMS
+              </button>
+            )}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-3 transition-colors"
+            >
+              <Filter className="w-6 h-6" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -231,6 +308,17 @@ const SMSingHistory: React.FC = () => {
                       </div>
                     </div>
                     <div className="text-right">
+                      <div className="flex items-center justify-end gap-2 mb-1">
+                        {isHamza && (
+                          <button
+                            onClick={() => setConfirmDeleteId(sms.id)}
+                            title="Supprimer ce message"
+                            className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                       <div className="flex items-center space-x-2 text-gray-600">
                         <Calendar className="w-4 h-4" />
                         <span className="text-sm font-medium">{date}</span>
@@ -308,6 +396,110 @@ const SMSingHistory: React.FC = () => {
             </div>
           )}
         </>
+      )}
+
+      {/* ── Ajouter un SMS manuellement (Hamza uniquement) ── */}
+      {showAddModal && isHamza && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowAddModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-bold text-white">Ajouter un SMS à l'historique</h3>
+                <button onClick={() => setShowAddModal(false)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Numéro destinataire *</label>
+                <input
+                  type="tel"
+                  value={manualEntry.destinataire}
+                  onChange={e => setManualEntry({ ...manualEntry, destinataire: e.target.value })}
+                  placeholder="Ex: 20123456"
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Client *</label>
+                <input
+                  type="text"
+                  value={manualEntry.client}
+                  onChange={e => setManualEntry({ ...manualEntry, client: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">N° Contrat</label>
+                <input
+                  type="text"
+                  value={manualEntry.numeroContrat}
+                  onChange={e => setManualEntry({ ...manualEntry, numeroContrat: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Message *</label>
+                <textarea
+                  value={manualEntry.description}
+                  onChange={e => setManualEntry({ ...manualEntry, description: e.target.value })}
+                  rows={4}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                />
+              </div>
+              {addError && (
+                <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl p-3">{addError}</div>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={handleAddManualEntry}
+                  disabled={addSaving}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 transition-all"
+                >
+                  {addSaving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Enregistrer
+                </button>
+                <button
+                  onClick={() => setShowAddModal(false)}
+                  disabled={addSaving}
+                  className="px-5 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Confirmation de suppression (Hamza uniquement) ── */}
+      {confirmDeleteId && isHamza && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setConfirmDeleteId(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-600" />
+              Supprimer ce SMS
+            </h3>
+            <p className="text-sm text-gray-600">Cette action est irréversible. Confirmer la suppression ?</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                disabled={deletingId === confirmDeleteId}
+                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => handleDelete(confirmDeleteId)}
+                disabled={deletingId === confirmDeleteId}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {deletingId === confirmDeleteId ? 'Suppression…' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

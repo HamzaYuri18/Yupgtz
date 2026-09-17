@@ -1709,6 +1709,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
         <TermesSmsModal
           targets={smsTargets}
           username={username || 'Inconnu'}
+          isHamza={isHamza}
           onClose={() => {
             setSmsTargets(null);
             setSelectedOverdue(new Set());
