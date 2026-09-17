@@ -42,6 +42,7 @@ type SendStatus = 'pending' | 'sent' | 'failed' | 'skipped';
 
 interface SendResult {
   target: SmsTarget;
+  phone: string;
   status: SendStatus;
   reason?: string;
 }
@@ -52,17 +53,37 @@ const TermesSmsModal: React.FC<Props> = ({ targets, username, isHamza, onClose }
   const [lang, setLang] = useState<Lang>('fr');
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState<SendResult[] | null>(null);
-  // Numéros ajoutés/corrigés manuellement (Hamza uniquement) pour les
-  // contrats sans téléphone enregistré, le temps de cet envoi.
-  const [phoneOverrides, setPhoneOverrides] = useState<Record<string, string>>({});
+  // Numéros ajoutés manuellement par Hamza, EN PLUS du numéro déjà
+  // enregistré pour le contrat (le SMS part vers tous les numéros).
+  const [extraPhones, setExtraPhones] = useState<Record<string, string[]>>({});
+  const [phoneDraft, setPhoneDraft] = useState<Record<string, string>>({});
   const maxChars = 160;
 
   // Pour les utilisateurs non-Hamza, le message effectif est toujours l'un
   // des 4 modèles fixes (2 modèles x 2 langues) — jamais du texte libre.
   const effectiveMessage = isHamza ? message : TEMPLATES[templateId][lang];
 
-  const phoneFor = (target: SmsTarget): string =>
-    phoneOverrides[target.numero_contrat] || target.telephone || '';
+  const phonesFor = (target: SmsTarget): string[] => {
+    const base = target.telephone ? [target.telephone] : [];
+    return [...base, ...(extraPhones[target.numero_contrat] || [])];
+  };
+
+  const addPhone = (numeroContrat: string) => {
+    const value = (phoneDraft[numeroContrat] || '').trim();
+    if (!value) return;
+    setExtraPhones(prev => ({
+      ...prev,
+      [numeroContrat]: [...(prev[numeroContrat] || []), value],
+    }));
+    setPhoneDraft(prev => ({ ...prev, [numeroContrat]: '' }));
+  };
+
+  const removeExtraPhone = (numeroContrat: string, index: number) => {
+    setExtraPhones(prev => ({
+      ...prev,
+      [numeroContrat]: (prev[numeroContrat] || []).filter((_, i) => i !== index),
+    }));
+  };
 
   const buildMessage = (target: SmsTarget): string =>
     effectiveMessage
@@ -77,53 +98,62 @@ const TermesSmsModal: React.FC<Props> = ({ targets, username, isHamza, onClose }
     const newResults: SendResult[] = [];
 
     for (const target of targets) {
-      const cleanedPhone = phoneFor(target).replace(/\s+/g, '');
+      const phones = phonesFor(target);
       const finalMessage = buildMessage(target);
 
-      if (!cleanedPhone || cleanedPhone.length < 8) {
-        newResults.push({ target, status: 'skipped', reason: 'Numéro de téléphone manquant ou invalide' });
+      if (phones.length === 0) {
+        newResults.push({ target, phone: '', status: 'skipped', reason: 'Numéro de téléphone manquant' });
         continue;
       }
       if (finalMessage.length > maxChars) {
-        newResults.push({ target, status: 'skipped', reason: `Message trop long (${finalMessage.length}/${maxChars})` });
+        newResults.push({ target, phone: phones.join(', '), status: 'skipped', reason: `Message trop long (${finalMessage.length}/${maxChars})` });
         continue;
       }
 
-      try {
-        const response = await fetch(`${supabaseUrl}/functions/v1/send-sms`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseAnonKey}`,
-          },
-          body: JSON.stringify({ mobile: cleanedPhone, message: finalMessage }),
-        });
-        const result = await response.json();
+      for (const rawPhone of phones) {
+        const cleanedPhone = rawPhone.replace(/\s+/g, '');
 
-        await supabase.from('smsing').insert({
-          date_envoi: new Date().toISOString(),
-          description: finalMessage,
-          destinataire: cleanedPhone,
-          client: target.assure,
-          numero_contrat: target.numero_contrat,
-          utilisateur: username,
-          statut: result.success ? 'Envoyé' : 'Non envoyé',
-        });
+        if (!cleanedPhone || cleanedPhone.length < 8) {
+          newResults.push({ target, phone: rawPhone, status: 'skipped', reason: 'Numéro invalide' });
+          continue;
+        }
 
-        newResults.push(result.success
-          ? { target, status: 'sent' }
-          : { target, status: 'failed', reason: result.error || 'Échec inconnu' });
-      } catch (err) {
-        await supabase.from('smsing').insert({
-          date_envoi: new Date().toISOString(),
-          description: finalMessage,
-          destinataire: cleanedPhone,
-          client: target.assure,
-          numero_contrat: target.numero_contrat,
-          utilisateur: username,
-          statut: 'Non envoyé',
-        });
-        newResults.push({ target, status: 'failed', reason: err instanceof Error ? err.message : 'Erreur réseau' });
+        try {
+          const response = await fetch(`${supabaseUrl}/functions/v1/send-sms`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+            },
+            body: JSON.stringify({ mobile: cleanedPhone, message: finalMessage }),
+          });
+          const result = await response.json();
+
+          await supabase.from('smsing').insert({
+            date_envoi: new Date().toISOString(),
+            description: finalMessage,
+            destinataire: cleanedPhone,
+            client: target.assure,
+            numero_contrat: target.numero_contrat,
+            utilisateur: username,
+            statut: result.success ? 'Envoyé' : 'Non envoyé',
+          });
+
+          newResults.push(result.success
+            ? { target, phone: cleanedPhone, status: 'sent' }
+            : { target, phone: cleanedPhone, status: 'failed', reason: result.error || 'Échec inconnu' });
+        } catch (err) {
+          await supabase.from('smsing').insert({
+            date_envoi: new Date().toISOString(),
+            description: finalMessage,
+            destinataire: cleanedPhone,
+            client: target.assure,
+            numero_contrat: target.numero_contrat,
+            utilisateur: username,
+            statut: 'Non envoyé',
+          });
+          newResults.push({ target, phone: cleanedPhone, status: 'failed', reason: err instanceof Error ? err.message : 'Erreur réseau' });
+        }
       }
     }
 
@@ -213,26 +243,52 @@ const TermesSmsModal: React.FC<Props> = ({ targets, username, isHamza, onClose }
                 {previewLength}/{maxChars} caractères (aperçu du 1er destinataire)
               </p>
 
-              <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+              <div className="max-h-56 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
                 {targets.map(t => {
-                  const hasNumber = !!phoneFor(t);
+                  const phones = phonesFor(t);
+                  const extras = extraPhones[t.numero_contrat] || [];
                   return (
-                    <div key={t.numero_contrat} className="px-3 py-2 text-xs flex justify-between items-center gap-2">
-                      <span className="text-gray-700 truncate">{t.assure} — {t.numero_contrat}</span>
-                      {isHamza ? (
-                        <input
-                          type="tel"
-                          value={phoneOverrides[t.numero_contrat] ?? t.telephone ?? ''}
-                          onChange={e => setPhoneOverrides(prev => ({ ...prev, [t.numero_contrat]: e.target.value }))}
-                          placeholder="Ajouter un numéro"
-                          className={`w-32 shrink-0 px-2 py-1 border rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none ${
-                            hasNumber ? 'border-gray-300' : 'border-red-300 bg-red-50'
-                          }`}
-                        />
-                      ) : (
-                        <span className={`shrink-0 ${hasNumber ? 'text-gray-500' : 'text-red-500 font-medium'}`}>
-                          {phoneFor(t) || 'sans numéro'}
-                        </span>
+                    <div key={t.numero_contrat} className="px-3 py-2 text-xs space-y-1.5">
+                      <div className="flex justify-between items-center gap-2">
+                        <span className="text-gray-700 truncate">{t.assure} — {t.numero_contrat}</span>
+                        {phones.length === 0 && <span className="text-red-500 font-medium shrink-0">sans numéro</span>}
+                      </div>
+
+                      {phones.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {t.telephone && (
+                            <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{t.telephone}</span>
+                          )}
+                          {extras.map((p, i) => (
+                            <span key={i} className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                              {p}
+                              {isHamza && (
+                                <button onClick={() => removeExtraPhone(t.numero_contrat, i)} className="hover:text-blue-900">
+                                  <X className="w-3 h-3" />
+                                </button>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {isHamza && (
+                        <div className="flex gap-1.5">
+                          <input
+                            type="tel"
+                            value={phoneDraft[t.numero_contrat] || ''}
+                            onChange={e => setPhoneDraft(prev => ({ ...prev, [t.numero_contrat]: e.target.value }))}
+                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addPhone(t.numero_contrat); } }}
+                            placeholder="Ajouter un numéro"
+                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                          />
+                          <button
+                            onClick={() => addPhone(t.numero_contrat)}
+                            className="px-2 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700"
+                          >
+                            Ajouter
+                          </button>
+                        </div>
                       )}
                     </div>
                   );
@@ -272,15 +328,17 @@ const TermesSmsModal: React.FC<Props> = ({ targets, username, isHamza, onClose }
               </div>
 
               <div className="max-h-56 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
-                {results.map(r => (
-                  <div key={r.target.numero_contrat} className="px-3 py-2 text-xs flex items-start gap-2">
+                {results.map((r, i) => (
+                  <div key={`${r.target.numero_contrat}-${r.phone}-${i}`} className="px-3 py-2 text-xs flex items-start gap-2">
                     {r.status === 'sent' ? (
                       <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
                     ) : (
                       <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                     )}
                     <div>
-                      <p className="text-gray-800 font-medium">{r.target.assure} — {r.target.numero_contrat}</p>
+                      <p className="text-gray-800 font-medium">
+                        {r.target.assure} — {r.target.numero_contrat}{r.phone ? ` (${r.phone})` : ''}
+                      </p>
                       {r.reason && <p className="text-gray-500">{r.reason}</p>}
                     </div>
                   </div>
