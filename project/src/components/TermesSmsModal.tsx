@@ -39,6 +39,9 @@ const sanitizeSmsText = (text: string): string =>
     .replace(SMART_SINGLE_QUOTES_RE, "'")
     .replace(SMART_DOUBLE_QUOTES_RE, '"')
     .replace(DASHES_RE, '-')
+    // Optimise les espaces : toute suite d'espaces/retours à la ligne
+    // devient un seul espace, pour ne pas gaspiller de caractères SMS.
+    .replace(/\s+/g, ' ')
     .trim();
 
 type TemplateId = 'echeance' | 'impaye';
@@ -221,6 +224,8 @@ const TermesSmsModal: React.FC<Props> = ({ targets, username, isHamza, onClose }
                     value={message}
                     onChange={e => setMessage(e.target.value)}
                     rows={5}
+                    dir="auto"
+                    style={{ textAlign: 'start' }}
                     className="w-full border border-gray-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                   />
                   <p className="text-xs text-gray-500 mt-1">
