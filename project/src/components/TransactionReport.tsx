@@ -508,32 +508,66 @@ const TransactionReport: React.FC = () => {
     setPendingDeleteTransaction(null);
   };
 
-  const resetAttestationStatut = async (numeroAttestation: string | null | undefined) => {
-    if (!numeroAttestation) return;
+  // ATTENTION: check_attestation_disponible renvoie la colonne "table_name"
+  // (pas "carnet_table") — un décalage de nom ici fait échouer la mise à
+  // jour du statut en silence (early return), ce qui laissait l'attestation
+  // bloquée à "servie" après suppression d'une opération.
+  const resetAttestationStatut = async (numeroAttestation: string | null | undefined): Promise<boolean> => {
+    if (!numeroAttestation) return true;
     const attestationNum = parseInt(numeroAttestation);
-    if (isNaN(attestationNum)) return;
+    if (isNaN(attestationNum)) return true;
     try {
       const { data: carnetTables, error: carnetError } = await supabase.rpc('check_attestation_disponible', { attestation_numero: attestationNum });
-      if (carnetError || !carnetTables || carnetTables.length === 0) return;
-      const carnetTable = carnetTables[0]?.carnet_table;
-      if (!carnetTable) return;
-      await supabase.from(carnetTable).update({ statut: null }).eq('numero_attestation', numeroAttestation.toString());
-    } catch {}
+      if (carnetError) {
+        console.error(`Erreur recherche du carnet pour l'attestation ${numeroAttestation}:`, carnetError);
+        return false;
+      }
+      const carnetTable = carnetTables?.[0]?.table_name;
+      if (!carnetTable) {
+        console.error(`Carnet introuvable pour l'attestation ${numeroAttestation}`);
+        return false;
+      }
+      const { error: updateError } = await supabase.from(carnetTable).update({ statut: null }).eq('numero_attestation', numeroAttestation.toString());
+      if (updateError) {
+        console.error(`Erreur remise à zéro du statut de l'attestation ${numeroAttestation}:`, updateError);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error(`Erreur inattendue lors de la remise à zéro du statut de l'attestation ${numeroAttestation}:`, err);
+      return false;
+    }
   };
 
-  const libererAttestation = async (numeroAttestation: string, transaction: Transaction, motif: string) => {
+  // upsert (et non insert) : une attestation déjà présente dans la table
+  // (ex: libérée puis re-verrouillée, ou ligne existante d'un test) ne doit
+  // jamais faire échouer silencieusement la libération à cause de la
+  // contrainte UNIQUE sur numero_attestation.
+  const libererAttestation = async (numeroAttestation: string, transaction: Transaction, motif: string): Promise<boolean> => {
     const session = getSession();
     const currentUser = session?.username || 'inconnu';
     try {
-      await supabase.from('attestations_disponibles').insert({
+      const { error } = await supabase.from('attestations_disponibles').upsert({
         numero_attestation: numeroAttestation,
         libere_par: currentUser,
         motif_liberation: motif,
         ancien_numero_contrat: transaction.numero_contrat,
         ancien_assure: transaction.assure,
-        reutilise: false
-      });
-    } catch {}
+        libere_le: new Date().toISOString(),
+        reutilise: false,
+        reutilise_le: null,
+        reutilise_par: null,
+        nouveau_numero_contrat: null,
+      }, { onConflict: 'numero_attestation' });
+      if (error) {
+        console.error(`Erreur libération de l'attestation ${numeroAttestation} dans attestations_disponibles:`, error);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error(`Erreur inattendue lors de la libération de l'attestation ${numeroAttestation}:`, err);
+      return false;
+    }
   };
 
   const saveToReportingSuppression = async (transaction: Transaction, motif: string): Promise<boolean> => {
@@ -558,6 +592,7 @@ const TransactionReport: React.FC = () => {
     try {
       await saveToReportingSuppression(transaction, motif);
       let sourceDeleteSuccess = false;
+      let attestationWarning = '';
 
       switch (transaction.type) {
         case 'Terme':
@@ -569,8 +604,13 @@ const TransactionReport: React.FC = () => {
             sourceDeleteSuccess = !termeError;
             if (sourceDeleteSuccess) {
               const attestationNum = termeRow?.['Numero Attestation'] || transaction.numero_attestation;
-              await resetAttestationStatut(attestationNum);
-              if (attestationNum) await libererAttestation(attestationNum, transaction, motif);
+              if (attestationNum) {
+                const resetOk = await resetAttestationStatut(attestationNum);
+                const libereOk = await libererAttestation(attestationNum, transaction, motif);
+                if (!resetOk || !libereOk) {
+                  attestationWarning = `⚠️ L'opération a été supprimée mais l'attestation ${attestationNum} n'a pas pu être libérée automatiquement. Merci de la régulariser manuellement.`;
+                }
+              }
             }
           }
           break;
@@ -583,8 +623,13 @@ const TransactionReport: React.FC = () => {
             sourceDeleteSuccess = !affaireError;
             if (sourceDeleteSuccess) {
               const attestationNum = affaireRow?.['Numero Attestation'] || transaction.numero_attestation;
-              await resetAttestationStatut(attestationNum);
-              if (attestationNum) await libererAttestation(attestationNum, transaction, motif);
+              if (attestationNum) {
+                const resetOk = await resetAttestationStatut(attestationNum);
+                const libereOk = await libererAttestation(attestationNum, transaction, motif);
+                if (!resetOk || !libereOk) {
+                  attestationWarning = `⚠️ L'opération a été supprimée mais l'attestation ${attestationNum} n'a pas pu être libérée automatiquement. Merci de la régulariser manuellement.`;
+                }
+              }
             }
           }
           break;
@@ -698,7 +743,7 @@ const TransactionReport: React.FC = () => {
       const { error: rapportError } = await supabase.from('rapport').delete().eq('id', transaction.id);
       if (rapportError) { setError(`Erreur suppression: ${rapportError.message}`); return; }
 
-      setError('');
+      setError(attestationWarning);
       void sourceDeleteSuccess;
       handleSearch();
     } catch (err) {
