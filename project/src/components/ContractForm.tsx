@@ -1395,7 +1395,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                   name="numeroAttestation"
                   value={formData.numeroAttestation}
                   onChange={handleInputChange}
-                  disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                   className="w-full p-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-green-50"
                   required
                 >
@@ -1412,7 +1411,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                   name="numeroAttestation"
                   value={formData.numeroAttestation}
                   onChange={handleInputChange}
-                  disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
                   placeholder="Ex: 12345"
                   required
