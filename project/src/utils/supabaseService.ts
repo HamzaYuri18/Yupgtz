@@ -2072,7 +2072,11 @@ const getPaidTermeKeysFromRapport = async (monthName: string, year: string): Pro
     if (monthNum === 0) return new Set();
     const monthStr = String(monthNum).padStart(2, '0');
     const startDate = `${year}-${monthStr}-01`;
-    const endDate = `${year}-${monthStr}-31`;
+    // Dernier jour réel du mois (28-31 selon le mois/l'année) plutôt qu'un
+    // "31" fixe, qui rendait la date invalide pour les mois plus courts
+    // (ex: "2026-09-31") et faisait échouer toute la requête.
+    const lastDay = new Date(Number(year), monthNum, 0).getDate();
+    const endDate = `${year}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
 
     const { data, error } = await supabase
       .from('rapport')
