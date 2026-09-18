@@ -875,6 +875,9 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
                     <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-1">Termes échus</p>
+                    {selectedMonth && (
+                      <p className="text-[11px] text-red-500 mb-1">{selectedMonth}</p>
+                    )}
                     <p className="text-2xl font-bold text-red-700">{overdueTermes.length}</p>
                     <p className="text-sm font-semibold text-red-600 mt-1">{calculateTotal(overdueTermes).toFixed(2)} DT</p>
                   </div>
