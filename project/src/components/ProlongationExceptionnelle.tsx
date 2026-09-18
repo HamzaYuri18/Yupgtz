@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, AlertTriangle, CheckCircle, Download, FileText, Car, MapPin, Calendar, RotateCcw, Shield, ListChecks } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
@@ -30,6 +30,7 @@ export interface ProlongForm {
   immatriculation: string;
   usage: string;
   adresse: string;
+  numero_attestation: string;
 }
 
 // ── Utilitaires date ──────────────────────────────────────────────────────────
@@ -190,6 +191,7 @@ const saveProlongation = async (f: ProlongForm): Promise<void> => {
     immatriculation: f.immatriculation.toUpperCase(),
     usage: f.usage,
     adresse: f.adresse,
+    numero_attestation: f.numero_attestation,
     date_demande: now.toISOString().split('T')[0],
     heure_demande: now.toTimeString().slice(0, 5),
   }]);
@@ -213,6 +215,61 @@ const ProlongationExceptionnelle: React.FC = () => {
   const [pdfError, setPdfError]   = useState<string | null>(null);
   const [buildingPdf, setBuildingPdf] = useState(false);
   const [pendingValidation, setPendingValidation] = useState<{ bytes: Uint8Array; numeroContrat: string } | null>(null);
+
+  // ── Attestation ──────────────────────────────────────────────────────────────
+  const [attestationsDisponibles, setAttestationsDisponibles] = useState<Array<{
+    id: number;
+    numero_attestation: string;
+    ancien_assure: string;
+    ancien_numero_contrat: string;
+    libere_le: string;
+  }>>([]);
+  const [useAttestationDisponible, setUseAttestationDisponible] = useState(false);
+  const [attestationCheck, setAttestationCheck] = useState<{
+    status: 'idle' | 'checking' | 'ok' | 'blocked' | 'error';
+    message?: string;
+  }>({ status: 'idle' });
+
+  useEffect(() => {
+    const loadAttestationsDisponibles = async () => {
+      const { data, error: err } = await supabase
+        .from('attestations_disponibles')
+        .select('id, numero_attestation, ancien_assure, ancien_numero_contrat, libere_le')
+        .eq('reutilise', false)
+        .order('libere_le', { ascending: false });
+      if (!err && data) setAttestationsDisponibles(data);
+    };
+    loadAttestationsDisponibles();
+  }, []);
+
+  const checkAttestationStatus = async (numero: string) => {
+    if (useAttestationDisponible) { setAttestationCheck({ status: 'ok' }); return; }
+    if (!numero.trim()) { setAttestationCheck({ status: 'idle' }); return; }
+
+    const numeroInt = parseInt(numero, 10);
+    if (isNaN(numeroInt)) {
+      setAttestationCheck({ status: 'error', message: 'Numéro invalide.' });
+      return;
+    }
+
+    setAttestationCheck({ status: 'checking' });
+    try {
+      const { data, error: rpcErr } = await supabase.rpc('check_attestation_disponible', { attestation_numero: numeroInt });
+      if (rpcErr) throw new Error(rpcErr.message);
+      const row = data?.[0];
+      if (!row || !row.existe) {
+        setAttestationCheck({ status: 'error', message: 'Numéro d\'attestation introuvable.' });
+        return;
+      }
+      if (row.statut_actuel === 'servie' || row.statut_actuel === 'prolongation') {
+        setAttestationCheck({ status: 'blocked', message: 'Cette attestation est utilisée. Veuillez réessayer avec un autre numéro.' });
+        return;
+      }
+      setAttestationCheck({ status: 'ok' });
+    } catch (err: any) {
+      setAttestationCheck({ status: 'error', message: err.message || 'Erreur lors de la vérification.' });
+    }
+  };
 
   // ── Step 1 : Recherche ──────────────────────────────────────────────────────
 
@@ -273,7 +330,10 @@ const ProlongationExceptionnelle: React.FC = () => {
         immatriculation: '',
         usage: USAGE_OPTIONS[0],
         adresse: '',
+        numero_attestation: '',
       });
+      setUseAttestationDisponible(false);
+      setAttestationCheck({ status: 'idle' });
       setStep('form');
     } catch (err: any) {
       setError(`Erreur inattendue : ${err.message}`);
@@ -309,12 +369,63 @@ const ProlongationExceptionnelle: React.FC = () => {
     if (!form.classe.trim())         { setError('La classe est obligatoire.'); return; }
     if (!form.marque.trim())         { setError('La marque est obligatoire.'); return; }
     if (!form.immatriculation.trim()) { setError('L\'immatriculation est obligatoire.'); return; }
+    if (!form.numero_attestation.trim()) { setError('Le numéro d\'attestation est obligatoire.'); return; }
 
     setSending(true);
     setError(null);
 
     try {
+      const numeroAttestationInt = parseInt(form.numero_attestation, 10);
+      if (isNaN(numeroAttestationInt)) {
+        setError('Numéro d\'attestation invalide.');
+        setSending(false);
+        return;
+      }
+
+      // Revérifier le statut au moment de l'enregistrement (l'attestation
+      // réutilisée via "attestations disponibles" est déjà garantie libre,
+      // donc ce contrôle est ignoré dans ce cas, comme dans Nouveau Contrat).
+      if (!useAttestationDisponible) {
+        const { data: attData, error: attErr } = await supabase.rpc('check_attestation_disponible', {
+          attestation_numero: numeroAttestationInt,
+        });
+        if (attErr) throw new Error(attErr.message);
+        const row = attData?.[0];
+        if (!row || !row.existe) {
+          setError('Numéro d\'attestation introuvable.');
+          setSending(false);
+          return;
+        }
+        if (row.statut_actuel === 'servie' || row.statut_actuel === 'prolongation') {
+          setError('⛔ Cette attestation est utilisée. Veuillez réessayer avec un autre numéro.');
+          setAttestationCheck({ status: 'blocked', message: 'Cette attestation est utilisée. Veuillez réessayer avec un autre numéro.' });
+          setSending(false);
+          return;
+        }
+      }
+
       await saveProlongation(form);
+
+      // Marquer l'attestation comme utilisée pour une prolongation.
+      const { error: markErr } = await supabase.rpc('update_attestation_prolongation', {
+        attestation_numero: numeroAttestationInt,
+        p_numero_contrat: form.numero_contrat,
+        p_assure: form.assure,
+      });
+      if (markErr) console.error('Erreur marquage attestation (prolongation):', markErr);
+
+      if (useAttestationDisponible) {
+        const session = getSession();
+        await supabase.from('attestations_disponibles')
+          .update({
+            reutilise: true,
+            reutilise_le: new Date().toISOString(),
+            reutilise_par: session?.username || 'Inconnu',
+            nouveau_numero_contrat: form.numero_contrat,
+          })
+          .eq('numero_attestation', form.numero_attestation);
+      }
+
       setStep('done');
     } catch (err: any) {
       setError(`Erreur lors de l'enregistrement : ${err.message}`);
@@ -530,6 +641,78 @@ const ProlongationExceptionnelle: React.FC = () => {
             </div>
           </div>
 
+          {/* Attestation */}
+          <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+            <h2 className="text-lg font-semibold text-slate-800 mb-5 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-violet-600" />
+              Attestation
+            </h2>
+
+            {attestationsDisponibles.length > 0 && (
+              <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useAttestationDisponible}
+                    onChange={e => {
+                      setUseAttestationDisponible(e.target.checked);
+                      upd('numero_attestation', '');
+                      setAttestationCheck({ status: 'idle' });
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm font-medium text-emerald-700">
+                    Réutiliser une attestation disponible ({attestationsDisponibles.length})
+                  </span>
+                </label>
+              </div>
+            )}
+
+            {useAttestationDisponible ? (
+              <select
+                value={form.numero_attestation}
+                onChange={e => { upd('numero_attestation', e.target.value); setAttestationCheck({ status: 'ok' }); }}
+                className="w-full border border-emerald-300 rounded-xl px-4 py-3 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none bg-emerald-50"
+              >
+                <option value="">Sélectionner une attestation disponible</option>
+                {attestationsDisponibles.map(att => (
+                  <option key={att.id} value={att.numero_attestation}>
+                    {att.numero_attestation} - {att.ancien_assure} (ex: {att.ancien_numero_contrat})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="number"
+                value={form.numero_attestation}
+                onChange={e => { upd('numero_attestation', e.target.value); setAttestationCheck({ status: 'idle' }); }}
+                onBlur={e => checkAttestationStatus(e.target.value)}
+                placeholder="Ex: 12345"
+                className={`w-full border rounded-xl px-4 py-3 text-slate-800 focus:ring-2 focus:border-transparent outline-none font-mono ${
+                  attestationCheck.status === 'blocked' || attestationCheck.status === 'error'
+                    ? 'border-red-400 bg-red-50 focus:ring-red-500'
+                    : attestationCheck.status === 'ok'
+                      ? 'border-emerald-400 bg-emerald-50 focus:ring-emerald-500'
+                      : 'border-slate-300 focus:ring-violet-500'
+                }`}
+              />
+            )}
+
+            {attestationCheck.status === 'checking' && (
+              <p className="mt-1.5 text-xs text-slate-500">Vérification en cours…</p>
+            )}
+            {(attestationCheck.status === 'blocked' || attestationCheck.status === 'error') && (
+              <p className="mt-1.5 text-xs text-red-600 flex items-center gap-1">
+                <AlertTriangle className="w-3.5 h-3.5" />{attestationCheck.message}
+              </p>
+            )}
+            {attestationCheck.status === 'ok' && (
+              <p className="mt-1.5 text-xs text-emerald-600 flex items-center gap-1">
+                <CheckCircle className="w-3.5 h-3.5" />Attestation disponible
+              </p>
+            )}
+          </div>
+
           <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
             <h2 className="text-lg font-semibold text-slate-800 mb-5 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-violet-600" />
@@ -621,7 +804,7 @@ const ProlongationExceptionnelle: React.FC = () => {
             </button>
             <button
               onClick={handleSubmit}
-              disabled={sending || !!finErr || !form.date_fin_prolongation}
+              disabled={sending || !!finErr || !form.date_fin_prolongation || attestationCheck.status === 'blocked' || attestationCheck.status === 'checking'}
               className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-semibold px-8 py-3 rounded-xl hover:from-violet-700 hover:to-indigo-700 transition-all disabled:opacity-60 shadow-lg"
             >
               {sending ? (

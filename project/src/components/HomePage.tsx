@@ -141,6 +141,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [hasShownCollectionsReminder, setHasShownCollectionsReminder] = useState(false);
   const [overdue3MonthsCount, setOverdue3MonthsCount] = useState(0);
   const [overdue3MonthsTotal, setOverdue3MonthsTotal] = useState(0);
+  const [overdue3MonthsLabel, setOverdue3MonthsLabel] = useState('');
 
   const isHamza = username?.toLowerCase() === 'hamza';
   // Ahlem/Rouae doivent voir le montant des termes échus/non payés (relance
@@ -379,11 +380,16 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const loadOverdue3MonthsTotal = async () => {
     try {
       const now = new Date();
+      const last3Dates = [2, 1, 0].map(i => new Date(now.getFullYear(), now.getMonth() - i, 1));
+      setOverdue3MonthsLabel(
+        last3Dates
+          .map(d => d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }))
+          .map(s => s.charAt(0).toUpperCase() + s.slice(1))
+          .join(', ')
+      );
+
       const results = await Promise.all(
-        [0, 1, 2].map(i => {
-          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-          return getOverdueUnpaidTermes(MONTHS_UNACCENTED[d.getMonth()], String(d.getFullYear()));
-        })
+        last3Dates.map(d => getOverdueUnpaidTermes(MONTHS_UNACCENTED[d.getMonth()], String(d.getFullYear())))
       );
       const all = results.flat();
       setOverdue3MonthsCount(all.length);
@@ -880,6 +886,9 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
                 <div className="bg-red-100 border border-red-300 rounded-xl p-4 text-center">
                   <p className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-1">Termes échus — 3 derniers mois</p>
+                  {overdue3MonthsLabel && (
+                    <p className="text-[11px] text-red-600 mb-1">{overdue3MonthsLabel}</p>
+                  )}
                   <p className="text-2xl font-bold text-red-800">{overdue3MonthsCount}</p>
                   <p className="text-sm font-semibold text-red-700 mt-1">{overdue3MonthsTotal.toFixed(2)} DT</p>
                 </div>
