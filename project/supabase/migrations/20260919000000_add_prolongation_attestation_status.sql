@@ -29,7 +29,9 @@ ALTER TABLE prolongation ADD COLUMN IF NOT EXISTS numero_attestation text;
 --    Built from whatever statut values actually exist in each table (some
 --    older carnet tables use a legacy value like 'en_stock' that our fixed
 --    list didn't account for) plus the standard set and 'prolongation', so
---    this never fails no matter what's already stored.
+--    this never fails no matter what's already stored. Registry rows whose
+--    table_name doesn't actually exist as a table (stale/orphaned entries
+--    in carnets_attestations) are skipped.
 DO $$
 DECLARE
   carnet_record RECORD;
@@ -37,6 +39,10 @@ DECLARE
   allowed_values text;
 BEGIN
   FOR carnet_record IN SELECT table_name FROM carnets_attestations LOOP
+    IF to_regclass(quote_ident(carnet_record.table_name)) IS NULL THEN
+      CONTINUE;
+    END IF;
+
     EXECUTE format(
       'SELECT string_agg(DISTINCT quote_literal(statut), '', '') FROM %I WHERE statut IS NOT NULL',
       carnet_record.table_name
