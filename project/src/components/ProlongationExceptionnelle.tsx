@@ -13,7 +13,30 @@ const MOIS_TABLE: Record<number, string> = {
   6: 'juillet', 7: 'aout', 8: 'septembre', 9: 'octobre', 10: 'novembre', 11: 'decembre'
 };
 
-const USAGE_OPTIONS = ['210_Privé ou affaire Classique'];
+const USAGE_OPTIONS = [
+  '210_Privé ou affaire Classique',
+  '510_Véh. agricole PTC <=3.5 T',
+  '530_Tran.mar.prpcptPTC<=3,5T',
+  '540_Tran.mar.prp.cptPTC>3,5T',
+  '310_Trans pub marchan PTC<=3,5',
+  '320_Trans pub marchan PTC>3.5',
+  '620_Tracteur à roues ss locat',
+  '622_Tract. roues ss loct+remor',
+  '609_Engin chantier PTC <=3.5 T',
+  '610_Engin chantier PTC >3.5 T',
+  '611_Engin voirie PTC <=3.5 T',
+  '612_Engin voirie PTC >3.5 T',
+  '512_Remor. agricole PTC<=3.5T',
+  '522_Remor. agricole PTC>3.5 T',
+  '322_Tran.mar.cpt.aut PTC>3,5T',
+  '532_Remorque U1 PTC <= 3,5 T',
+  '542_Remorque U2  PTC>3,5 T',
+  '650_Moiss.batteuse ss location',
+  '651_Moiss. batteuse location',
+  '20_Auto Ecole Tourisme',
+  '420_Taxi individuelle',
+  '430_Louages',
+];
 
 
 
