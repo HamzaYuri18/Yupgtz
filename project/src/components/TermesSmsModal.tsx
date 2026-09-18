@@ -39,9 +39,13 @@ const sanitizeSmsText = (text: string): string =>
     .replace(SMART_SINGLE_QUOTES_RE, "'")
     .replace(SMART_DOUBLE_QUOTES_RE, '"')
     .replace(DASHES_RE, '-')
-    // Optimise les espaces : toute suite d'espaces/retours à la ligne
-    // devient un seul espace, pour ne pas gaspiller de caractères SMS.
-    .replace(/\s+/g, ' ')
+    // Optimise les espaces sans casser une mise en forme multi-lignes
+    // volontaire : espaces/tabulations consécutifs -> un seul espace,
+    // lignes vides consécutives -> un seul retour à la ligne, espaces
+    // superflus autour des retours à la ligne supprimés.
+    .replace(/[ \t]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{2,}/g, '\n')
     .trim();
 
 type TemplateId = 'echeance' | 'impaye';
@@ -52,11 +56,11 @@ type Lang = 'fr' | 'ar';
 const TEMPLATES: Record<TemplateId, Record<Lang, string>> = {
   echeance: {
     fr: "Cher Client, votre contrat d'assurance arrive à échéance. Merci de régler votre prime d'assurance le plus tôt possible. Tel: 72486210",
-    ar: 'عزيزي الزبون، عقد تأمينك قد وصل إلى تاريخ الاستحقاق. يرجى تسديد قسط التأمين في أقرب وقت ممكن. الهاتف: 72486210',
+    ar: 'حريفنا الكريم، عقد تأمينك قد وصل إلى تاريخ الاستحقاق. يرجى تسديد قسط التأمين في أقرب وقت ممكن. الهاتف: 72486210 تأمينات ستار',
   },
   impaye: {
     fr: "Cher client, votre prime d'assurance demeure impayée. Merci de bien vouloir passer par notre agence pour le paiement afin d'éviter des pénalités. Tel: 72486210",
-    ar: 'عزيزي الزبون، لا يزال قسط تأمينك غير مسدد. يرجى المرور بوكالتنا لتسوية الدفع تفاديًا للغرامات. الهاتف: 72486210',
+    ar: 'حريفنا الكريم\nنعلمكم أن قسط تأمينكم لا يزال غير مسدد\nالرجاء الدفع في أقرب وقت تفاديًا لمعاليم إضافية و خطايا\n72486210\nتأمينات ستار',
   },
 };
 
@@ -77,7 +81,7 @@ interface SendResult {
 const TermesSmsModal: React.FC<Props> = ({ targets, username, isHamza, onClose }) => {
   const [message, setMessage] = useState(DEFAULT_MESSAGE);
   const [templateId, setTemplateId] = useState<TemplateId>('echeance');
-  const [lang, setLang] = useState<Lang>('fr');
+  const [lang, setLang] = useState<Lang>('ar');
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState<SendResult[] | null>(null);
   // Numéros ajoutés manuellement par Hamza, EN PLUS du numéro déjà
@@ -262,7 +266,7 @@ const TermesSmsModal: React.FC<Props> = ({ targets, username, isHamza, onClose }
                     ))}
                   </div>
                   <div
-                    className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800"
+                    className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 whitespace-pre-line"
                     dir={lang === 'ar' ? 'rtl' : 'ltr'}
                   >
                     {effectiveMessage}
