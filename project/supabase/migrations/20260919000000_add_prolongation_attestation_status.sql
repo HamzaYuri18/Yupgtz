@@ -26,12 +26,25 @@
 ALTER TABLE prolongation ADD COLUMN IF NOT EXISTS numero_attestation text;
 
 -- 1. Widen the statut constraint on every existing carnet table.
+--    Built from whatever statut values actually exist in each table (some
+--    older carnet tables use a legacy value like 'en_stock' that our fixed
+--    list didn't account for) plus the standard set and 'prolongation', so
+--    this never fails no matter what's already stored.
 DO $$
 DECLARE
   carnet_record RECORD;
   existing_constraint text;
+  allowed_values text;
 BEGIN
   FOR carnet_record IN SELECT table_name FROM carnets_attestations LOOP
+    EXECUTE format(
+      'SELECT string_agg(DISTINCT quote_literal(statut), '', '') FROM %I WHERE statut IS NOT NULL',
+      carnet_record.table_name
+    ) INTO allowed_values;
+
+    allowed_values := COALESCE(allowed_values || ', ', '')
+      || '''imprimee'', ''servie'', ''annulee'', ''prolongation''';
+
     SELECT con.conname INTO existing_constraint
     FROM pg_constraint con
     JOIN pg_class rel ON rel.oid = con.conrelid
@@ -44,9 +57,10 @@ BEGIN
     END IF;
 
     EXECUTE format(
-      'ALTER TABLE %I ADD CONSTRAINT %I CHECK (statut IS NULL OR statut IN (''imprimee'', ''servie'', ''annulee'', ''prolongation''))',
+      'ALTER TABLE %I ADD CONSTRAINT %I CHECK (statut IS NULL OR statut IN (%s))',
       carnet_record.table_name,
-      carnet_record.table_name || '_statut_check'
+      carnet_record.table_name || '_statut_check',
+      allowed_values
     );
   END LOOP;
 END $$;
