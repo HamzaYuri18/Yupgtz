@@ -139,6 +139,8 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   // Rappel de relance de paiement à chaque connexion (Ahlem/Rouae uniquement)
   const [showCollectionsReminder, setShowCollectionsReminder] = useState(false);
   const [hasShownCollectionsReminder, setHasShownCollectionsReminder] = useState(false);
+  const [overdue3MonthsCount, setOverdue3MonthsCount] = useState(0);
+  const [overdue3MonthsTotal, setOverdue3MonthsTotal] = useState(0);
 
   const isHamza = username?.toLowerCase() === 'hamza';
   // Ahlem/Rouae doivent voir le montant des termes échus/non payés (relance
@@ -151,6 +153,10 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     loadCreditsDueToday();
     loadSessionTasks();
     loadTotalUncompletedTasks();
+    if (isRestrictedUser(username || '')) {
+      loadOverdue3MonthsTotal();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -230,10 +236,10 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     return () => clearInterval(t);
   }, [showPromoBanner]);
 
-  const openPromoBanner = () => {
-    setPromoImageIndex(0);
-    setShowPromoBanner(true);
-  };
+  // Désactivé sur demande : le modal "Challenge Productivité" ne doit plus
+  // s'afficher. La fonction reste en place (nombreux points d'appel dans la
+  // chaîne de popups) mais ne fait plus rien.
+  const openPromoBanner = () => {};
 
   const checkSessionStatus = async () => {
     if (sessionDate) {
@@ -362,6 +368,28 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
       console.error('Erreur lors du chargement des données:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const MONTHS_UNACCENTED = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
+
+  // Termes échus cumulés sur les 3 derniers mois (mois en cours inclus),
+  // pour donner à Ahlem/Rouae une vision du retard au-delà du seul mois
+  // actuellement sélectionné dans le tableau de bord.
+  const loadOverdue3MonthsTotal = async () => {
+    try {
+      const now = new Date();
+      const results = await Promise.all(
+        [0, 1, 2].map(i => {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          return getOverdueUnpaidTermes(MONTHS_UNACCENTED[d.getMonth()], String(d.getFullYear()));
+        })
+      );
+      const all = results.flat();
+      setOverdue3MonthsCount(all.length);
+      setOverdue3MonthsTotal(calculateTotal(all));
+    } catch (error) {
+      console.error('Erreur lors du calcul des termes échus sur 3 mois:', error);
     }
   };
 
@@ -826,7 +854,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                   <AlertCircle className="w-10 h-10" />
                   <div>
                     <h2 className="text-2xl font-bold">Relance des paiements</h2>
-                    <p className="text-orange-100">À faire aujourd'hui</p>
+                    <p className="text-orange-100">N'oubliez pas !!</p>
                   </div>
                 </div>
                 <button
@@ -847,8 +875,13 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                   <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
                     <p className="text-xs font-semibold text-orange-600 uppercase tracking-wide mb-1">Termes non payés</p>
                     <p className="text-2xl font-bold text-orange-700">{unpaidTermes.length}</p>
-                    <p className="text-sm font-semibold text-orange-600 mt-1">{calculateTotal(unpaidTermes).toFixed(2)} DT</p>
                   </div>
+                </div>
+
+                <div className="bg-red-100 border border-red-300 rounded-xl p-4 text-center">
+                  <p className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-1">Termes échus — 3 derniers mois</p>
+                  <p className="text-2xl font-bold text-red-800">{overdue3MonthsCount}</p>
+                  <p className="text-sm font-semibold text-red-700 mt-1">{overdue3MonthsTotal.toFixed(2)} DT</p>
                 </div>
 
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
@@ -1225,7 +1258,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                       color="#F97316"
                       icon={<Clock className="w-7 h-7" />}
                       onClick={() => setShowUnpaidDetails(!showUnpaidDetails)}
-                      showAmount={canSeeCollectionAmounts}
+                      showAmount={isHamza}
                     />
                     <CircularStatCard
                       title="Échéances Proches"
@@ -1444,7 +1477,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                         </th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
-                        {canSeeCollectionAmounts && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
+                        {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Remarque</th>
@@ -1476,7 +1509,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                             </td>
                             <td className="px-4 py-3 text-sm font-medium">{terme.numero_contrat}</td>
                             <td className="px-4 py-3 text-sm">{terme.assure}</td>
-                            {canSeeCollectionAmounts && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
+                            {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
                             <td className="px-4 py-3 text-sm">{formatDate(terme.echeance)}</td>
                             <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
                             <td className="px-4 py-3 text-sm">
