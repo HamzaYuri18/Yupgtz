@@ -1439,7 +1439,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="paymentMode"
                 value={formData.paymentMode}
                 onChange={handleInputChange}
-                disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                 className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 required
               >
@@ -1457,7 +1456,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="paymentType"
                 value={formData.paymentType}
                 onChange={handleInputChange}
-                disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                 className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 required
               >
@@ -1485,7 +1483,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     name="numeroCheque"
                     value={formData.numeroCheque}
                     onChange={handleInputChange}
-                    disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                     className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
                     placeholder="Numéro du chèque"
                   />
@@ -1500,7 +1497,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     name="banque"
                     value={formData.banque}
                     onChange={handleInputChange}
-                    disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                     className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
                     placeholder="Nom de la banque"
                   />
@@ -1516,7 +1512,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     name="dateEncaissementPrevue"
                     value={formData.dateEncaissementPrevue}
                     onChange={handleInputChange}
-                    disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                     min={new Date().toISOString().split('T')[0]}
                     max={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                     className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
@@ -1548,7 +1543,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     name="creditAmount"
                     value={formData.creditAmount}
                     onChange={handleInputChange}
-                    disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                     step="0.01"
                     min="0"
                     max={formData.premiumAmount || undefined}
@@ -1568,7 +1562,6 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     name="paymentDate"
                     value={formData.paymentDate}
                     onChange={handleInputChange}
-                    disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                     min={new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                     className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 bg-white"
                     required={isHamza}
