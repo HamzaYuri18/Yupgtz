@@ -242,6 +242,37 @@ const ProlongationExceptionnelle: React.FC = () => {
     loadAttestationsDisponibles();
   }, []);
 
+  // Évalue si une attestation peut être utilisée pour une prolongation.
+  // - statut NULL (ou "en_stock") : disponible.
+  // - statut "servie" ou "prolongation" : déjà utilisée, bloqué.
+  // - statut "annulee" : disponible UNIQUEMENT si elle figure bien dans
+  //   attestations_disponibles et n'y a pas déjà été réutilisée — une
+  //   attestation annulée mais jamais formellement libérée reste bloquée.
+  const ATTESTATION_USED_MESSAGE = 'Cette attestation est utilisée. Veuillez réessayer avec un autre numéro.';
+
+  const evaluateAttestation = async (numeroInt: number): Promise<{ ok: boolean; message?: string }> => {
+    const { data, error: rpcErr } = await supabase.rpc('check_attestation_disponible', { attestation_numero: numeroInt });
+    if (rpcErr) throw new Error(rpcErr.message);
+    const row = data?.[0];
+    if (!row || !row.existe) {
+      return { ok: false, message: 'Numéro d\'attestation introuvable.' };
+    }
+    if (row.statut_actuel === 'servie' || row.statut_actuel === 'prolongation') {
+      return { ok: false, message: ATTESTATION_USED_MESSAGE };
+    }
+    if (row.statut_actuel === 'annulee') {
+      const { data: dispo } = await supabase
+        .from('attestations_disponibles')
+        .select('id, reutilise')
+        .eq('numero_attestation', String(numeroInt))
+        .maybeSingle();
+      if (!dispo || dispo.reutilise) {
+        return { ok: false, message: ATTESTATION_USED_MESSAGE };
+      }
+    }
+    return { ok: true };
+  };
+
   const checkAttestationStatus = async (numero: string) => {
     if (useAttestationDisponible) { setAttestationCheck({ status: 'ok' }); return; }
     if (!numero.trim()) { setAttestationCheck({ status: 'idle' }); return; }
@@ -254,18 +285,8 @@ const ProlongationExceptionnelle: React.FC = () => {
 
     setAttestationCheck({ status: 'checking' });
     try {
-      const { data, error: rpcErr } = await supabase.rpc('check_attestation_disponible', { attestation_numero: numeroInt });
-      if (rpcErr) throw new Error(rpcErr.message);
-      const row = data?.[0];
-      if (!row || !row.existe) {
-        setAttestationCheck({ status: 'error', message: 'Numéro d\'attestation introuvable.' });
-        return;
-      }
-      if (row.statut_actuel === 'servie' || row.statut_actuel === 'prolongation') {
-        setAttestationCheck({ status: 'blocked', message: 'Cette attestation est utilisée. Veuillez réessayer avec un autre numéro.' });
-        return;
-      }
-      setAttestationCheck({ status: 'ok' });
+      const result = await evaluateAttestation(numeroInt);
+      setAttestationCheck(result.ok ? { status: 'ok' } : { status: 'blocked', message: result.message });
     } catch (err: any) {
       setAttestationCheck({ status: 'error', message: err.message || 'Erreur lors de la vérification.' });
     }
@@ -386,19 +407,10 @@ const ProlongationExceptionnelle: React.FC = () => {
       // réutilisée via "attestations disponibles" est déjà garantie libre,
       // donc ce contrôle est ignoré dans ce cas, comme dans Nouveau Contrat).
       if (!useAttestationDisponible) {
-        const { data: attData, error: attErr } = await supabase.rpc('check_attestation_disponible', {
-          attestation_numero: numeroAttestationInt,
-        });
-        if (attErr) throw new Error(attErr.message);
-        const row = attData?.[0];
-        if (!row || !row.existe) {
-          setError('Numéro d\'attestation introuvable.');
-          setSending(false);
-          return;
-        }
-        if (row.statut_actuel === 'servie' || row.statut_actuel === 'prolongation') {
-          setError('⛔ Cette attestation est utilisée. Veuillez réessayer avec un autre numéro.');
-          setAttestationCheck({ status: 'blocked', message: 'Cette attestation est utilisée. Veuillez réessayer avec un autre numéro.' });
+        const result = await evaluateAttestation(numeroAttestationInt);
+        if (!result.ok) {
+          setError(`⛔ ${result.message}`);
+          setAttestationCheck({ status: 'blocked', message: result.message });
           setSending(false);
           return;
         }
