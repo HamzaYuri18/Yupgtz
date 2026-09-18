@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Search, AlertTriangle, CheckCircle, Download, FileText, Car, MapPin, Calendar, RotateCcw, Shield, ListChecks } from 'lucide-react';
+import { Search, AlertTriangle, CheckCircle, Download, FileText, Car, MapPin, Calendar, RotateCcw, Shield, ListChecks, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { getSession } from '../utils/auth';
 import ProlongationsList from './ProlongationsList';
 import ProlongationValidationModal from './ProlongationValidationModal';
+import MissingAttestationModal from './MissingAttestationModal';
 
 // Noms des mois sans accents pour les noms de tables
 const MOIS_TABLE: Record<number, string> = {
@@ -229,6 +230,18 @@ const ProlongationExceptionnelle: React.FC = () => {
     status: 'idle' | 'checking' | 'ok' | 'blocked' | 'error';
     message?: string;
   }>({ status: 'idle' });
+  // Séquence d'attestations manquantes (numéros sautés dans le carnet) — même
+  // mécanisme que dans Nouveau Contrat : l'utilisateur doit les régulariser
+  // (motif + éventuel scan barré) avant de pouvoir continuer.
+  const [showMissingAttestationModal, setShowMissingAttestationModal] = useState(false);
+  const [missingAttestationNumbers, setMissingAttestationNumbers] = useState<string[]>([]);
+  const [carnetTableName, setCarnetTableName] = useState('');
+  const [pendingFormForSubmit, setPendingFormForSubmit] = useState<ProlongForm | null>(null);
+  // Le statut de l'attestation (RPC update_attestation_prolongation) ne doit
+  // changer qu'au moment du téléchargement effectif du PDF — c-à-d après la
+  // saisie et la validation du code d'autorisation envoyé à Hamza pour les
+  // utilisateurs non-Hamza. Ce garde-fou évite un double appel.
+  const [attestationStatusUpdated, setAttestationStatusUpdated] = useState(false);
 
   useEffect(() => {
     const loadAttestationsDisponibles = async () => {
@@ -289,6 +302,144 @@ const ProlongationExceptionnelle: React.FC = () => {
       setAttestationCheck(result.ok ? { status: 'ok' } : { status: 'blocked', message: result.message });
     } catch (err: any) {
       setAttestationCheck({ status: 'error', message: err.message || 'Erreur lors de la vérification.' });
+    }
+  };
+
+  // Vérifie que l'attestation saisie respecte bien l'ordre de séquence du
+  // carnet (même règle métier que dans Nouveau Contrat) : si des numéros du
+  // carnet ont été sautés et sont toujours au statut NULL (jamais régularisés),
+  // ils sont remontés comme "manquants".
+  const checkAttestationSequence = async (
+    attestationNum: number
+  ): Promise<{ ok: boolean; missingNumbers?: string[]; carnetTable?: string; message?: string }> => {
+    const { data: validationData, error: validationError } = await supabase
+      .rpc('validate_attestation_sequence', { attestation_numero: attestationNum });
+    if (validationError) throw new Error(validationError.message);
+    if (!validationData || validationData.length === 0) return { ok: true };
+
+    const validation = validationData[0];
+    if (validation.is_valid) return { ok: true };
+
+    const numeroAttendu = validation.numero_attendu;
+    if (numeroAttendu && parseInt(numeroAttendu) < attestationNum) {
+      if (!validation.carnet_table) {
+        return { ok: false, message: 'Erreur : table du carnet non trouvée.' };
+      }
+
+      const potentialMissingNumbers: string[] = [];
+      for (let i = parseInt(numeroAttendu); i < attestationNum; i++) {
+        potentialMissingNumbers.push(i.toString());
+      }
+
+      const { data: carnetAttestations, error: carnetError } = await supabase
+        .from(validation.carnet_table)
+        .select('numero_attestation, statut')
+        .in('numero_attestation', potentialMissingNumbers);
+      if (carnetError) {
+        return { ok: false, message: 'Erreur lors de la vérification des attestations manquantes.' };
+      }
+
+      const missingNumbers = potentialMissingNumbers.filter(num => {
+        const att = carnetAttestations?.find(a => a.numero_attestation === num);
+        return att?.statut === null;
+      });
+
+      if (missingNumbers.length === 0) return { ok: true };
+      return { ok: false, missingNumbers, carnetTable: validation.carnet_table };
+    }
+
+    const messageDetail = numeroAttendu ? ` Le numéro attendu est : ${numeroAttendu}.` : '';
+    return { ok: false, message: `${validation.message}${messageDetail}` };
+  };
+
+  // Vérification complète (statut + séquence), déclenchée par le bouton
+  // "Vérifier" et, en filet de sécurité, au moment de l'enregistrement.
+  const runAttestationChecks = async (): Promise<{ ok: boolean; missing?: boolean; message?: string }> => {
+    if (!form) return { ok: false };
+    if (useAttestationDisponible) { setAttestationCheck({ status: 'ok' }); return { ok: true }; }
+
+    const numero = form.numero_attestation.trim();
+    if (!numero) {
+      setAttestationCheck({ status: 'idle' });
+      return { ok: false, message: 'Le numéro d\'attestation est obligatoire.' };
+    }
+
+    const numeroInt = parseInt(numero, 10);
+    if (isNaN(numeroInt)) {
+      setAttestationCheck({ status: 'error', message: 'Numéro invalide.' });
+      return { ok: false, message: 'Numéro d\'attestation invalide.' };
+    }
+
+    setAttestationCheck({ status: 'checking' });
+    try {
+      const basic = await evaluateAttestation(numeroInt);
+      if (!basic.ok) {
+        setAttestationCheck({ status: 'blocked', message: basic.message });
+        return { ok: false, message: basic.message };
+      }
+
+      const seq = await checkAttestationSequence(numeroInt);
+      if (seq.ok) {
+        setAttestationCheck({ status: 'ok' });
+        return { ok: true };
+      }
+
+      if (seq.missingNumbers && seq.carnetTable) {
+        setMissingAttestationNumbers(seq.missingNumbers);
+        setCarnetTableName(seq.carnetTable);
+        const msg = 'Vous avez manqué des attestations. Veuillez les régulariser ci-dessous.';
+        setAttestationCheck({ status: 'blocked', message: msg });
+        setShowMissingAttestationModal(true);
+        return { ok: false, missing: true, message: msg };
+      }
+
+      setAttestationCheck({ status: 'blocked', message: seq.message });
+      return { ok: false, message: seq.message };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erreur lors de la vérification.';
+      setAttestationCheck({ status: 'error', message: msg });
+      return { ok: false, message: msg };
+    }
+  };
+
+  const handleMissingAttestationComplete = async () => {
+    setShowMissingAttestationModal(false);
+    const check = await runAttestationChecks();
+    if (pendingFormForSubmit) {
+      const f = pendingFormForSubmit;
+      setPendingFormForSubmit(null);
+      if (check.ok) {
+        await finishSubmit(f);
+      }
+    }
+  };
+
+  // Change le statut de l'attestation en "prolongation" (et marque une
+  // éventuelle attestation disponible comme réutilisée). N'est appelé qu'au
+  // moment du téléchargement réel du PDF — jamais avant, et jamais avant la
+  // validation du code d'autorisation envoyé à Hamza pour les autres utilisateurs.
+  const finalizeAttestationStatus = async (f: ProlongForm): Promise<void> => {
+    const numeroAttestationInt = parseInt(f.numero_attestation, 10);
+    if (isNaN(numeroAttestationInt)) return;
+
+    const { error: markErr } = await supabase.rpc('update_attestation_prolongation', {
+      attestation_numero: numeroAttestationInt,
+      p_numero_contrat: f.numero_contrat,
+      p_assure: f.assure,
+    });
+    if (markErr) console.error('Erreur marquage attestation (prolongation):', markErr);
+
+    if (useAttestationDisponible) {
+      const session = getSession();
+      const { error: dispoErr } = await supabase.from('attestations_disponibles')
+        .update({
+          reutilise: true,
+          reutilise_le: new Date().toISOString(),
+          reutilise_par: session?.username || 'Inconnu',
+          nouveau_numero_contrat: f.numero_contrat,
+        })
+        .eq('numero_attestation', f.numero_attestation);
+      if (dispoErr) console.error('Erreur marquage attestation disponible (réutilisation):', dispoErr);
     }
   };
 
@@ -355,6 +506,11 @@ const ProlongationExceptionnelle: React.FC = () => {
       });
       setUseAttestationDisponible(false);
       setAttestationCheck({ status: 'idle' });
+      setShowMissingAttestationModal(false);
+      setMissingAttestationNumbers([]);
+      setCarnetTableName('');
+      setPendingFormForSubmit(null);
+      setAttestationStatusUpdated(false);
       setStep('form');
     } catch (err: any) {
       setError(`Erreur inattendue : ${err.message}`);
@@ -380,6 +536,25 @@ const ProlongationExceptionnelle: React.FC = () => {
 
   // ── Step 2 : Soumission ─────────────────────────────────────────────────────
 
+  // Termine réellement l'enregistrement une fois toutes les vérifications
+  // d'attestation passées (appelé directement, ou après régularisation des
+  // attestations manquantes). Le statut de l'attestation n'est volontairement
+  // PAS changé ici : voir finalizeAttestationStatus, appelé uniquement au
+  // téléchargement du PDF validé.
+  const finishSubmit = async (f: ProlongForm) => {
+    setSending(true);
+    setError(null);
+    try {
+      await saveProlongation(f);
+      setStep('done');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erreur inconnue';
+      setError(`Erreur lors de l'enregistrement : ${msg}`);
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!form) return;
 
@@ -392,58 +567,27 @@ const ProlongationExceptionnelle: React.FC = () => {
     if (!form.immatriculation.trim()) { setError('L\'immatriculation est obligatoire.'); return; }
     if (!form.numero_attestation.trim()) { setError('Le numéro d\'attestation est obligatoire.'); return; }
 
-    setSending(true);
     setError(null);
 
-    try {
-      const numeroAttestationInt = parseInt(form.numero_attestation, 10);
-      if (isNaN(numeroAttestationInt)) {
-        setError('Numéro d\'attestation invalide.');
-        setSending(false);
+    // Revérifier le statut ET la séquence au moment de l'enregistrement
+    // (l'attestation réutilisée via "attestations disponibles" est déjà
+    // garantie libre, donc ce contrôle est ignoré dans ce cas, comme dans
+    // Nouveau Contrat).
+    if (!useAttestationDisponible) {
+      const check = await runAttestationChecks();
+      if (!check.ok) {
+        if (check.missing) {
+          // Le modal de régularisation est déjà ouvert ; on mémorise le
+          // formulaire pour reprendre l'enregistrement une fois complété.
+          setPendingFormForSubmit(form);
+        } else if (check.message) {
+          setError(`⛔ ${check.message}`);
+        }
         return;
       }
-
-      // Revérifier le statut au moment de l'enregistrement (l'attestation
-      // réutilisée via "attestations disponibles" est déjà garantie libre,
-      // donc ce contrôle est ignoré dans ce cas, comme dans Nouveau Contrat).
-      if (!useAttestationDisponible) {
-        const result = await evaluateAttestation(numeroAttestationInt);
-        if (!result.ok) {
-          setError(`⛔ ${result.message}`);
-          setAttestationCheck({ status: 'blocked', message: result.message });
-          setSending(false);
-          return;
-        }
-      }
-
-      await saveProlongation(form);
-
-      // Marquer l'attestation comme utilisée pour une prolongation.
-      const { error: markErr } = await supabase.rpc('update_attestation_prolongation', {
-        attestation_numero: numeroAttestationInt,
-        p_numero_contrat: form.numero_contrat,
-        p_assure: form.assure,
-      });
-      if (markErr) console.error('Erreur marquage attestation (prolongation):', markErr);
-
-      if (useAttestationDisponible) {
-        const session = getSession();
-        await supabase.from('attestations_disponibles')
-          .update({
-            reutilise: true,
-            reutilise_le: new Date().toISOString(),
-            reutilise_par: session?.username || 'Inconnu',
-            nouveau_numero_contrat: form.numero_contrat,
-          })
-          .eq('numero_attestation', form.numero_attestation);
-      }
-
-      setStep('done');
-    } catch (err: any) {
-      setError(`Erreur lors de l'enregistrement : ${err.message}`);
-    } finally {
-      setSending(false);
     }
+
+    await finishSubmit(form);
   };
 
   const upd = (field: keyof ProlongForm, val: string) =>
@@ -460,6 +604,12 @@ const ProlongationExceptionnelle: React.FC = () => {
       const username = getSession()?.username || '';
 
       if (username === 'Hamza') {
+        // Hamza est lui-même l'autorité de validation : le changement de
+        // statut de l'attestation se fait donc directement à son téléchargement.
+        if (!attestationStatusUpdated) {
+          await finalizeAttestationStatus(form);
+          setAttestationStatusUpdated(true);
+        }
         downloadPDFBytes(bytes, form.numero_contrat);
       } else {
         setPendingValidation({ bytes, numeroContrat: form.numero_contrat });
@@ -479,6 +629,13 @@ const ProlongationExceptionnelle: React.FC = () => {
     setForm(null);
     setError(null);
     setFinErr(null);
+    setUseAttestationDisponible(false);
+    setAttestationCheck({ status: 'idle' });
+    setShowMissingAttestationModal(false);
+    setMissingAttestationNumbers([]);
+    setCarnetTableName('');
+    setPendingFormForSubmit(null);
+    setAttestationStatusUpdated(false);
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -694,20 +851,31 @@ const ProlongationExceptionnelle: React.FC = () => {
                 ))}
               </select>
             ) : (
-              <input
-                type="number"
-                value={form.numero_attestation}
-                onChange={e => { upd('numero_attestation', e.target.value); setAttestationCheck({ status: 'idle' }); }}
-                onBlur={e => checkAttestationStatus(e.target.value)}
-                placeholder="Ex: 12345"
-                className={`w-full border rounded-xl px-4 py-3 text-slate-800 focus:ring-2 focus:border-transparent outline-none font-mono ${
-                  attestationCheck.status === 'blocked' || attestationCheck.status === 'error'
-                    ? 'border-red-400 bg-red-50 focus:ring-red-500'
-                    : attestationCheck.status === 'ok'
-                      ? 'border-emerald-400 bg-emerald-50 focus:ring-emerald-500'
-                      : 'border-slate-300 focus:ring-violet-500'
-                }`}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={form.numero_attestation}
+                  onChange={e => { upd('numero_attestation', e.target.value); setAttestationCheck({ status: 'idle' }); }}
+                  onBlur={e => checkAttestationStatus(e.target.value)}
+                  placeholder="Ex: 12345"
+                  className={`flex-1 min-w-0 border rounded-xl px-4 py-3 text-slate-800 focus:ring-2 focus:border-transparent outline-none font-mono ${
+                    attestationCheck.status === 'blocked' || attestationCheck.status === 'error'
+                      ? 'border-red-400 bg-red-50 focus:ring-red-500'
+                      : attestationCheck.status === 'ok'
+                        ? 'border-emerald-400 bg-emerald-50 focus:ring-emerald-500'
+                        : 'border-slate-300 focus:ring-violet-500'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => runAttestationChecks()}
+                  disabled={!form.numero_attestation.trim() || attestationCheck.status === 'checking'}
+                  className="shrink-0 flex items-center gap-2 px-4 py-3 rounded-xl border border-violet-300 text-violet-700 font-medium hover:bg-violet-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  Vérifier
+                </button>
+              </div>
             )}
 
             {attestationCheck.status === 'checking' && (
@@ -883,12 +1051,27 @@ const ProlongationExceptionnelle: React.FC = () => {
           form={form}
           pdfBytes={pendingValidation.bytes}
           onClose={() => setPendingValidation(null)}
-          onValidated={() => {
+          onValidated={async () => {
+            // Le code d'autorisation envoyé à Hamza vient d'être validé :
+            // c'est seulement maintenant que l'attestation change de statut.
+            if (!attestationStatusUpdated) {
+              await finalizeAttestationStatus(form);
+              setAttestationStatusUpdated(true);
+            }
             downloadPDFBytes(pendingValidation.bytes, pendingValidation.numeroContrat);
             setPendingValidation(null);
           }}
         />
       )}
+
+      <MissingAttestationModal
+        isOpen={showMissingAttestationModal}
+        onClose={() => { setShowMissingAttestationModal(false); setPendingFormForSubmit(null); }}
+        missingNumbers={missingAttestationNumbers}
+        currentUser={getSession()?.username || ''}
+        carnetTable={carnetTableName}
+        onComplete={handleMissingAttestationComplete}
+      />
     </div>
   );
 };
