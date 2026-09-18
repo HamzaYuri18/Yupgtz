@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, DollarSign, X, Tag, Send, MessageSquare } from 'lucide-react';
 import { getAvailableMonths, getUnpaidTermesByMonth, getOverdueUnpaidTermes, getPaidTermesByMonth, getUpcomingTermes, getCreditsDueToday, getTotalTermesByMonth, getRemarqueStatsByMonth, getRemarqueContractsByMonth, RemarqueMonthStats } from '../utils/supabaseService';
-import { getSessionDate } from '../utils/auth';
+import { getSessionDate, isRestrictedUser } from '../utils/auth';
 import { isSessionClosed } from '../utils/sessionService';
 import { supabase } from '../lib/supabase';
 import TaskManagement from './TaskManagement';
@@ -136,7 +136,14 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [selectedUnpaid, setSelectedUnpaid] = useState<Set<string>>(new Set());
   const [smsTargets, setSmsTargets] = useState<SmsTarget[] | null>(null);
 
+  // Rappel de relance de paiement à chaque connexion (Ahlem/Rouae uniquement)
+  const [showCollectionsReminder, setShowCollectionsReminder] = useState(false);
+  const [hasShownCollectionsReminder, setHasShownCollectionsReminder] = useState(false);
+
   const isHamza = username?.toLowerCase() === 'hamza';
+  // Ahlem/Rouae doivent voir le montant des termes échus/non payés (relance
+  // de paiement), même s'ils n'ont pas accès aux autres montants financiers.
+  const canSeeCollectionAmounts = isHamza || isRestrictedUser(username || '');
 
   useEffect(() => {
     loadAvailableMonths();
@@ -180,8 +187,33 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     return () => clearTimeout(timer);
   }, [creditsDueToday.length, sessionTasks.length, initialPopupsChecked]);
 
+  // Rappel de relance de paiement pour Ahlem/Rouae : affiché à chaque
+  // connexion (dès que ce composant est monté) tant qu'il reste des termes
+  // échus/non payés, une fois les autres popups prioritaires (crédits du
+  // jour, tâches) refermés ou écartés, pour ne pas les empiler.
   useEffect(() => {
-    if (showCreditAlert || showTaskAlert) {
+    if (!isRestrictedUser(username || '')) return;
+    if (hasShownCollectionsReminder) return;
+    if (!initialPopupsChecked) return;
+    if (showCreditAlert || showTaskAlert) return;
+    if (overdueTermes.length === 0 && unpaidTermes.length === 0) return;
+
+    if (showPromoBanner) setShowPromoBanner(false);
+    setShowCollectionsReminder(true);
+    setHasShownCollectionsReminder(true);
+  }, [
+    username,
+    initialPopupsChecked,
+    showCreditAlert,
+    showTaskAlert,
+    showPromoBanner,
+    overdueTermes,
+    unpaidTermes,
+    hasShownCollectionsReminder,
+  ]);
+
+  useEffect(() => {
+    if (showCreditAlert || showTaskAlert || showCollectionsReminder) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
@@ -190,7 +222,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     return () => {
       document.body.style.overflow = 'unset';
     };
-  }, [showCreditAlert, showTaskAlert]);
+  }, [showCreditAlert, showTaskAlert, showCollectionsReminder]);
 
   useEffect(() => {
     if (!showPromoBanner) return;
@@ -783,6 +815,77 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
           </div>
         )}
 
+        {showCollectionsReminder && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[9999] p-4"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowCollectionsReminder(false); }}
+          >
+            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-orange-500 to-red-600 text-white p-6 rounded-t-2xl flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-10 h-10" />
+                  <div>
+                    <h2 className="text-2xl font-bold">Relance des paiements</h2>
+                    <p className="text-orange-100">À faire aujourd'hui</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowCollectionsReminder(false)}
+                  className="p-2 hover:bg-red-700 rounded-lg transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                    <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-1">Termes échus</p>
+                    <p className="text-2xl font-bold text-red-700">{overdueTermes.length}</p>
+                    <p className="text-sm font-semibold text-red-600 mt-1">{calculateTotal(overdueTermes).toFixed(2)} DT</p>
+                  </div>
+                  <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
+                    <p className="text-xs font-semibold text-orange-600 uppercase tracking-wide mb-1">Termes non payés</p>
+                    <p className="text-2xl font-bold text-orange-700">{unpaidTermes.length}</p>
+                    <p className="text-sm font-semibold text-orange-600 mt-1">{calculateTotal(unpaidTermes).toFixed(2)} DT</p>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <p className="text-sm text-blue-900">
+                    Merci de relancer ces clients dès aujourd'hui pour le paiement de leur prime.
+                    Un appel ou un SMS rapide peut suffire à régulariser leur situation.
+                  </p>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <p className="text-sm text-amber-900 italic">
+                    "Perdre un client coûte bien plus cher que d'en gagner deux nouveaux." Chaque relance compte.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-1">
+                  <button
+                    onClick={() => setShowCollectionsReminder(false)}
+                    className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition-colors"
+                  >
+                    Fermer
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowCollectionsReminder(false);
+                      setShowOverdueDetails(true);
+                    }}
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-xl hover:from-orange-600 hover:to-red-700 font-semibold transition-colors"
+                  >
+                    Voir les termes à relancer
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Tableau de bord des Termes</h1>
           <p className="text-sm text-gray-600">Vue d'ensemble des paiements et échéances</p>
@@ -1111,7 +1214,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                       color="#EF4444"
                       icon={<AlertCircle className="w-7 h-7" />}
                       onClick={() => setShowOverdueDetails(!showOverdueDetails)}
-                      showAmount={isHamza}
+                      showAmount={canSeeCollectionAmounts}
                     />
                     <CircularStatCard
                       title="Termes Non Payés"
@@ -1122,7 +1225,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                       color="#F97316"
                       icon={<Clock className="w-7 h-7" />}
                       onClick={() => setShowUnpaidDetails(!showUnpaidDetails)}
-                      showAmount={isHamza}
+                      showAmount={canSeeCollectionAmounts}
                     />
                     <CircularStatCard
                       title="Échéances Proches"
@@ -1214,7 +1317,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                         </th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
-                        {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
+                        {canSeeCollectionAmounts && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Remarque</th>
@@ -1257,7 +1360,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                             </td>
                             <td className="px-4 py-3 text-sm font-medium">{terme.numero_contrat}</td>
                             <td className="px-4 py-3 text-sm">{terme.assure}</td>
-                            {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
+                            {canSeeCollectionAmounts && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
                             <td className={`px-4 py-3 text-sm font-medium ${isContentieux ? 'text-white' : 'text-red-600'}`}>{formatDate(terme.echeance)}</td>
                             <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
                             <td className="px-4 py-3 text-sm">
@@ -1341,7 +1444,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                         </th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
-                        {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
+                        {canSeeCollectionAmounts && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Remarque</th>
@@ -1373,7 +1476,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                             </td>
                             <td className="px-4 py-3 text-sm font-medium">{terme.numero_contrat}</td>
                             <td className="px-4 py-3 text-sm">{terme.assure}</td>
-                            {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
+                            {canSeeCollectionAmounts && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
                             <td className="px-4 py-3 text-sm">{formatDate(terme.echeance)}</td>
                             <td className="px-4 py-3 text-sm">{terme.num_tel || terme.num_tel_2 || 'N/A'}</td>
                             <td className="px-4 py-3 text-sm">
