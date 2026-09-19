@@ -183,6 +183,7 @@ BEGIN
         numero_contrat = $1,
         assure = $2,
         statut = ''prolongation'',
+        date_impression = NOW(),
         updated_at = NOW()
       WHERE numero_attestation = $3
     ', carnet_record.table_name)

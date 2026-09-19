@@ -441,16 +441,27 @@ const ProlongationExceptionnelle: React.FC = () => {
   // éventuelle attestation disponible comme réutilisée). N'est appelé qu'au
   // moment du téléchargement réel du PDF — jamais avant, et jamais avant la
   // validation du code d'autorisation envoyé à Hamza pour les autres utilisateurs.
-  const finalizeAttestationStatus = async (f: ProlongForm): Promise<void> => {
+  // Retourne null si tout s'est bien passé, ou un message d'avertissement à
+  // afficher si une des deux étapes a échoué (le téléchargement du PDF n'est
+  // jamais bloqué pour autant : l'échec doit rester visible, pas silencieux).
+  const finalizeAttestationStatus = async (f: ProlongForm): Promise<string | null> => {
     const numeroAttestationInt = parseInt(f.numero_attestation, 10);
-    if (isNaN(numeroAttestationInt)) return;
+    if (isNaN(numeroAttestationInt)) return null;
 
-    const { error: markErr } = await supabase.rpc('update_attestation_prolongation', {
+    let warning: string | null = null;
+
+    const { data: rpcSuccess, error: markErr } = await supabase.rpc('update_attestation_prolongation', {
       attestation_numero: numeroAttestationInt,
       p_numero_contrat: f.numero_contrat,
       p_assure: f.assure,
     });
-    if (markErr) console.error('Erreur marquage attestation (prolongation):', markErr);
+    if (markErr) {
+      console.error('Erreur marquage attestation (prolongation):', markErr);
+      warning = `⚠️ L'attestation ${f.numero_attestation} n'a pas pu être marquée comme utilisée (${markErr.message}). Merci de la régulariser manuellement.`;
+    } else if (rpcSuccess === false) {
+      console.error(`update_attestation_prolongation: attestation ${f.numero_attestation} introuvable dans un carnet.`);
+      warning = `⚠️ L'attestation ${f.numero_attestation} est introuvable dans un carnet. Merci de vérifier son statut manuellement.`;
+    }
 
     if (useAttestationDisponible) {
       const session = getSession();
@@ -462,8 +473,13 @@ const ProlongationExceptionnelle: React.FC = () => {
           nouveau_numero_contrat: f.numero_contrat,
         })
         .eq('numero_attestation', f.numero_attestation);
-      if (dispoErr) console.error('Erreur marquage attestation disponible (réutilisation):', dispoErr);
+      if (dispoErr) {
+        console.error('Erreur marquage attestation disponible (réutilisation):', dispoErr);
+        warning = warning || `⚠️ L'attestation ${f.numero_attestation} n'a pas pu être marquée comme réutilisée.`;
+      }
     }
+
+    return warning;
   };
 
   // ── Step 1 : Recherche ──────────────────────────────────────────────────────
@@ -630,8 +646,9 @@ const ProlongationExceptionnelle: React.FC = () => {
         // Hamza est lui-même l'autorité de validation : le changement de
         // statut de l'attestation se fait donc directement à son téléchargement.
         if (!attestationStatusUpdated) {
-          await finalizeAttestationStatus(form);
+          const warning = await finalizeAttestationStatus(form);
           setAttestationStatusUpdated(true);
+          if (warning) setPdfError(warning);
         }
         downloadPDFBytes(bytes, form.numero_contrat);
       } else {
@@ -1078,8 +1095,9 @@ const ProlongationExceptionnelle: React.FC = () => {
             // Le code d'autorisation envoyé à Hamza vient d'être validé :
             // c'est seulement maintenant que l'attestation change de statut.
             if (!attestationStatusUpdated) {
-              await finalizeAttestationStatus(form);
+              const warning = await finalizeAttestationStatus(form);
               setAttestationStatusUpdated(true);
+              if (warning) setPdfError(warning);
             }
             downloadPDFBytes(pendingValidation.bytes, pendingValidation.numeroContrat);
             setPendingValidation(null);
