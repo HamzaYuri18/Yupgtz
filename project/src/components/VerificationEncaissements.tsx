@@ -233,13 +233,19 @@ const VerificationEncaissements: React.FC = () => {
     setSecondarySearched(true);
     try {
       const { table, dateColumn } = SECONDARY_TABLES[secondaryView];
-      const { data, error } = await supabase
+      // Borne de fin inclusive jusqu'à la toute fin de la journée : si la
+      // colonne est un timestamp (pas juste une date), comparer à
+      // "secDateTo" tout court exclut silencieusement toutes les lignes de
+      // ce jour-là enregistrées après minuit — ça se traduit par "aucune
+      // donnée" alors que la table est bien remplie.
+      const { data, error, count } = await supabase
         .from(table)
-        .select('*')
+        .select('*', { count: 'exact' })
         .gte(dateColumn, secDateFrom)
-        .lte(dateColumn, secDateTo)
+        .lte(dateColumn, `${secDateTo}T23:59:59.999`)
         .order(dateColumn, { ascending: false });
       if (error) throw error;
+      console.log(`🔍 ${table} (${dateColumn} entre ${secDateFrom} et ${secDateTo}): ${count ?? data?.length ?? 0} ligne(s)`);
       setSecondaryRows(data || []);
     } catch (error) {
       setSecondaryError(error instanceof Error ? error.message : 'Erreur lors du chargement des données.');
@@ -356,7 +362,10 @@ const VerificationEncaissements: React.FC = () => {
               <span className="text-sm text-slate-500">{secondaryRows.length} ligne(s)</span>
             </div>
             {secondaryRows.length === 0 ? (
-              <div className="p-8 text-center text-slate-500">Aucune donnée pour cette plage de dates.</div>
+              <div className="p-8 text-center text-slate-500 space-y-1">
+                <p>Aucune donnée pour cette plage de dates.</p>
+                <p className="text-xs text-slate-400">Si la table contient pourtant des lignes dans cette période, vérifiez que les politiques RLS de "{SECONDARY_TABLES[secondaryView].table}" autorisent bien la lecture (SELECT) pour les rôles anon/authenticated.</p>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
