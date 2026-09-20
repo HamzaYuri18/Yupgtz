@@ -257,6 +257,33 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     hasShownCollectionsReminder,
   ]);
 
+  // Rappel périodique (toutes les 30 minutes) de relance des termes échus/non
+  // payés pour Ahlem/Rouae : comme pour les tâches, le rappel initial ne
+  // s'affichait qu'une fois par session — il se redéclenche maintenant tant
+  // qu'il reste des termes échus ou non payés.
+  const collectionsReminderRef = useRef({ isRestricted: false, overdueCount: 0, unpaidCount: 0, blocking: false });
+  useEffect(() => {
+    collectionsReminderRef.current = {
+      isRestricted: isRestrictedUser(username || ''),
+      overdueCount: overdueTermes.length,
+      unpaidCount: unpaidTermes.length,
+      blocking: showCreditAlert || showTaskAlert,
+    };
+  }, [username, overdueTermes, unpaidTermes, showCreditAlert, showTaskAlert]);
+
+  useEffect(() => {
+    const COLLECTIONS_REMINDER_INTERVAL_MS = 30 * 60 * 1000;
+    const interval = setInterval(() => {
+      const { isRestricted, overdueCount, unpaidCount, blocking } = collectionsReminderRef.current;
+      if (!isRestricted || blocking) return;
+      if (overdueCount === 0 && unpaidCount === 0) return;
+      setShowPromoBanner(false);
+      setShowCollectionsReminder(true);
+    }, COLLECTIONS_REMINDER_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     if (showCreditAlert || showTaskAlert || showCollectionsReminder) {
       document.body.style.overflow = 'hidden';
