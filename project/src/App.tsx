@@ -56,8 +56,11 @@ const SplashScreen: React.FC<{ visible: boolean }> = ({ visible }) => (
       </h1>
       <p className="text-slate-400 text-center mt-2 text-sm tracking-widest uppercase">Plateforme de gestion</p>
       <span
-        className="absolute -bottom-3 right-0 sm:-right-2 text-red-500 font-extrabold text-lg tracking-tight"
-        style={{ animation: visible ? 'v2-zoom-out 1.1s cubic-bezier(0.22, 1, 0.36, 1) 0.5s backwards' : 'none' }}
+        className="absolute -bottom-3 right-0 sm:-right-2 text-red-500 font-black text-lg tracking-tight"
+        style={{
+          animation: visible ? 'v2-zoom-out 1.3s cubic-bezier(0.22, 1, 0.36, 1) 0.5s backwards' : 'none',
+          transformOrigin: 'center',
+        }}
       >
         V2
       </span>
@@ -86,8 +89,8 @@ const SplashScreen: React.FC<{ visible: boolean }> = ({ visible }) => (
         100% { width: 0%; margin-left: 100%; }
       }
       @keyframes v2-zoom-out {
-        0%   { transform: scale(3.2); opacity: 0; }
-        60%  { transform: scale(0.85); opacity: 1; }
+        0%   { transform: scale(60); opacity: 0.9; }
+        70%  { transform: scale(0.85); opacity: 1; }
         100% { transform: scale(1); opacity: 1; }
       }
     `}</style>
