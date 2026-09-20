@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, DollarSign, X, Tag, Send, MessageSquare } from 'lucide-react';
+import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, DollarSign, X, Tag, Send, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
 import { getAvailableMonths, getUnpaidTermesByMonth, getOverdueUnpaidTermes, getPaidTermesByMonth, getUpcomingTermes, getCreditsDueToday, getTotalTermesByMonth, getRemarqueStatsByMonth, getRemarqueContractsByMonth, RemarqueMonthStats } from '../utils/supabaseService';
 import { getSessionDate, isRestrictedUser } from '../utils/auth';
 import { isSessionClosed } from '../utils/sessionService';
@@ -128,6 +128,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [initialPopupsChecked, setInitialPopupsChecked] = useState(false);
   const [remarqueStats, setRemarqueStats] = useState<RemarqueMonthStats[]>([]);
   const [remarqueStatsLoading, setRemarqueStatsLoading] = useState(false);
+  const [remarqueCollapsed, setRemarqueCollapsed] = useState(true);
   const [remarqueDrillDown, setRemarqueDrillDown] = useState<{ month: string; type: string; contracts: any[] } | null>(null);
   const [remarqueDrillLoading, setRemarqueDrillLoading] = useState(false);
 
@@ -989,12 +990,25 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
         {/* Statistiques Remarques par Mois */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex items-center gap-2 mb-5">
-            <Tag className="w-5 h-5 text-teal-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Contrats par Remarque — par Mois</h2>
-            <span className="text-xs text-gray-400 ml-1">(cliquer sur un chiffre pour voir les détails)</span>
+          <div
+            onClick={() => setRemarqueCollapsed(!remarqueCollapsed)}
+            className="flex items-center justify-between cursor-pointer"
+          >
+            <div className="flex items-center gap-2 flex-wrap">
+              <Tag className="w-5 h-5 text-teal-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Contrats par Remarque — par Mois</h2>
+              <span className="px-3 py-1 bg-teal-100 text-teal-800 rounded-full text-sm font-bold whitespace-nowrap">
+                {remarqueStats.reduce((s, r) => s + r.total, 0)}
+              </span>
+              {!remarqueCollapsed && (
+                <span className="text-xs text-gray-400 ml-1">(cliquer sur un chiffre pour voir les détails)</span>
+              )}
+            </div>
+            {remarqueCollapsed ? <ChevronDown className="w-5 h-5 text-gray-600" /> : <ChevronUp className="w-5 h-5 text-gray-600" />}
           </div>
 
+          {!remarqueCollapsed && (
+          <div className="mt-5">
           {remarqueStatsLoading ? (
             <div className="flex justify-center py-6">
               <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
@@ -1189,6 +1203,8 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                 </div>
               )}
             </>
+          )}
+          </div>
           )}
         </div>
 

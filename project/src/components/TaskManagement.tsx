@@ -32,6 +32,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [showTachesAFaire, setShowTachesAFaire] = useState(false);
   const [showTachesAccomplies, setShowTachesAccomplies] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const [dateFilter, setDateFilter] = useState<string>('today');
   const [statusFilter, setStatusFilter] = useState<'all' | 'A faire' | 'Accomplie'>('all');
   const [customDateDebut, setCustomDateDebut] = useState<string>('');
@@ -257,25 +258,40 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
     return <div className="text-center py-4">Chargement des tâches...</div>;
   }
 
+  const totalAFaireCount = taches.filter((t) => t.statut === 'A faire').length;
+
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-xl shadow-lg p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-800">Gestion des Tâches</h3>
-            <p className="text-sm text-gray-600 mt-1">Tâches introduites par Hamza</p>
+        <div
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="flex items-center justify-between cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800">Gestion des Tâches</h3>
+              <p className="text-sm text-gray-600 mt-1">Tâches introduites par Hamza</p>
+            </div>
+            <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm font-bold whitespace-nowrap">
+              {totalAFaireCount} à faire
+            </span>
           </div>
-          {isHamza && (
-            <button
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Ajouter une tâche
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {isHamza && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setIsCollapsed(false); setShowAddForm(!showAddForm); }}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Ajouter une tâche
+              </button>
+            )}
+            {isCollapsed ? <ChevronDown className="w-5 h-5 text-gray-600" /> : <ChevronUp className="w-5 h-5 text-gray-600" />}
+          </div>
         </div>
 
+        {!isCollapsed && (
+        <div className="mt-4">
         {showAddForm && isHamza && (
           <form onSubmit={handleAddTache} className="mb-4 p-4 rounded-lg border-2 border-blue-200 space-y-3">
             <div className="grid grid-cols-2 gap-3">
@@ -811,6 +827,8 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
               </div>
             )}
           </div>
+        )}
+        </div>
         )}
       </div>
     </div>
