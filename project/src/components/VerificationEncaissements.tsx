@@ -12,6 +12,28 @@ const SECONDARY_TABLES: Record<SecondaryView, { table: string; dateColumn: strin
 
 const prettyHeader = (key: string): string => key.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
+// attestations_motifs accumule des doublons (même ligne réinsérée) : deux
+// lignes sont considérées comme le même motif si elles partagent les 4
+// mêmes police / souscripteur / date_emission / date_effet — on ne garde
+// alors que la première rencontrée.
+const DEDUP_KEYS: Partial<Record<SecondaryView, string[]>> = {
+  motifs: ['police', 'souscripteur', 'date_emission', 'date_effet'],
+};
+
+const dedupeRows = (view: SecondaryView, allRows: Record<string, unknown>[]): Record<string, unknown>[] => {
+  const keys = DEDUP_KEYS[view];
+  if (!keys) return allRows;
+  const seen = new Set<string>();
+  const result: Record<string, unknown>[] = [];
+  for (const row of allRows) {
+    const key = keys.map((k) => String(row[k] ?? '').trim().toLowerCase()).join('|');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(row);
+  }
+  return result;
+};
+
 // terme_encaissement_details.date_input et attestations_motifs.date_emission
 // se sont avérées être des colonnes TEXTE (pas "date") contenant des dates au
 // format français jj/mm/aaaa — une comparaison .gte()/.lte() côté serveur sur
@@ -269,7 +291,7 @@ const VerificationEncaissements: React.FC = () => {
       const { data, error } = await supabase.from(table).select('*');
       if (error) throw error;
 
-      const allRows = data || [];
+      const allRows = dedupeRows(secondaryView, data || []);
       setSecondaryTotalCount(allRows.length);
 
       const fromDate = new Date(`${secDateFrom}T00:00:00`);
