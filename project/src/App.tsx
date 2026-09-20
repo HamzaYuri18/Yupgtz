@@ -56,10 +56,10 @@ const SplashScreen: React.FC<{ visible: boolean }> = ({ visible }) => (
       </h1>
       <p className="text-slate-400 text-center mt-2 text-sm tracking-widest uppercase">Plateforme de gestion</p>
       <span
-        className="absolute -bottom-3 right-0 sm:-right-2 text-red-500 font-black text-lg tracking-tight"
+        className="v2-badge absolute -bottom-3 right-0 sm:-right-2 text-red-500 font-black tracking-tight inline-block"
         style={{
-          animation: visible ? 'v2-zoom-out 1.3s cubic-bezier(0.22, 1, 0.36, 1) 0.5s backwards' : 'none',
-          transformOrigin: 'center',
+          fontSize: '1.125rem',
+          animation: visible ? 'v2-zoom-out 1.6s cubic-bezier(0.16, 1, 0.3, 1) 0.5s backwards' : 'none',
         }}
       >
         V2
@@ -88,10 +88,17 @@ const SplashScreen: React.FC<{ visible: boolean }> = ({ visible }) => (
         50%  { width: 70%; margin-left: 15%; }
         100% { width: 0%; margin-left: 100%; }
       }
+      /* Taille en vmin (relative à l'écran, pas un facteur de scale fixe) :
+         "V2" démarre proportionnel à l'écran quel que soit sa taille (mobile
+         ou large moniteur), puis se rétrécit en douceur jusqu'à sa taille
+         finale — un seul mouvement continu, sans rebond, pour rester fluide. */
       @keyframes v2-zoom-out {
-        0%   { transform: scale(60); opacity: 0.9; }
-        70%  { transform: scale(0.85); opacity: 1; }
-        100% { transform: scale(1); opacity: 1; }
+        0%   { font-size: 42vmin; opacity: 0; filter: blur(6px); }
+        15%  { opacity: 1; filter: blur(0); }
+        100% { font-size: 1.125rem; opacity: 1; filter: blur(0); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .v2-badge { animation: none !important; font-size: 1.125rem !important; opacity: 1 !important; }
       }
     `}</style>
   </div>
