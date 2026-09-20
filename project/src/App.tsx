@@ -56,9 +56,9 @@ const SplashScreen: React.FC<{ visible: boolean }> = ({ visible }) => (
       </h1>
       <p className="text-slate-400 text-center mt-2 text-sm tracking-widest uppercase">Plateforme de gestion</p>
       <span
-        className="v2-badge absolute -bottom-3 right-0 sm:-right-2 text-red-500 font-black tracking-tight inline-block"
+        className="v2-badge absolute -bottom-4 right-0 sm:-right-3 text-red-500 font-black italic tracking-tight inline-block"
         style={{
-          fontSize: '1.125rem',
+          fontSize: '2.25rem',
           animation: visible ? 'v2-zoom-out 1.6s cubic-bezier(0.16, 1, 0.3, 1) 0.5s backwards' : 'none',
         }}
       >
@@ -93,12 +93,12 @@ const SplashScreen: React.FC<{ visible: boolean }> = ({ visible }) => (
          ou large moniteur), puis se rétrécit en douceur jusqu'à sa taille
          finale — un seul mouvement continu, sans rebond, pour rester fluide. */
       @keyframes v2-zoom-out {
-        0%   { font-size: 42vmin; opacity: 0; filter: blur(6px); }
+        0%   { font-size: 48vmin; opacity: 0; filter: blur(6px); }
         15%  { opacity: 1; filter: blur(0); }
-        100% { font-size: 1.125rem; opacity: 1; filter: blur(0); }
+        100% { font-size: 2.25rem; opacity: 1; filter: blur(0); }
       }
       @media (prefers-reduced-motion: reduce) {
-        .v2-badge { animation: none !important; font-size: 1.125rem !important; opacity: 1 !important; }
+        .v2-badge { animation: none !important; font-size: 2.25rem !important; opacity: 1 !important; }
       }
     `}</style>
   </div>
