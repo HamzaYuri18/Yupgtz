@@ -164,6 +164,7 @@ const VerificationEncaissements: React.FC = () => {
   const [secondaryLoading, setSecondaryLoading] = useState(false);
   const [secondaryError, setSecondaryError] = useState('');
   const [secondarySearched, setSecondarySearched] = useState(false);
+  const [secondaryTotalCount, setSecondaryTotalCount] = useState<number | null>(null);
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
@@ -231,6 +232,7 @@ const VerificationEncaissements: React.FC = () => {
     setSecondaryLoading(true);
     setSecondaryError('');
     setSecondarySearched(true);
+    setSecondaryTotalCount(null);
     try {
       const { table, dateColumn } = SECONDARY_TABLES[secondaryView];
       // Borne de fin inclusive jusqu'à la toute fin de la journée : si la
@@ -247,6 +249,18 @@ const VerificationEncaissements: React.FC = () => {
       if (error) throw error;
       console.log(`🔍 ${table} (${dateColumn} entre ${secDateFrom} et ${secDateTo}): ${count ?? data?.length ?? 0} ligne(s)`);
       setSecondaryRows(data || []);
+
+      // Diagnostic : si le filtre par date ne renvoie rien, on compte les
+      // lignes visibles dans la table SANS filtre de date. Ça distingue un
+      // problème de RLS/permissions (0 dans les deux cas, alors que
+      // l'utilisateur voit des lignes dans Supabase) d'un problème de plage
+      // de dates ou de format de colonne (0 filtré mais > 0 au total).
+      if ((count ?? data?.length ?? 0) === 0) {
+        const { count: totalCount, error: totalError } = await supabase
+          .from(table)
+          .select('*', { count: 'exact', head: true });
+        if (!totalError) setSecondaryTotalCount(totalCount ?? 0);
+      }
     } catch (error) {
       setSecondaryError(error instanceof Error ? error.message : 'Erreur lors du chargement des données.');
       setSecondaryRows([]);
@@ -364,7 +378,17 @@ const VerificationEncaissements: React.FC = () => {
             {secondaryRows.length === 0 ? (
               <div className="p-8 text-center text-slate-500 space-y-1">
                 <p>Aucune donnée pour cette plage de dates.</p>
-                <p className="text-xs text-slate-400">Si la table contient pourtant des lignes dans cette période, vérifiez que les politiques RLS de "{SECONDARY_TABLES[secondaryView].table}" autorisent bien la lecture (SELECT) pour les rôles anon/authenticated.</p>
+                {secondaryTotalCount === 0 ? (
+                  <p className="text-xs text-amber-600 font-medium">
+                    0 ligne visible au total dans "{SECONDARY_TABLES[secondaryView].table}" (même sans filtre de date) — c'est un problème de permissions RLS, pas de dates : la politique doit autoriser le rôle "anon" (l'application n'utilise pas l'authentification Supabase, donc "authenticated" seul ne suffit pas).
+                  </p>
+                ) : secondaryTotalCount !== null && secondaryTotalCount > 0 ? (
+                  <p className="text-xs text-amber-600 font-medium">
+                    {secondaryTotalCount} ligne(s) visible(s) au total dans la table, mais aucune dans cette plage de dates — vérifiez le format/la colonne "{SECONDARY_TABLES[secondaryView].dateColumn}" ou élargissez la période.
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-400">Si la table contient pourtant des lignes dans cette période, vérifiez que les politiques RLS de "{SECONDARY_TABLES[secondaryView].table}" autorisent bien la lecture (SELECT) pour le rôle "anon".</p>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto">
