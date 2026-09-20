@@ -134,6 +134,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   // Sélection pour l'envoi de SMS de rappel (Termes Échus / Non Payés)
   const [selectedOverdue, setSelectedOverdue] = useState<Set<string>>(new Set());
   const [selectedUnpaid, setSelectedUnpaid] = useState<Set<string>>(new Set());
+  const [selectedUpcoming, setSelectedUpcoming] = useState<Set<string>>(new Set());
   const [smsTargets, setSmsTargets] = useState<SmsTarget[] | null>(null);
 
   // Rappel de relance de paiement à chaque connexion (Ahlem/Rouae uniquement)
@@ -565,8 +566,16 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   // ── Sélection & SMS de rappel (Termes Échus / Non Payés) ──────────────────
   const termeKey = (terme: any): string => `${terme.numero_contrat}|${terme.echeance}`;
 
-  const toggleSelection = (set: 'overdue' | 'unpaid', key: string) => {
-    const setter = set === 'overdue' ? setSelectedOverdue : setSelectedUnpaid;
+  type TermeSelectionSet = 'overdue' | 'unpaid' | 'upcoming';
+
+  const selectionSetterFor = (set: TermeSelectionSet) =>
+    set === 'overdue' ? setSelectedOverdue : set === 'unpaid' ? setSelectedUnpaid : setSelectedUpcoming;
+
+  const selectionSetFor = (set: TermeSelectionSet): Set<string> =>
+    set === 'overdue' ? selectedOverdue : set === 'unpaid' ? selectedUnpaid : selectedUpcoming;
+
+  const toggleSelection = (set: TermeSelectionSet, key: string) => {
+    const setter = selectionSetterFor(set);
     setter(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -575,9 +584,9 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     });
   };
 
-  const toggleSelectAll = (set: 'overdue' | 'unpaid', termes: any[]) => {
-    const setter = set === 'overdue' ? setSelectedOverdue : setSelectedUnpaid;
-    const current = set === 'overdue' ? selectedOverdue : selectedUnpaid;
+  const toggleSelectAll = (set: TermeSelectionSet, termes: any[]) => {
+    const setter = selectionSetterFor(set);
+    const current = selectionSetFor(set);
     const allKeys = termes.map(termeKey);
     const allSelected = allKeys.length > 0 && allKeys.every(k => current.has(k));
     setter(allSelected ? new Set() : new Set(allKeys));
@@ -589,8 +598,8 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     telephone: terme.num_tel || terme.num_tel_2 || '',
   });
 
-  const openSmsForSelection = (set: 'overdue' | 'unpaid', termes: any[]) => {
-    const selected = set === 'overdue' ? selectedOverdue : selectedUnpaid;
+  const openSmsForSelection = (set: TermeSelectionSet, termes: any[]) => {
+    const selected = selectionSetFor(set);
     const targets = termes.filter(t => selected.has(termeKey(t))).map(termeToSmsTarget);
     if (targets.length > 0) setSmsTargets(targets);
   };
@@ -851,68 +860,96 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
         {showCollectionsReminder && (
           <div
-            className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[9999] p-4"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
             onClick={(e) => { if (e.target === e.currentTarget) setShowCollectionsReminder(false); }}
           >
-            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
-              <div className="bg-gradient-to-r from-orange-500 to-red-600 text-white p-6 rounded-t-2xl flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <AlertCircle className="w-10 h-10" />
-                  <div>
-                    <h2 className="text-2xl font-bold">Relance des paiements</h2>
-                    <p className="text-orange-100">N'oubliez pas !!</p>
+            <div
+              className="bg-white rounded-3xl shadow-2xl ring-1 ring-black/5 max-w-xl w-full max-h-[90vh] overflow-y-auto relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-gradient-to-br from-slate-900 via-red-900 to-orange-700 text-white p-6 sm:p-7 rounded-t-3xl relative overflow-hidden">
+                <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/5 rounded-full" />
+                <div className="absolute -bottom-16 -left-10 w-48 h-48 bg-white/5 rounded-full" />
+                <div className="relative flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 shrink-0 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center">
+                      <AlertCircle className="w-7 h-7 text-orange-200" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Relance des paiements</h2>
+                      <p className="text-orange-200/90 text-sm mt-0.5">N'oubliez pas !!</p>
+                    </div>
                   </div>
+                  <button
+                    onClick={() => setShowCollectionsReminder(false)}
+                    className="p-2 rounded-xl hover:bg-white/10 transition-colors shrink-0"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => setShowCollectionsReminder(false)}
-                  className="p-2 hover:bg-red-700 rounded-lg transition-colors"
-                >
-                  <X className="w-6 h-6" />
-                </button>
               </div>
 
-              <div className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
-                    <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-1">Termes échus</p>
-                    {selectedMonth && (
-                      <p className="text-[11px] text-red-500 mb-1">{selectedMonth}</p>
-                    )}
-                    <p className="text-2xl font-bold text-red-700">{overdueTermes.length}</p>
-                    <p className="text-sm font-semibold text-red-600 mt-1">{calculateTotal(overdueTermes).toFixed(2)} DT</p>
+              <div className="p-5 sm:p-7 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="relative bg-white border border-red-200 rounded-2xl p-4 pl-5 overflow-hidden shadow-sm">
+                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-red-500" />
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
+                        <AlertCircle className="w-4 h-4 text-red-600" />
+                      </div>
+                      <p className="text-xs font-semibold text-red-600 uppercase tracking-wide">Termes échus</p>
+                    </div>
+                    {selectedMonth && <p className="text-[11px] text-slate-400 mb-1">{selectedMonth}</p>}
+                    <p className="text-3xl font-extrabold text-slate-900 leading-none">{overdueTermes.length}</p>
+                    <p className="text-sm font-semibold text-red-600 mt-1.5">{calculateTotal(overdueTermes).toFixed(2)} DT</p>
                   </div>
-                  <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
-                    <p className="text-xs font-semibold text-orange-600 uppercase tracking-wide mb-1">Termes non payés</p>
-                    <p className="text-2xl font-bold text-orange-700">{unpaidTermes.length}</p>
+
+                  <div className="relative bg-white border border-orange-200 rounded-2xl p-4 pl-5 overflow-hidden shadow-sm">
+                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-orange-400" />
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                        <Clock className="w-4 h-4 text-orange-600" />
+                      </div>
+                      <p className="text-xs font-semibold text-orange-600 uppercase tracking-wide">Termes non payés</p>
+                    </div>
+                    <p className="text-3xl font-extrabold text-slate-900 leading-none">{unpaidTermes.length}</p>
                   </div>
                 </div>
 
-                <div className="bg-red-100 border border-red-300 rounded-xl p-4 text-center">
-                  <p className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-1">Termes échus — 3 derniers mois</p>
-                  {overdue3MonthsLabel && (
-                    <p className="text-[11px] text-red-600 mb-1">{overdue3MonthsLabel}</p>
-                  )}
-                  <p className="text-2xl font-bold text-red-800">{overdue3MonthsCount}</p>
-                  <p className="text-sm font-semibold text-red-700 mt-1">{overdue3MonthsTotal.toFixed(2)} DT</p>
+                <div className="relative bg-gradient-to-br from-red-50 to-orange-50 border border-red-200 rounded-2xl p-5 overflow-hidden shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center">
+                      <TrendingUp className="w-4 h-4 text-white" />
+                    </div>
+                    <p className="text-xs font-semibold text-red-700 uppercase tracking-wide">Termes échus — 3 derniers mois</p>
+                  </div>
+                  {overdue3MonthsLabel && <p className="text-[11px] text-red-500/80 mb-1">{overdue3MonthsLabel}</p>}
+                  <div className="flex items-end justify-between">
+                    <p className="text-3xl font-extrabold text-red-800 leading-none">{overdue3MonthsCount}</p>
+                    <p className="text-base font-bold text-red-700">{overdue3MonthsTotal.toFixed(2)} DT</p>
+                  </div>
                 </div>
 
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                  <p className="text-sm text-blue-900">
+                <div className="bg-blue-50/80 border border-blue-100 rounded-2xl p-4 flex items-start gap-3">
+                  <div className="w-8 h-8 shrink-0 rounded-lg bg-blue-100 flex items-center justify-center mt-0.5">
+                    <MessageSquare className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <p className="text-sm text-blue-900 leading-relaxed">
                     Merci de relancer ces clients dès aujourd'hui pour le paiement de leur prime.
                     Un appel ou un SMS rapide peut suffire à régulariser leur situation.
                   </p>
                 </div>
 
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                  <p className="text-sm text-amber-900 italic">
-                    "Perdre un client coûte bien plus cher que d'en gagner deux nouveaux." Chaque relance compte.
+                <blockquote className="border-l-4 border-amber-300 bg-amber-50/60 rounded-r-2xl px-4 py-3">
+                  <p className="text-sm text-amber-900 italic leading-relaxed">
+                    « Perdre un client coûte bien plus cher que d'en gagner deux nouveaux. » Chaque relance compte.
                   </p>
-                </div>
+                </blockquote>
 
-                <div className="flex gap-3 pt-1">
+                <div className="flex flex-col sm:flex-row gap-3 pt-1">
                   <button
                     onClick={() => setShowCollectionsReminder(false)}
-                    className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition-colors"
+                    className="flex-1 px-4 py-3 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-medium transition-colors"
                   >
                     Fermer
                   </button>
@@ -921,8 +958,9 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                       setShowCollectionsReminder(false);
                       setShowOverdueDetails(true);
                     }}
-                    className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-xl hover:from-orange-600 hover:to-red-700 font-semibold transition-colors"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl hover:from-red-700 hover:to-orange-700 font-semibold shadow-lg shadow-red-600/20 transition-all"
                   >
+                    <Send className="w-4 h-4" />
                     Voir les termes à relancer
                   </button>
                 </div>
@@ -1566,17 +1604,44 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     onChange={(e) => setSearchUpcoming(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                   />
+                  {selectedUpcoming.size > 0 && (
+                    <div className="mt-3 flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5">
+                      <span className="text-sm font-medium text-blue-700">{selectedUpcoming.size} sélectionné{selectedUpcoming.size > 1 ? 's' : ''}</span>
+                      <button
+                        onClick={() => openSmsForSelection('upcoming', filterTermes(upcomingTermes, searchUpcoming))}
+                        className="ml-auto flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        Envoyer SMS
+                      </button>
+                      <button
+                        onClick={() => setSelectedUpcoming(new Set())}
+                        className="text-sm text-blue-600 hover:text-blue-800"
+                      >
+                        Désélectionner
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-blue-50">
                       <tr>
+                        <th className="px-4 py-3 text-left">
+                          <input
+                            type="checkbox"
+                            checked={(() => { const t = filterTermes(upcomingTermes, searchUpcoming); return t.length > 0 && t.every(x => selectedUpcoming.has(termeKey(x))); })()}
+                            onChange={() => toggleSelectAll('upcoming', filterTermes(upcomingTermes, searchUpcoming))}
+                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                        </th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">N° Contrat</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
                         {isHamza && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Prime (DT)</th>}
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Échéance</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Téléphone</th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Remarque</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -1594,6 +1659,14 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                             onClick={() => handleTermeClick(terme)}
                             title="Cliquez pour ajouter/modifier une remarque"
                           >
+                            <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={selectedUpcoming.has(termeKey(terme))}
+                                onChange={() => toggleSelection('upcoming', termeKey(terme))}
+                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                            </td>
                             <td className="px-4 py-3 text-sm font-medium">{terme.numero_contrat}</td>
                             <td className="px-4 py-3 text-sm">{terme.assure}</td>
                             {isHamza && <td className="px-4 py-3 text-sm font-semibold">{parseFloat(terme.prime).toFixed(2)}</td>}
@@ -1608,6 +1681,15 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                               }`}>
                                 {terme.remarque || 'Aucune'}
                               </span>
+                            </td>
+                            <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                              <button
+                                onClick={() => openSmsForOne(terme)}
+                                title="Envoyer un SMS de rappel"
+                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-100 transition-colors"
+                              >
+                                <MessageSquare className="w-4 h-4" />
+                              </button>
                             </td>
                           </tr>
                         );
@@ -1862,6 +1944,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
             setSmsTargets(null);
             setSelectedOverdue(new Set());
             setSelectedUnpaid(new Set());
+            setSelectedUpcoming(new Set());
           }}
         />
       )}
