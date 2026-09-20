@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { AlertCircle, CheckCircle, Clock, Plus, CreditCard as Edit2, Save, X, ChevronDown, ChevronUp, Calendar, Trash2, Filter, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, Plus, CreditCard as Edit2, Save, X, ChevronDown, ChevronUp, Calendar, Trash2, Filter, RefreshCw, ClipboardList } from 'lucide-react';
 
 interface Tache {
   id: string;
@@ -262,17 +262,20 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-xl shadow-lg p-6">
+      <div className="bg-white rounded-xl shadow-lg overflow-hidden">
         <div
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="flex items-center justify-between cursor-pointer"
+          className="flex items-center justify-between gap-3 px-6 py-4 cursor-pointer bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 transition-colors"
         >
-          <div className="flex items-center gap-3">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800">Gestion des Tâches</h3>
-              <p className="text-sm text-gray-600 mt-1">Tâches introduites par Hamza</p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+              <ClipboardList className="w-5 h-5 text-white" />
             </div>
-            <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm font-bold whitespace-nowrap">
+            <div>
+              <h3 className="text-lg font-semibold text-white">Gestion des Tâches</h3>
+              <p className="text-xs text-indigo-100 mt-0.5">Tâches introduites par Hamza</p>
+            </div>
+            <span className="px-3 py-1 bg-white text-indigo-700 rounded-full text-sm font-bold whitespace-nowrap shadow-sm">
               {totalAFaireCount} à faire
             </span>
           </div>
@@ -280,18 +283,18 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
             {isHamza && (
               <button
                 onClick={(e) => { e.stopPropagation(); setIsCollapsed(false); setShowAddForm(!showAddForm); }}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-white/15 text-white border border-white/25 rounded-lg hover:bg-white/25 transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 Ajouter une tâche
               </button>
             )}
-            {isCollapsed ? <ChevronDown className="w-5 h-5 text-gray-600" /> : <ChevronUp className="w-5 h-5 text-gray-600" />}
+            {isCollapsed ? <ChevronDown className="w-5 h-5 text-white" /> : <ChevronUp className="w-5 h-5 text-white" />}
           </div>
         </div>
 
         {!isCollapsed && (
-        <div className="mt-4">
+        <div className="p-6">
         {showAddForm && isHamza && (
           <form onSubmit={handleAddTache} className="mb-4 p-4 rounded-lg border-2 border-blue-200 space-y-3">
             <div className="grid grid-cols-2 gap-3">

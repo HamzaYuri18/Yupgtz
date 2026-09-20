@@ -989,26 +989,28 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
 
         {/* Statistiques Remarques par Mois */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-hidden">
           <div
             onClick={() => setRemarqueCollapsed(!remarqueCollapsed)}
-            className="flex items-center justify-between cursor-pointer"
+            className="flex items-center justify-between gap-3 px-6 py-4 cursor-pointer bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 transition-colors"
           >
-            <div className="flex items-center gap-2 flex-wrap">
-              <Tag className="w-5 h-5 text-teal-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Contrats par Remarque — par Mois</h2>
-              <span className="px-3 py-1 bg-teal-100 text-teal-800 rounded-full text-sm font-bold whitespace-nowrap">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+                <Tag className="w-5 h-5 text-white" />
+              </div>
+              <h2 className="text-lg font-semibold text-white">Contrats par Remarque — par Mois</h2>
+              <span className="px-3 py-1 bg-white text-teal-700 rounded-full text-sm font-bold whitespace-nowrap shadow-sm">
                 {remarqueStats.reduce((s, r) => s + r.total, 0)}
               </span>
               {!remarqueCollapsed && (
-                <span className="text-xs text-gray-400 ml-1">(cliquer sur un chiffre pour voir les détails)</span>
+                <span className="text-xs text-teal-100 ml-1">(cliquer sur un chiffre pour voir les détails)</span>
               )}
             </div>
-            {remarqueCollapsed ? <ChevronDown className="w-5 h-5 text-gray-600" /> : <ChevronUp className="w-5 h-5 text-gray-600" />}
+            {remarqueCollapsed ? <ChevronDown className="w-5 h-5 text-white" /> : <ChevronUp className="w-5 h-5 text-white" />}
           </div>
 
           {!remarqueCollapsed && (
-          <div className="mt-5">
+          <div className="p-6">
           {remarqueStatsLoading ? (
             <div className="flex justify-center py-6">
               <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
