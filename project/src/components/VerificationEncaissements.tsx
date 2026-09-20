@@ -12,26 +12,29 @@ const SECONDARY_TABLES: Record<SecondaryView, { table: string; dateColumn: strin
 
 const prettyHeader = (key: string): string => key.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
-// attestations_motifs accumule des doublons (même ligne réinsérée) : deux
-// lignes sont considérées comme le même motif si elles partagent les 4
-// mêmes police / souscripteur / date_emission / date_effet — on ne garde
-// alors que la première rencontrée.
-const DEDUP_KEYS: Partial<Record<SecondaryView, string[]>> = {
-  motifs: ['police', 'souscripteur', 'date_emission', 'date_effet'],
+// attestations_motifs accumule des doublons (même ligne réinsérée, parfois
+// avec un souscripteur / une date_emission / un motif corrigé). "police" +
+// "date_effet" identifient une même ligne (un même terme d'un même contrat) ;
+// parmi les 5 critères (police, souscripteur, date_emission, date_effet,
+// motif) :
+//  - si tout est identique pour cette police+date_effet, c'est un pur
+//    doublon → on n'en garde qu'un seul ;
+//  - si au moins un des 3 autres critères (souscripteur, date_emission,
+//    motif) diffère, la version la plus récente remplace l'ancienne au lieu
+//    de s'accumuler à côté.
+const DEDUP_IDENTITY_KEYS: Partial<Record<SecondaryView, string[]>> = {
+  motifs: ['police', 'date_effet'],
 };
 
 const dedupeRows = (view: SecondaryView, allRows: Record<string, unknown>[]): Record<string, unknown>[] => {
-  const keys = DEDUP_KEYS[view];
-  if (!keys) return allRows;
-  const seen = new Set<string>();
-  const result: Record<string, unknown>[] = [];
+  const identityKeys = DEDUP_IDENTITY_KEYS[view];
+  if (!identityKeys) return allRows;
+  const byIdentity = new Map<string, Record<string, unknown>>();
   for (const row of allRows) {
-    const key = keys.map((k) => String(row[k] ?? '').trim().toLowerCase()).join('|');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(row);
+    const key = identityKeys.map((k) => String(row[k] ?? '').trim().toLowerCase()).join('|');
+    byIdentity.set(key, row); // la dernière version rencontrée remplace la précédente
   }
-  return result;
+  return Array.from(byIdentity.values());
 };
 
 // terme_encaissement_details.date_input et attestations_motifs.date_emission
