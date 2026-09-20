@@ -11,6 +11,7 @@ interface Tache {
   utilisateur_charge: 'Ahlem' | 'Islem' | 'Rouae';
   statut: 'A faire' | 'Accomplie';
   remarques: string;
+  reportingtache: string | null;
   session_id: number | null;
   created_by: string;
   created_at: string;
@@ -46,6 +47,7 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
   });
   const [remarquesTemp, setRemarquesTemp] = useState<{ [key: string]: string }>({});
   const [newDateTemp, setNewDateTemp] = useState<{ [key: string]: string }>({});
+  const [reportingTemp, setReportingTemp] = useState<{ [key: string]: string }>({});
 
   const isHamza = currentUser === 'Hamza';
   const isIslemRouaeOrAhlem = currentUser === 'Islem' || currentUser === 'Rouae' || currentUser === 'Ahlem';
@@ -112,6 +114,32 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
         .from('taches')
         .update({ statut: newStatut, updated_at: new Date().toISOString() })
         .eq('id', tacheId);
+
+      if (error) throw error;
+      loadTaches();
+      if (onTaskUpdate) onTaskUpdate();
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du statut:', error);
+      alert('Erreur lors de la mise à jour du statut');
+    }
+  };
+
+  // Le reporting est obligatoire pour marquer une tâche comme accomplie —
+  // c'est ce qui fait disparaître le rappel périodique une fois vraiment fait.
+  const handleMarkComplete = async (tache: Tache) => {
+    if (!canMarkAsComplete || isSessionClosed) return;
+
+    const reporting = (reportingTemp[tache.id] !== undefined ? reportingTemp[tache.id] : tache.reportingtache || '').trim();
+    if (!reporting) {
+      alert('Veuillez saisir le reporting de cette tâche.');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('taches')
+        .update({ statut: 'Accomplie', reportingtache: reporting, updated_at: new Date().toISOString() })
+        .eq('id', tache.id);
 
       if (error) throw error;
       loadTaches();
@@ -617,11 +645,25 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                         </div>
                       )}
                     </div>
+                    <div className="mt-3">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Reporting <span className="text-red-500">*</span>
+                        <span className="text-gray-400 font-normal ml-1">(obligatoire pour marquer comme accomplie)</span>
+                      </label>
+                      <textarea
+                        value={reportingTemp[tache.id] !== undefined ? reportingTemp[tache.id] : (tache.reportingtache || '')}
+                        onChange={(e) => setReportingTemp({ ...reportingTemp, [tache.id]: e.target.value })}
+                        disabled={!canEditRemarks || isSessionClosed}
+                        placeholder="Décrivez ce qui a été fait pour cette tâche..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                        rows={2}
+                      />
+                    </div>
                   </div>
                   <div className="ml-4 flex flex-col gap-2">
                     {canMarkAsComplete && !isSessionClosed && (
                       <button
-                        onClick={() => handleUpdateStatut(tache.id, 'Accomplie')}
+                        onClick={() => handleMarkComplete(tache)}
                         className="px-4 py-2 rounded-lg font-medium transition-colors bg-green-600 text-white hover:bg-green-700"
                       >
                         <CheckCircle className="inline w-4 h-4 mr-1" />
@@ -784,6 +826,12 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
                           )}
                         </div>
                       )}
+                    </div>
+                    <div className="mt-3">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Reporting :</label>
+                      <p className="text-sm text-gray-600 bg-white p-2 rounded">
+                        {tache.reportingtache || 'Aucun reporting'}
+                      </p>
                     </div>
                   </div>
                   <div className="ml-4 flex flex-col gap-2">

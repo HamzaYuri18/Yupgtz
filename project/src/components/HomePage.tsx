@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircle, Calendar, CheckCircle, Clock, TrendingUp, Filter, DollarSign, X, Tag, Send, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
 import { getAvailableMonths, getUnpaidTermesByMonth, getOverdueUnpaidTermes, getPaidTermesByMonth, getUpcomingTermes, getCreditsDueToday, getTotalTermesByMonth, getRemarqueStatsByMonth, getRemarqueContractsByMonth, RemarqueMonthStats } from '../utils/supabaseService';
 import { getSessionDate, isRestrictedUser } from '../utils/auth';
@@ -195,6 +195,42 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
 
     return () => clearTimeout(timer);
   }, [creditsDueToday.length, sessionTasks.length, initialPopupsChecked]);
+
+  // Rappel périodique (toutes les 30 minutes) des tâches non accomplies :
+  // contrairement au popup unique du démarrage, celui-ci se redéclenche tant
+  // qu'il reste des tâches "A faire" pour la date de session — une tâche
+  // n'arrête de faire réapparaître le rappel qu'une fois marquée "Accomplie"
+  // avec un reporting (donc plus dans sessionTasks).
+  const blockingModalRef = useRef({ showCreditAlert, showCollectionsReminder });
+  useEffect(() => {
+    blockingModalRef.current = { showCreditAlert, showCollectionsReminder };
+  }, [showCreditAlert, showCollectionsReminder]);
+
+  useEffect(() => {
+    const TASK_REMINDER_INTERVAL_MS = 30 * 60 * 1000;
+    const interval = setInterval(async () => {
+      if (blockingModalRef.current.showCreditAlert || blockingModalRef.current.showCollectionsReminder) return;
+      const sessionDate = getSessionDate();
+      if (!sessionDate) return;
+      try {
+        const { count, error } = await supabase
+          .from('taches')
+          .select('*', { count: 'exact', head: true })
+          .eq('date_effectuer', sessionDate)
+          .eq('statut', 'A faire');
+        if (error) throw error;
+        if ((count || 0) > 0) {
+          await loadSessionTasks();
+          await loadTotalUncompletedTasks();
+          setShowTaskAlert(true);
+        }
+      } catch (error) {
+        console.error('Erreur lors du rappel périodique des tâches:', error);
+      }
+    }, TASK_REMINDER_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Rappel de relance de paiement pour Ahlem/Rouae : affiché à chaque
   // connexion (dès que ce composant est monté) tant qu'il reste des termes
@@ -801,7 +837,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                   </div>
                   <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                     <p className="text-sm text-amber-800 font-medium">
-                      Important : Assurez-vous de marquer chaque tâche comme "Accomplie" une fois terminée
+                      Important : ce rappel réapparaît toutes les 30 minutes. Pour qu'il disparaisse, marquez chaque tâche comme "Accomplie" en indiquant un reporting (obligatoire) dans la rubrique Gestion des Tâches.
                     </p>
                   </div>
                 </div>
