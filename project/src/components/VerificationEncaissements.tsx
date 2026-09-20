@@ -1,7 +1,29 @@
 import React, { useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { AlertCircle, CheckCircle2, FileSpreadsheet, Search, Upload, XCircle } from 'lucide-react';
+import { AlertCircle, CalendarRange, CheckCircle2, FileSpreadsheet, Search, Upload, XCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+
+type SecondaryView = 'encaissement' | 'motifs';
+
+const SECONDARY_TABLES: Record<SecondaryView, { table: string; dateColumn: string; label: string }> = {
+  encaissement: { table: 'terme_encaissement_details', dateColumn: 'date_input', label: 'Détails de la vérification des encaissements' },
+  motifs: { table: 'attestations_motifs', dateColumn: 'date_emission', label: 'Motifs des attestations servies non comptabilisées' },
+};
+
+const prettyHeader = (key: string): string => key.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+
+const formatCell = (value: unknown): string => {
+  if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
+  if (typeof value === 'number') return value.toLocaleString('fr-FR');
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) {
+      return value.length > 10 ? date.toLocaleString('fr-FR') : date.toLocaleDateString('fr-FR');
+    }
+  }
+  return String(value);
+};
 
 type VerificationStatus = 'bon' | 'non-encaisse' | 'alerte' | 'introuvable';
 
@@ -134,6 +156,15 @@ const VerificationEncaissements: React.FC = () => {
   const [message, setMessage] = useState('');
   const [filter, setFilter] = useState<'tous' | VerificationStatus>('tous');
 
+  // ── Consultation par plage de dates (terme_encaissement_details / attestations_motifs) ──
+  const [secondaryView, setSecondaryView] = useState<SecondaryView>('encaissement');
+  const [secDateFrom, setSecDateFrom] = useState('');
+  const [secDateTo, setSecDateTo] = useState('');
+  const [secondaryRows, setSecondaryRows] = useState<Record<string, unknown>[]>([]);
+  const [secondaryLoading, setSecondaryLoading] = useState(false);
+  const [secondaryError, setSecondaryError] = useState('');
+  const [secondarySearched, setSecondarySearched] = useState(false);
+
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
     setMessage('');
@@ -192,6 +223,37 @@ const VerificationEncaissements: React.FC = () => {
     }
   };
 
+  const loadSecondaryData = async () => {
+    if (!secDateFrom || !secDateTo) {
+      setSecondaryError('Veuillez sélectionner une date de début et une date de fin.');
+      return;
+    }
+    setSecondaryLoading(true);
+    setSecondaryError('');
+    setSecondarySearched(true);
+    try {
+      const { table, dateColumn } = SECONDARY_TABLES[secondaryView];
+      const { data, error } = await supabase
+        .from(table)
+        .select('*')
+        .gte(dateColumn, secDateFrom)
+        .lte(dateColumn, secDateTo)
+        .order(dateColumn, { ascending: false });
+      if (error) throw error;
+      setSecondaryRows(data || []);
+    } catch (error) {
+      setSecondaryError(error instanceof Error ? error.message : 'Erreur lors du chargement des données.');
+      setSecondaryRows([]);
+    } finally {
+      setSecondaryLoading(false);
+    }
+  };
+
+  const secondaryColumns = useMemo(
+    () => (secondaryRows.length > 0 ? Object.keys(secondaryRows[0]) : []),
+    [secondaryRows]
+  );
+
   const filteredResults = useMemo(() => {
     if (filter === 'tous') return results;
     if (filter === 'alerte') return results.filter((result) => result.dateStatus === 'alerte' || result.montantStatus === 'alerte');
@@ -228,6 +290,97 @@ const VerificationEncaissements: React.FC = () => {
         <button onClick={verifyRows} disabled={isLoading || rows.length === 0} className="mt-5 inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
           <Search className="w-4 h-4" /> {isLoading ? 'Vérification en cours...' : 'Lancer la vérification'}
         </button>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="p-3 rounded-xl bg-indigo-100 text-indigo-700"><CalendarRange className="w-6 h-6" /></div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Détails par plage de dates</h2>
+            <p className="text-sm text-slate-500 mt-1">Consultez les détails de la vérification des encaissements, ou les motifs des attestations servies non comptabilisées.</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-5">
+          {(Object.keys(SECONDARY_TABLES) as SecondaryView[]).map((view) => (
+            <button
+              key={view}
+              onClick={() => { setSecondaryView(view); setSecondaryRows([]); setSecondarySearched(false); setSecondaryError(''); }}
+              className={`px-4 py-2 rounded-xl font-semibold text-sm transition-colors ${
+                secondaryView === view ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {SECONDARY_TABLES[view].label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Date de début</label>
+            <input
+              type="date"
+              value={secDateFrom}
+              onChange={(e) => setSecDateFrom(e.target.value)}
+              className="border border-slate-300 rounded-xl px-4 py-2.5 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Date de fin</label>
+            <input
+              type="date"
+              value={secDateTo}
+              onChange={(e) => setSecDateTo(e.target.value)}
+              className="border border-slate-300 rounded-xl px-4 py-2.5 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+            />
+          </div>
+          <button
+            onClick={loadSecondaryData}
+            disabled={secondaryLoading}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <Search className="w-4 h-4" /> {secondaryLoading ? 'Recherche en cours...' : 'Rechercher'}
+          </button>
+        </div>
+
+        {secondaryError && (
+          <div className="mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />{secondaryError}
+          </div>
+        )}
+
+        {secondarySearched && !secondaryError && (
+          <div className="mt-5 border border-slate-200 rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+              <h3 className="font-semibold text-slate-800 text-sm">{SECONDARY_TABLES[secondaryView].label}</h3>
+              <span className="text-sm text-slate-500">{secondaryRows.length} ligne(s)</span>
+            </div>
+            {secondaryRows.length === 0 ? (
+              <div className="p-8 text-center text-slate-500">Aucune donnée pour cette plage de dates.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      {secondaryColumns.map((col) => (
+                        <th key={col} className="px-4 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">{prettyHeader(col)}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {secondaryRows.map((row, index) => (
+                      <tr key={index} className="hover:bg-slate-50">
+                        {secondaryColumns.map((col) => (
+                          <td key={col} className="px-4 py-3 whitespace-nowrap text-slate-700">{formatCell(row[col])}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {results.length > 0 && <>
