@@ -58,6 +58,13 @@ const parseFlexibleDate = (value: unknown): Date | null => {
   return Number.isNaN(fallback.getTime()) ? null : fallback;
 };
 
+const normalizeOuiNon = (value: unknown): 'oui' | 'non' | null => {
+  const text = String(value ?? '').trim().toLowerCase();
+  if (text === 'oui' || text === 'true' || text === '1') return 'oui';
+  if (text === 'non' || text === 'false' || text === '0') return 'non';
+  return null;
+};
+
 const formatCell = (value: unknown): string => {
   if (value === null || value === undefined || value === '') return '—';
   if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
@@ -330,6 +337,26 @@ const VerificationEncaissements: React.FC = () => {
     [secondaryRows]
   );
 
+  // Stats "statut ok" / "montant ok" pour la vue Détails de la vérification
+  // des encaissements uniquement.
+  const encaissementStats = useMemo(() => {
+    if (secondaryView !== 'encaissement' || secondaryRows.length === 0) return null;
+    let statutOui = 0, statutNon = 0, montantOui = 0, montantNon = 0;
+    for (const row of secondaryRows) {
+      const statut = normalizeOuiNon(row['statut_ok']);
+      if (statut === 'oui') statutOui += 1;
+      else if (statut === 'non') statutNon += 1;
+      const montant = normalizeOuiNon(row['montant_ok']);
+      if (montant === 'oui') montantOui += 1;
+      else if (montant === 'non') montantNon += 1;
+    }
+    return { statutOui, statutNon, montantOui, montantNon };
+  }, [secondaryView, secondaryRows]);
+
+  const isSecondaryRowAlert = (row: Record<string, unknown>): boolean =>
+    secondaryView === 'encaissement' &&
+    (normalizeOuiNon(row['statut_ok']) === 'non' || normalizeOuiNon(row['montant_ok']) === 'non');
+
   const filteredResults = useMemo(() => {
     if (filter === 'tous') return results;
     if (filter === 'alerte') return results.filter((result) => result.dateStatus === 'alerte' || result.montantStatus === 'alerte');
@@ -425,6 +452,27 @@ const VerificationEncaissements: React.FC = () => {
           </div>
         )}
 
+        {secondarySearched && !secondaryError && encaissementStats && (
+          <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="rounded-xl p-4 bg-emerald-50 border border-emerald-200">
+              <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Statut ok — Oui</p>
+              <p className="text-2xl font-bold text-emerald-800 mt-1">{encaissementStats.statutOui}</p>
+            </div>
+            <div className="rounded-xl p-4 bg-red-50 border border-red-200">
+              <p className="text-xs font-semibold text-red-700 uppercase tracking-wide">Statut ok — Non</p>
+              <p className="text-2xl font-bold text-red-800 mt-1">{encaissementStats.statutNon}</p>
+            </div>
+            <div className="rounded-xl p-4 bg-emerald-50 border border-emerald-200">
+              <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Montant ok — Oui</p>
+              <p className="text-2xl font-bold text-emerald-800 mt-1">{encaissementStats.montantOui}</p>
+            </div>
+            <div className="rounded-xl p-4 bg-red-50 border border-red-200">
+              <p className="text-xs font-semibold text-red-700 uppercase tracking-wide">Montant ok — Non</p>
+              <p className="text-2xl font-bold text-red-800 mt-1">{encaissementStats.montantNon}</p>
+            </div>
+          </div>
+        )}
+
         {secondarySearched && !secondaryError && (
           <div className="mt-5 border border-slate-200 rounded-xl overflow-hidden">
             <div className="px-5 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
@@ -460,13 +508,16 @@ const VerificationEncaissements: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {secondaryRows.map((row, index) => (
-                      <tr key={index} className="hover:bg-slate-50">
-                        {secondaryColumns.map((col) => (
-                          <td key={col} className="px-4 py-3 whitespace-nowrap text-slate-700">{formatCell(row[col])}</td>
-                        ))}
-                      </tr>
-                    ))}
+                    {secondaryRows.map((row, index) => {
+                      const isAlert = isSecondaryRowAlert(row);
+                      return (
+                        <tr key={index} className={isAlert ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-slate-50'}>
+                          {secondaryColumns.map((col) => (
+                            <td key={col} className={`px-4 py-3 whitespace-nowrap ${isAlert ? 'text-red-700 font-medium' : 'text-slate-700'}`}>{formatCell(row[col])}</td>
+                          ))}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
