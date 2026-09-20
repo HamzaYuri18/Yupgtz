@@ -165,6 +165,7 @@ const VerificationEncaissements: React.FC = () => {
   const [secondaryError, setSecondaryError] = useState('');
   const [secondarySearched, setSecondarySearched] = useState(false);
   const [secondaryTotalCount, setSecondaryTotalCount] = useState<number | null>(null);
+  const [secondaryDateRangeAvailable, setSecondaryDateRangeAvailable] = useState<{ min: string; max: string } | null>(null);
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
@@ -233,6 +234,7 @@ const VerificationEncaissements: React.FC = () => {
     setSecondaryError('');
     setSecondarySearched(true);
     setSecondaryTotalCount(null);
+    setSecondaryDateRangeAvailable(null);
     try {
       const { table, dateColumn } = SECONDARY_TABLES[secondaryView];
       // Borne de fin inclusive jusqu'à la toute fin de la journée : si la
@@ -260,6 +262,18 @@ const VerificationEncaissements: React.FC = () => {
           .from(table)
           .select('*', { count: 'exact', head: true });
         if (!totalError) setSecondaryTotalCount(totalCount ?? 0);
+
+        if (totalCount && totalCount > 0) {
+          const [{ data: minRow }, { data: maxRow }] = await Promise.all([
+            supabase.from(table).select(dateColumn).not(dateColumn, 'is', null).order(dateColumn, { ascending: true }).limit(1).maybeSingle(),
+            supabase.from(table).select(dateColumn).not(dateColumn, 'is', null).order(dateColumn, { ascending: false }).limit(1).maybeSingle(),
+          ]);
+          const minVal = (minRow as Record<string, unknown> | null)?.[dateColumn];
+          const maxVal = (maxRow as Record<string, unknown> | null)?.[dateColumn];
+          if (minVal && maxVal) {
+            setSecondaryDateRangeAvailable({ min: String(minVal), max: String(maxVal) });
+          }
+        }
       }
     } catch (error) {
       setSecondaryError(error instanceof Error ? error.message : 'Erreur lors du chargement des données.');
@@ -384,7 +398,10 @@ const VerificationEncaissements: React.FC = () => {
                   </p>
                 ) : secondaryTotalCount !== null && secondaryTotalCount > 0 ? (
                   <p className="text-xs text-amber-600 font-medium">
-                    {secondaryTotalCount} ligne(s) visible(s) au total dans la table, mais aucune dans cette plage de dates — vérifiez le format/la colonne "{SECONDARY_TABLES[secondaryView].dateColumn}" ou élargissez la période.
+                    {secondaryTotalCount} ligne(s) visible(s) au total dans la table, mais aucune dans cette plage de dates.
+                    {secondaryDateRangeAvailable && (
+                      <> Les dates disponibles vont du {formatCell(secondaryDateRangeAvailable.min)} au {formatCell(secondaryDateRangeAvailable.max)} — choisissez une plage qui couvre cette période.</>
+                    )}
                   </p>
                 ) : (
                   <p className="text-xs text-slate-400">Si la table contient pourtant des lignes dans cette période, vérifiez que les politiques RLS de "{SECONDARY_TABLES[secondaryView].table}" autorisent bien la lecture (SELECT) pour le rôle "anon".</p>
