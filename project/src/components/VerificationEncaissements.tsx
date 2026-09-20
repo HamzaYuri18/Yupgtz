@@ -12,6 +12,30 @@ const SECONDARY_TABLES: Record<SecondaryView, { table: string; dateColumn: strin
 
 const prettyHeader = (key: string): string => key.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
+// terme_encaissement_details.date_input et attestations_motifs.date_emission
+// se sont avérées être des colonnes TEXTE (pas "date") contenant des dates au
+// format français jj/mm/aaaa — une comparaison .gte()/.lte() côté serveur sur
+// du texte ne trie donc pas du tout comme une vraie date (ex: "01/12/2026" <
+// "15/01/2026" en tri texte). On récupère donc toutes les lignes et on filtre
+// par date réellement parsée côté client, ce qui fonctionne quel que soit le
+// format exact (ISO ou jj/mm/aaaa) sans dépendre du type réel de la colonne.
+const parseFlexibleDate = (value: unknown): Date | null => {
+  if (!value) return null;
+  const text = String(value).trim();
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) {
+    const d = new Date(`${iso[1]}-${iso[2]}-${iso[3]}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const french = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+  if (french) {
+    const d = new Date(`${french[3]}-${french[2].padStart(2, '0')}-${french[1].padStart(2, '0')}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const fallback = new Date(text);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+};
+
 const formatCell = (value: unknown): string => {
   if (value === null || value === undefined || value === '') return '—';
   if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
@@ -237,43 +261,39 @@ const VerificationEncaissements: React.FC = () => {
     setSecondaryDateRangeAvailable(null);
     try {
       const { table, dateColumn } = SECONDARY_TABLES[secondaryView];
-      // Borne de fin inclusive jusqu'à la toute fin de la journée : si la
-      // colonne est un timestamp (pas juste une date), comparer à
-      // "secDateTo" tout court exclut silencieusement toutes les lignes de
-      // ce jour-là enregistrées après minuit — ça se traduit par "aucune
-      // donnée" alors que la table est bien remplie.
-      const { data, error, count } = await supabase
-        .from(table)
-        .select('*', { count: 'exact' })
-        .gte(dateColumn, secDateFrom)
-        .lte(dateColumn, `${secDateTo}T23:59:59.999`)
-        .order(dateColumn, { ascending: false });
+      // date_input / date_emission se sont révélées être du texte, pas une
+      // vraie colonne "date" : un filtre .gte()/.lte() côté serveur trie ce
+      // texte lexicographiquement, pas chronologiquement, et rate donc des
+      // lignes qui sont pourtant bien dans la plage voulue. On récupère tout
+      // et on filtre/trie côté client avec une date réellement parsée.
+      const { data, error } = await supabase.from(table).select('*');
       if (error) throw error;
-      console.log(`🔍 ${table} (${dateColumn} entre ${secDateFrom} et ${secDateTo}): ${count ?? data?.length ?? 0} ligne(s)`);
-      setSecondaryRows(data || []);
 
-      // Diagnostic : si le filtre par date ne renvoie rien, on compte les
-      // lignes visibles dans la table SANS filtre de date. Ça distingue un
-      // problème de RLS/permissions (0 dans les deux cas, alors que
-      // l'utilisateur voit des lignes dans Supabase) d'un problème de plage
-      // de dates ou de format de colonne (0 filtré mais > 0 au total).
-      if ((count ?? data?.length ?? 0) === 0) {
-        const { count: totalCount, error: totalError } = await supabase
-          .from(table)
-          .select('*', { count: 'exact', head: true });
-        if (!totalError) setSecondaryTotalCount(totalCount ?? 0);
+      const allRows = data || [];
+      setSecondaryTotalCount(allRows.length);
 
-        if (totalCount && totalCount > 0) {
-          const [{ data: minRow }, { data: maxRow }] = await Promise.all([
-            supabase.from(table).select(dateColumn).not(dateColumn, 'is', null).order(dateColumn, { ascending: true }).limit(1).maybeSingle(),
-            supabase.from(table).select(dateColumn).not(dateColumn, 'is', null).order(dateColumn, { ascending: false }).limit(1).maybeSingle(),
-          ]);
-          const minVal = (minRow as Record<string, unknown> | null)?.[dateColumn];
-          const maxVal = (maxRow as Record<string, unknown> | null)?.[dateColumn];
-          if (minVal && maxVal) {
-            setSecondaryDateRangeAvailable({ min: String(minVal), max: String(maxVal) });
-          }
-        }
+      const fromDate = new Date(`${secDateFrom}T00:00:00`);
+      const toDate = new Date(`${secDateTo}T23:59:59.999`);
+      const withParsedDate = allRows
+        .map((row) => ({ row, parsed: parseFlexibleDate(row[dateColumn]) }))
+        .filter((r) => r.parsed !== null) as { row: Record<string, unknown>; parsed: Date }[];
+
+      const filtered = withParsedDate
+        .filter((r) => r.parsed >= fromDate && r.parsed <= toDate)
+        .sort((a, b) => b.parsed.getTime() - a.parsed.getTime())
+        .map((r) => r.row);
+
+      console.log(`🔍 ${table} (${dateColumn} entre ${secDateFrom} et ${secDateTo}): ${filtered.length}/${allRows.length} ligne(s)`);
+      setSecondaryRows(filtered);
+
+      // Diagnostic : si rien ne correspond à la plage choisie, indiquer où
+      // se trouvent réellement les dates disponibles dans la table.
+      if (filtered.length === 0 && withParsedDate.length > 0) {
+        const sorted = [...withParsedDate].sort((a, b) => a.parsed.getTime() - b.parsed.getTime());
+        setSecondaryDateRangeAvailable({
+          min: sorted[0].parsed.toLocaleDateString('fr-FR'),
+          max: sorted[sorted.length - 1].parsed.toLocaleDateString('fr-FR'),
+        });
       }
     } catch (error) {
       setSecondaryError(error instanceof Error ? error.message : 'Erreur lors du chargement des données.');
@@ -400,7 +420,7 @@ const VerificationEncaissements: React.FC = () => {
                   <p className="text-xs text-amber-600 font-medium">
                     {secondaryTotalCount} ligne(s) visible(s) au total dans la table, mais aucune dans cette plage de dates.
                     {secondaryDateRangeAvailable && (
-                      <> Les dates disponibles vont du {formatCell(secondaryDateRangeAvailable.min)} au {formatCell(secondaryDateRangeAvailable.max)} — choisissez une plage qui couvre cette période.</>
+                      <> Les dates disponibles vont du {secondaryDateRangeAvailable.min} au {secondaryDateRangeAvailable.max} — choisissez une plage qui couvre cette période.</>
                     )}
                   </p>
                 ) : (
