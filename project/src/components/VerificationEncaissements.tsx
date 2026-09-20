@@ -7,7 +7,7 @@ type SecondaryView = 'encaissement' | 'motifs';
 
 const SECONDARY_TABLES: Record<SecondaryView, { table: string; dateColumn: string; label: string }> = {
   encaissement: { table: 'terme_encaissement_details', dateColumn: 'date_input', label: 'Détails de la vérification des encaissements' },
-  motifs: { table: 'attestations_motifs', dateColumn: 'date_input', label: 'Motifs des attestations servies non comptabilisées' },
+  motifs: { table: 'attestations_motifs', dateColumn: 'date_emission', label: 'Motifs des attestations servies non comptabilisées' },
 };
 
 const prettyHeader = (key: string): string => key.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
