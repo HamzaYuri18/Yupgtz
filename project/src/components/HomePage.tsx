@@ -634,6 +634,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
     numero_contrat: terme.numero_contrat,
     assure: terme.assure,
     telephone: terme.num_tel || terme.num_tel_2 || '',
+    echeance: terme.echeance,
   });
 
   const openSmsForSelection = (set: TermeSelectionSet, termes: any[]) => {

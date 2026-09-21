@@ -6,6 +6,7 @@ export interface SmsTarget {
   numero_contrat: string;
   assure: string;
   telephone: string;
+  echeance?: string;
 }
 
 interface Props {
@@ -168,6 +169,7 @@ const TermesSmsModal: React.FC<Props> = ({ targets, username, isHamza, onClose }
             destinataire: cleanedPhone,
             client: target.assure,
             numero_contrat: target.numero_contrat,
+            echeance: target.echeance || null,
             utilisateur: username,
             statut: result.success ? 'Envoyé' : 'Non envoyé',
           });
@@ -182,6 +184,7 @@ const TermesSmsModal: React.FC<Props> = ({ targets, username, isHamza, onClose }
             destinataire: cleanedPhone,
             client: target.assure,
             numero_contrat: target.numero_contrat,
+            echeance: target.echeance || null,
             utilisateur: username,
             statut: 'Non envoyé',
           });

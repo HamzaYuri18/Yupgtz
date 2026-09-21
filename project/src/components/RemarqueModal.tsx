@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { X, MessageSquare, Calendar, User } from 'lucide-react';
+import { X, MessageSquare, Calendar, User, Send } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+
+interface SmsHistoryEntry {
+  date_envoi: string;
+  utilisateur: string;
+  statut: string | null;
+  destinataire: string;
+}
 
 interface RemarqueModalProps {
   isOpen: boolean;
@@ -22,14 +29,39 @@ export default function RemarqueModal({ isOpen, onClose, contrat, onSave }: Rema
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [smsHistory, setSmsHistory] = useState<SmsHistoryEntry[]>([]);
+  const [smsHistoryLoading, setSmsHistoryLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setRemarque('');
       setError('');
       setSuccess('');
+      loadSmsHistory();
     }
-  }, [isOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, contrat.police, contrat.echeance]);
+
+  const loadSmsHistory = async () => {
+    if (!contrat.echeance) { setSmsHistory([]); return; }
+    setSmsHistoryLoading(true);
+    try {
+      const echeanceFormatted = contrat.echeance.split('T')[0];
+      const { data, error: smsError } = await supabase
+        .from('smsing')
+        .select('date_envoi, utilisateur, statut, destinataire')
+        .eq('numero_contrat', contrat.police)
+        .eq('echeance', echeanceFormatted)
+        .order('date_envoi', { ascending: false });
+      if (smsError) throw smsError;
+      setSmsHistory(data || []);
+    } catch (err) {
+      console.error('Erreur lors du chargement de l\'historique SMS:', err);
+      setSmsHistory([]);
+    } finally {
+      setSmsHistoryLoading(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!remarque.trim()) {
@@ -124,6 +156,43 @@ export default function RemarqueModal({ isOpen, onClose, contrat, onSave }: Rema
                 <span className="ml-2 font-medium text-gray-900">{contrat.mois}</span>
               </div>
             </div>
+          </div>
+
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-emerald-900 mb-3 flex items-center">
+              <Send className="w-4 h-4 mr-2" />
+              SMS envoyés pour ce terme ({smsHistory.length})
+            </h3>
+            {smsHistoryLoading ? (
+              <div className="flex items-center gap-2 text-sm text-emerald-700">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-600"></div>
+                Chargement...
+              </div>
+            ) : smsHistory.length === 0 ? (
+              <p className="text-sm text-emerald-700">Aucun SMS envoyé pour ce terme.</p>
+            ) : (
+              <ul className="space-y-2">
+                {smsHistory.map((sms, index) => (
+                  <li key={index} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-700 bg-white rounded-lg border border-emerald-100 px-3 py-2">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3 text-emerald-600" />
+                      {new Date(sms.date_envoi).toLocaleString('fr-FR', {
+                        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                      })}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <User className="w-3 h-3 text-emerald-600" />
+                      {sms.utilisateur}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full font-semibold ${
+                      sms.statut === 'Envoyé' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                      {sms.statut || 'Envoyé'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           {contrat.remarque && (
