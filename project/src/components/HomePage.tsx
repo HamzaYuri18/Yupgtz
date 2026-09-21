@@ -118,6 +118,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
   const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
   const [sessionTasks, setSessionTasks] = useState<any[]>([]);
   const [totalUncompletedTasks, setTotalUncompletedTasks] = useState<number>(0);
+  const [focusTask, setFocusTask] = useState<{ id: string; ts: number } | null>(null);
 
   const [isRemarqueModalOpen, setIsRemarqueModalOpen] = useState(false);
   const [selectedContrat, setSelectedContrat] = useState<any>(null);
@@ -855,7 +856,15 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                       {sessionTasks.map((task, index) => (
-                        <tr key={index} className="hover:bg-blue-50">
+                        <tr
+                          key={index}
+                          onClick={() => {
+                            setShowTaskAlert(false);
+                            setFocusTask({ id: task.id, ts: Date.now() });
+                          }}
+                          title="Cliquer pour aller traiter cette tâche"
+                          className="hover:bg-blue-50 cursor-pointer"
+                        >
                           <td className="px-4 py-3 text-sm font-medium">{task.titre}</td>
                           <td className="px-4 py-3 text-sm">{task.description || 'N/A'}</td>
                           <td className="px-4 py-3 text-sm text-blue-600 font-medium">
@@ -1016,6 +1025,7 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
             currentUser={username || 'Inconnu'}
             sessionId={currentSessionId}
             isSessionClosed={sessionClosed}
+            focusTask={focusTask}
             onTaskUpdate={() => {
               loadTotalUncompletedTasks();
               loadSessionTasks();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { AlertCircle, CheckCircle, Clock, Plus, CreditCard as Edit2, Save, X, ChevronDown, ChevronUp, Calendar, Trash2, Filter, RefreshCw, ClipboardList } from 'lucide-react';
 
@@ -23,9 +23,12 @@ interface TaskManagementProps {
   sessionId: number | null;
   isSessionClosed: boolean;
   onTaskUpdate?: () => void;
+  // Changé à chaque clic sur une tâche depuis le modal de rappel : fait
+  // dérouler la rubrique et fait défiler jusqu'à cette tâche précise.
+  focusTask?: { id: string; ts: number } | null;
 }
 
-export default function TaskManagement({ currentUser, sessionId, isSessionClosed, onTaskUpdate }: TaskManagementProps) {
+export default function TaskManagement({ currentUser, sessionId, isSessionClosed, onTaskUpdate, focusTask }: TaskManagementProps) {
   const [taches, setTaches] = useState<Tache[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -48,6 +51,8 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
   const [remarquesTemp, setRemarquesTemp] = useState<{ [key: string]: string }>({});
   const [newDateTemp, setNewDateTemp] = useState<{ [key: string]: string }>({});
   const [reportingTemp, setReportingTemp] = useState<{ [key: string]: string }>({});
+  const [highlightedTacheId, setHighlightedTacheId] = useState<string | null>(null);
+  const tacheRefs = useRef<{ [id: string]: HTMLDivElement | null }>({});
 
   const isHamza = currentUser === 'Hamza';
   const isIslemRouaeOrAhlem = currentUser === 'Islem' || currentUser === 'Rouae' || currentUser === 'Ahlem';
@@ -57,6 +62,27 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
   useEffect(() => {
     loadTaches();
   }, []);
+
+  // Clic sur une tâche depuis le modal de rappel : déplier la section, lever
+  // les filtres qui pourraient la masquer, puis défiler jusqu'à elle.
+  useEffect(() => {
+    if (!focusTask) return;
+    setIsCollapsed(false);
+    setShowTachesAFaire(true);
+    setDateFilter('all');
+    setStatusFilter('all');
+    setHighlightedTacheId(focusTask.id);
+
+    const timer = setTimeout(() => {
+      tacheRefs.current[focusTask.id]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 200);
+    const clearHighlight = setTimeout(() => setHighlightedTacheId(null), 2500);
+
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(clearHighlight);
+    };
+  }, [focusTask]);
 
   const loadTaches = async () => {
     try {
@@ -541,7 +567,10 @@ export default function TaskManagement({ currentUser, sessionId, isSessionClosed
             {tachesAFaire.map((tache) => (
               <div
                 key={tache.id}
-                className="bg-white p-4 rounded-lg border-2 border-gray-200"
+                ref={(el) => { tacheRefs.current[tache.id] = el; }}
+                className={`bg-white p-4 rounded-lg border-2 transition-all duration-500 ${
+                  highlightedTacheId === tache.id ? 'border-blue-500 ring-4 ring-blue-200' : 'border-gray-200'
+                }`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">

@@ -20,6 +20,9 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
   const [clotureCle, setClotureCle] = useState('');
   const [cleError, setCleError] = useState('');
   const [isValidatingCle, setIsValidatingCle] = useState(false);
+  const [showTasksBlockingModal, setShowTasksBlockingModal] = useState(false);
+  const [pendingTasksCount, setPendingTasksCount] = useState(0);
+  const [isCheckingTasks, setIsCheckingTasks] = useState(false);
 
   // Sauvegarder la session si l'utilisateur ferme l'application après avoir généré la FC
   React.useEffect(() => {
@@ -37,7 +40,33 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
     };
   }, [pdfGenerated, username]);
 
-  const handleGeneratePDFClick = () => {
+  // Avant même de demander la clé de clôture : aucune tâche "A faire" de
+  // cette session ne doit rester sans reporting. En cas d'erreur de
+  // vérification (réseau…), on laisse passer plutôt que de bloquer la
+  // clôture pour un souci technique indépendant des tâches.
+  const handleGeneratePDFClick = async () => {
+    setIsCheckingTasks(true);
+    try {
+      const sessionDate = getSessionDate();
+      const { count, error } = await supabase
+        .from('taches')
+        .select('*', { count: 'exact', head: true })
+        .eq('date_effectuer', sessionDate)
+        .eq('statut', 'A faire');
+
+      if (error) throw error;
+
+      if ((count || 0) > 0) {
+        setPendingTasksCount(count || 0);
+        setShowTasksBlockingModal(true);
+        return;
+      }
+    } catch (err) {
+      console.error('Erreur lors de la vérification des tâches avant clôture:', err);
+    } finally {
+      setIsCheckingTasks(false);
+    }
+
     setClotureCle('');
     setCleError('');
     setShowKeyModal(true);
@@ -172,16 +201,21 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
         <div className="space-y-3">
           <button
             onClick={handleGeneratePDFClick}
-            disabled={isGeneratingPDF || pdfGenerated}
+            disabled={isGeneratingPDF || isCheckingTasks || pdfGenerated}
             className={`w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-lg font-semibold transition-all duration-200 ${
               pdfGenerated
                 ? 'bg-green-100 text-green-800 border border-green-300'
-                : isGeneratingPDF
+                : isGeneratingPDF || isCheckingTasks
                 ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
                 : 'bg-blue-600 hover:bg-blue-700 text-white'
             }`}
           >
-            {isGeneratingPDF ? (
+            {isCheckingTasks ? (
+              <>
+                <div className="w-5 h-5 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></div>
+                <span>Vérification des tâches...</span>
+              </>
+            ) : isGeneratingPDF ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 <span>Génération en cours...</span>
@@ -290,6 +324,31 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
                 J'ai compris
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showTasksBlockingModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg shadow-2xl p-6 max-w-md w-full mx-4 border-4 border-red-400">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-3 bg-red-100 rounded-full">
+                <AlertCircle className="w-8 h-8 text-red-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900">Tâches non accomplies</h2>
+            </div>
+            <p className="text-gray-700 mb-2">
+              Il reste <span className="font-bold text-red-600">{pendingTasksCount}</span> tâche(s) non accomplie(s) pour cette session.
+            </p>
+            <p className="text-sm text-gray-600 mb-6">
+              Vous devez marquer chaque tâche comme "Accomplie" en saisissant son reporting (obligatoire) dans la rubrique Gestion des Tâches avant de pouvoir clôturer cette session.
+            </p>
+            <button
+              onClick={() => setShowTasksBlockingModal(false)}
+              className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors"
+            >
+              J'ai compris
+            </button>
           </div>
         </div>
       )}
