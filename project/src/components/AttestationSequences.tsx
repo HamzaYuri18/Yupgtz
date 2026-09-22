@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Plus, Download, X, Search, BarChart2, AlertCircle, Ban, ZoomIn } from 'lucide-react';
+import { FileText, Plus, Download, X, Search, BarChart2, AlertCircle, Ban, ZoomIn, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
 import { getSession } from '../utils/auth';
@@ -57,6 +57,16 @@ interface BarreesModalState {
   selectedImage: string | null;
 }
 
+interface ActiveCarnetNotif {
+  carnetName: string;
+  tableName: string;
+  remaining: number;
+  annulees: number;
+  prolongations: number;
+}
+
+const LOW_STOCK_THRESHOLD = 50;
+
 const AttestationSequences: React.FC = () => {
   const [numeroDebut, setNumeroDebut] = useState('');
   const [numeroFin, setNumeroFin] = useState('');
@@ -89,6 +99,8 @@ const AttestationSequences: React.FC = () => {
     loading: false,
     selectedImage: null
   });
+  const [activeCarnetNotif, setActiveCarnetNotif] = useState<ActiveCarnetNotif | null>(null);
+  const [activeCarnetNotifVisible, setActiveCarnetNotifVisible] = useState(false);
 
   const itemsPerPage = 10;
 
@@ -101,6 +113,7 @@ const AttestationSequences: React.FC = () => {
     loadCarnets();
     loadStatistics();
     loadCarnetRemaining();
+    loadActiveCarnetNotif();
   }, []);
 
   useEffect(() => {
@@ -241,6 +254,87 @@ const AttestationSequences: React.FC = () => {
       setCarnetRemaining(remaining);
     } catch (error) {
       console.error('Erreur chargement restants:', error);
+    }
+  };
+
+  // Détecte le carnet actif (celui dont le dernier numéro d'attestation
+  // servi/utilisé est le plus élevé), puis compte pour CE carnet précis les
+  // attestations restantes / annulées / en prolongation. Si le stock restant
+  // passe sous le seuil, alerte visuelle + notification Telegram à Hamza
+  // (une seule fois par jour et par carnet, via localStorage, pour ne pas
+  // spammer à chaque ouverture de la page).
+  const loadActiveCarnetNotif = async () => {
+    try {
+      const { data: carnetsData, error: carnetsErr } = await supabase
+        .from('carnets_attestations')
+        .select('table_name, nom_carnet');
+      if (carnetsErr || !carnetsData || carnetsData.length === 0) return;
+
+      let active: { table_name: string; nom_carnet: string } | null = null;
+      let highestUsed = -1;
+
+      for (const carnet of carnetsData) {
+        const { data, error } = await supabase
+          .from(carnet.table_name)
+          .select('numero_attestation')
+          .not('statut', 'is', null)
+          .order('numero_attestation', { ascending: false })
+          .limit(1);
+        if (error || !data || data.length === 0) continue;
+        const lastNum = parseInt(data[0].numero_attestation, 10);
+        if (!isNaN(lastNum) && lastNum > highestUsed) {
+          highestUsed = lastNum;
+          active = carnet;
+        }
+      }
+
+      if (!active) return;
+
+      const [remainingRes, annuleesRes, prolongationsRes] = await Promise.all([
+        supabase.from(active.table_name).select('*', { count: 'exact', head: true }).is('statut', null),
+        supabase.from(active.table_name).select('*', { count: 'exact', head: true }).eq('statut', 'annulee'),
+        supabase.from(active.table_name).select('*', { count: 'exact', head: true }).eq('statut', 'prolongation'),
+      ]);
+
+      const remaining = remainingRes.count || 0;
+      const annulees = annuleesRes.count || 0;
+      const prolongations = prolongationsRes.count || 0;
+
+      setActiveCarnetNotif({
+        carnetName: active.nom_carnet,
+        tableName: active.table_name,
+        remaining,
+        annulees,
+        prolongations,
+      });
+      setTimeout(() => setActiveCarnetNotifVisible(true), 60);
+
+      if (remaining < LOW_STOCK_THRESHOLD) {
+        const today = new Date().toISOString().split('T')[0];
+        const alertKey = `lowStockTelegramAlert_${active.table_name}_${today}`;
+        if (!localStorage.getItem(alertKey)) {
+          localStorage.setItem(alertKey, '1');
+          const message = [
+            '⚠️ Alerte stock attestations',
+            '',
+            `Carnet : ${active.nom_carnet}`,
+            `Attestations restantes : ${remaining}`,
+            `Attestations annulées : ${annulees}`,
+            `Attestations en prolongation : ${prolongations}`,
+            '',
+            `Seuil d'alerte : ${LOW_STOCK_THRESHOLD} attestations restantes.`,
+          ].join('\n');
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+          fetch(`${supabaseUrl}/functions/v1/send-telegram`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseAnonKey}` },
+            body: JSON.stringify({ message }),
+          }).catch(err => console.error('Erreur envoi Telegram alerte stock:', err));
+        }
+      }
+    } catch (error) {
+      console.error('Erreur détection carnet actif:', error);
     }
   };
 
@@ -543,6 +637,64 @@ const AttestationSequences: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Notification — carnet actif */}
+      {activeCarnetNotif && (
+        <div
+          className={`rounded-2xl shadow-xl overflow-hidden transform transition-all duration-700 ease-out ${
+            activeCarnetNotifVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-3'
+          } ${
+            activeCarnetNotif.remaining < LOW_STOCK_THRESHOLD
+              ? 'bg-gradient-to-r from-red-600 via-red-500 to-rose-600'
+              : 'bg-gradient-to-r from-slate-800 via-indigo-800 to-indigo-700'
+          }`}
+        >
+          <div className="p-5 flex items-start gap-4">
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+              activeCarnetNotif.remaining < LOW_STOCK_THRESHOLD ? 'bg-white/20 animate-pulse' : 'bg-white/10'
+            }`}>
+              {activeCarnetNotif.remaining < LOW_STOCK_THRESHOLD ? (
+                <AlertTriangle className="w-6 h-6 text-white" />
+              ) : (
+                <FileText className="w-6 h-6 text-white" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-white font-bold text-base">Carnet actif : {activeCarnetNotif.carnetName}</h3>
+                {activeCarnetNotif.remaining < LOW_STOCK_THRESHOLD && (
+                  <span className="px-2 py-0.5 bg-white text-red-700 rounded-full text-xs font-extrabold uppercase tracking-wide animate-pulse">
+                    Stock critique
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-3 mt-3">
+                <div className="bg-white/15 rounded-xl px-4 py-2">
+                  <p className="text-white/70 text-xs">Restantes</p>
+                  <p className="text-white text-xl font-bold">{activeCarnetNotif.remaining}</p>
+                </div>
+                <div className="bg-white/15 rounded-xl px-4 py-2">
+                  <p className="text-white/70 text-xs">Annulées</p>
+                  <p className="text-white text-xl font-bold">{activeCarnetNotif.annulees}</p>
+                </div>
+                <div className="bg-white/15 rounded-xl px-4 py-2">
+                  <p className="text-white/70 text-xs">Prolongation</p>
+                  <p className="text-white text-xl font-bold">{activeCarnetNotif.prolongations}</p>
+                </div>
+              </div>
+              {activeCarnetNotif.remaining < LOW_STOCK_THRESHOLD && (
+                <p className="text-white/90 text-xs mt-3">Hamza a été informé par Telegram.</p>
+              )}
+            </div>
+            <button
+              onClick={() => setActiveCarnetNotif(null)}
+              className="text-white/70 hover:text-white transition-colors shrink-0"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div
