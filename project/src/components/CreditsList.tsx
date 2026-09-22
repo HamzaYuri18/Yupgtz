@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, User, Download, MessageSquare, BarChart3, Trash2, X, FileText } from 'lucide-react';
+import { CreditCard, Filter, Calendar, CheckCircle, XCircle, Clock, TrendingUp, AlertTriangle, User, Download, MessageSquare, BarChart3, Trash2, X, FileText, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { getCredits, updateCreditStatus, deleteCredit, syncMissingCredits, getDuplicateCredits, deleteDuplicateCredits, type DuplicateCreditGroup } from '../utils/supabaseService';
 import { getSession } from '../utils/auth';
@@ -8,6 +8,7 @@ import SMSModal from './SMSModal';
 import CreditDetailsModal from './CreditDetailsModal';
 import CreditEvolutionModal from './CreditEvolutionModal';
 import CreditPaymentModal from './CreditPaymentModal';
+import ReportingRecouvrementModal from './ReportingRecouvrementModal';
 
 const CreditsList: React.FC = () => {
   const [credits, setCredits] = useState<any[]>([]);
@@ -54,6 +55,7 @@ const CreditsList: React.FC = () => {
   const [deletingDuplicates, setDeletingDuplicates] = useState(false);
   const [duplicateMsg, setDuplicateMsg] = useState<string | null>(null);
   const [keepChoice, setKeepChoice] = useState<Record<string, number>>({});
+  const [showReportingRecouvrementModal, setShowReportingRecouvrementModal] = useState(false);
 
   useEffect(() => {
     const session = getSession();
@@ -1009,6 +1011,14 @@ const CreditsList: React.FC = () => {
                 {loadingDuplicates ? '...' : 'Doublons'}
               </button>
             )}
+            <button
+              onClick={() => setShowReportingRecouvrementModal(true)}
+              title="Consulter le reporting de recouvrement des crédits"
+              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-100 text-indigo-800 border border-indigo-300 rounded-lg text-sm font-medium hover:bg-indigo-200 transition-colors"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Reporting recouvrement
+            </button>
             <div className="flex items-center space-x-2 bg-gray-100 rounded-lg px-3 py-2">
               <User className="w-4 h-4 text-gray-600" />
               <span className="text-sm font-medium text-gray-700">
@@ -1899,6 +1909,10 @@ const CreditsList: React.FC = () => {
           isOpen={isEvolutionModalOpen}
           onClose={() => setIsEvolutionModalOpen(false)}
         />
+
+        {showReportingRecouvrementModal && (
+          <ReportingRecouvrementModal onClose={() => setShowReportingRecouvrementModal(false)} />
+        )}
 
         {/* Doublons Modal - Hamza only */}
         {showDuplicatesModal && (
