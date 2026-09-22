@@ -1002,14 +1002,20 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-2xl p-4 sm:p-6 lg:p-8 border border-white/20">
-        <div className="flex items-center space-x-2 sm:space-x-3 mb-4 sm:mb-6">
-          <div className="p-2 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-lg shadow-md">
-            <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+      <div className="bg-white rounded-3xl shadow-2xl shadow-indigo-100/60 border border-slate-100 overflow-hidden">
+        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-900 px-4 sm:px-6 lg:px-8 py-5 sm:py-6">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
+              <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-300" />
+            </div>
+            <div>
+              <h2 className="text-xl sm:text-2xl font-bold text-white">Nouveau Contrat</h2>
+              <p className="text-slate-400 text-xs sm:text-sm mt-0.5">Créer ou enregistrer une opération</p>
+            </div>
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">Nouveau Contrat</h2>
         </div>
 
+        <div className="p-4 sm:p-6 lg:p-8">
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
           {/* Type et Branche */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
@@ -1055,7 +1061,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                   }));
                   setMessage('');
                 }}
-                className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
+                className="w-full p-2 sm:p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 required
               >
                 <option value="Affaire">Affaire</option>
@@ -1075,7 +1081,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 value={formData.branch}
                 onChange={handleInputChange}
                 disabled={isRetourTechniqueMode || isRetourContentieuxMode}
-                className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
+                className="w-full p-2 sm:p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 required
               >
                 <option value="Auto">Auto</option>
@@ -1088,7 +1094,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
           {/* Recherche pour les contrats Terme */}
           {formData.type === 'Terme' && availableMonths.length > 0 && (
-            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-4">
               <label className="block text-sm font-medium text-blue-700 mb-2">
                 📅 Sélectionner l'année et le mois pour la recherche des contrats Terme
               </label>
@@ -1104,7 +1110,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                       setSelectedYear(e.target.value);
                       setSelectedMonth('');
                     }}
-                    className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                    className="w-full p-3 border border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
                   >
                     <option value="">Choisir une année...</option>
                     {availableYears.map((year, index) => (
@@ -1121,7 +1127,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     value={selectedMonth}
                     onChange={(e) => setSelectedMonth(e.target.value)}
                     disabled={!selectedYear}
-                    className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full p-3 border border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Choisir un mois...</option>
                     {availableMonths
@@ -1153,7 +1159,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 value={formData.contractNumber}
                 onChange={handleInputChange}
                 disabled={isRetourTechniqueMode || isRetourContentieuxMode}
-                className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
+                className="flex-1 p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
                 placeholder="Entrez le numéro de contrat"
                 required
               />
@@ -1161,7 +1167,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 <button
                   type="button"
                   onClick={searchInXML}
-                  className="px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl"
+                  className="px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl"
                 >
                   <Search className="w-4 h-4" />
                   <span>Rechercher</span>
@@ -1183,7 +1189,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 value={formData.dateEcheance}
                 onChange={handleInputChange}
                 disabled={isRetourTechniqueMode || isRetourContentieuxMode}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
+                className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
                 required
               />
             </div>
@@ -1191,7 +1197,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
           {/* Message pour Encaissement autre code */}
           {showAutreCodeMessage && (
-            <div className="bg-blue-50 border border-blue-300 rounded-lg p-4">
+            <div className="bg-blue-50 border border-blue-300 rounded-xl p-4">
               <p className="text-sm text-blue-800 font-medium">
                 📢 Veuillez proposer au client le transfert de son contrat chez notre agence pour proximité de service!!!
               </p>
@@ -1203,7 +1209,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
           {/* Résultats de recherche */}
           {xmlSearchResult && (
-            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4">
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
               <h3 className="text-sm font-semibold text-green-800 mb-2 flex items-center">
                 <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
                 📋 Données du contrat trouvées:
@@ -1237,7 +1243,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
           {/* Alerte frais de mise en demeure */}
           {fraisInfo && formData.type === 'Terme' && (
-            <div className={`rounded-lg border p-4 flex items-start gap-3 ${
+            <div className={`rounded-xl border p-4 flex items-start gap-3 ${
               fraisInfo.montant === 15
                 ? 'bg-red-50 border-red-300'
                 : 'bg-amber-50 border-amber-300'
@@ -1294,7 +1300,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 className={`w-full p-3 border ${
                   (isRetourTechniqueMode || isRetourContentieuxMode) ? 'border-red-500' : 
                   isFieldLocked('premiumAmount') ? 'border-gray-400 bg-gray-100 text-gray-600' : 'border-gray-300'
-                } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 ${
+                } rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 ${
                   isFieldLocked('premiumAmount') ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
                 }`}
                 placeholder="0.00"
@@ -1318,7 +1324,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 onChange={handleInputChange}
                 className={`w-full p-2 sm:p-3 border ${
                   isFieldLocked('insuredName') ? 'border-gray-400 bg-gray-100 text-gray-600' : 'border-gray-300'
-                } rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 ${
+                } rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 ${
                   isFieldLocked('insuredName') ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
                 } text-sm sm:text-base`}
                 placeholder="Nom complet de l'assuré"
@@ -1344,7 +1350,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                 pattern="\+216[0-9]{8}"
                 maxLength={12}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
+                className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
                 placeholder="+21623502362"
                 title="Format: +216 suivi de 8 chiffres (ex: +21623502362)"
                 required
@@ -1370,7 +1376,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
               {/* Option pour utiliser une attestation disponible */}
               {attestationsDisponibles.length > 0 && (
-                <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-xl">
                   <label className="flex items-center cursor-pointer">
                     <input
                       type="checkbox"
@@ -1395,7 +1401,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                   name="numeroAttestation"
                   value={formData.numeroAttestation}
                   onChange={handleInputChange}
-                  className="w-full p-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-green-50"
+                  className="w-full p-3 border border-green-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-green-50"
                   required
                 >
                   <option value="">Sélectionner une attestation disponible</option>
@@ -1411,7 +1417,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                   name="numeroAttestation"
                   value={formData.numeroAttestation}
                   onChange={handleInputChange}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
+                  className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
                   placeholder="Ex: 12345"
                   required
                 />
@@ -1437,7 +1443,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="paymentMode"
                 value={formData.paymentMode}
                 onChange={handleInputChange}
-                className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
+                className="w-full p-2 sm:p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 required
               >
                 <option value="Espece">Espèce</option>
@@ -1454,7 +1460,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="paymentType"
                 value={formData.paymentType}
                 onChange={handleInputChange}
-                className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
+                className="w-full p-2 sm:p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white text-sm sm:text-base"
                 required
               >
                 <option value="Au comptant">Au comptant</option>
@@ -1465,7 +1471,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
           {/* Section CHÈQUE (conditionnelle) */}
           {formData.paymentMode === 'Cheque' && (
-            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-6">
+            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-6">
               <h3 className="text-lg font-semibold text-blue-800 mb-4 flex items-center">
                 <FileText className="w-5 h-5 mr-2" />
                 Informations du Chèque
@@ -1481,7 +1487,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     name="numeroCheque"
                     value={formData.numeroCheque}
                     onChange={handleInputChange}
-                    className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                    className="w-full p-3 border border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
                     placeholder="Numéro du chèque"
                   />
                 </div>
@@ -1495,7 +1501,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     name="banque"
                     value={formData.banque}
                     onChange={handleInputChange}
-                    className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                    className="w-full p-3 border border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
                     placeholder="Nom de la banque"
                   />
                 </div>
@@ -1512,7 +1518,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     onChange={handleInputChange}
                     min={new Date().toISOString().split('T')[0]}
                     max={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
-                    className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                    className="w-full p-3 border border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
                   />
                   <p className="text-xs text-blue-600 mt-1">
                     Date entre aujourd'hui et {new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR')}
@@ -1524,7 +1530,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
           {/* Section CRÉDIT (conditionnelle) */}
           {formData.paymentType === 'Crédit' && (
-            <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-lg p-6">
+            <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-xl p-6">
               <h3 className="text-lg font-semibold text-orange-800 mb-4 flex items-center">
                 <CreditCard className="w-5 h-5 mr-2" />
                 Informations de Crédit
@@ -1544,7 +1550,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     step="0.01"
                     min="0"
                     max={formData.premiumAmount || undefined}
-                    className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 bg-white"
+                    className="w-full p-3 border border-orange-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 bg-white"
                     placeholder="0.00"
                     required
                   />
@@ -1561,7 +1567,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                     value={formData.paymentDate}
                     onChange={handleInputChange}
                     min={new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
-                    className="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 bg-white"
+                    className="w-full p-3 border border-orange-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 bg-white"
                     required={isHamza}
                   />
                   <p className="text-xs text-orange-600 mt-1">
@@ -1572,18 +1578,18 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               
               {/* Récapitulatif du crédit */}
               {formData.premiumAmount && formData.creditAmount && (
-                <div className="mt-4 p-4 bg-white rounded-lg border border-orange-200">
+                <div className="mt-4 p-4 bg-white rounded-xl border border-orange-200">
                   <h4 className="font-semibold text-orange-700 text-sm mb-3">📊 Récapitulatif du crédit:</h4>
                   <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div className="text-center p-2 bg-green-50 rounded-lg">
+                    <div className="text-center p-2 bg-green-50 rounded-xl">
                       <div className="font-medium text-green-700">Prime totale</div>
                       <div className="text-green-600 font-bold">{parseFloat(formData.premiumAmount).toFixed(2)} DT</div>
                     </div>
-                    <div className="text-center p-2 bg-blue-50 rounded-lg">
+                    <div className="text-center p-2 bg-blue-50 rounded-xl">
                       <div className="font-medium text-blue-700">Montant crédit</div>
                       <div className="text-blue-600 font-bold">{parseFloat(formData.creditAmount).toFixed(2)} DT</div>
                     </div>
-                    <div className="text-center p-2 bg-purple-50 rounded-lg">
+                    <div className="text-center p-2 bg-purple-50 rounded-xl">
                       <div className="font-medium text-purple-700">À payer comptant</div>
                       <div className="text-purple-600 font-bold">
                         {(parseFloat(formData.premiumAmount) - parseFloat(formData.creditAmount)).toFixed(2)} DT
@@ -1597,7 +1603,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
           {/* Champ Date de création — Hamza uniquement */}
           {isHamza && (
-            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
+            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-4">
               <label className="block text-sm font-medium text-purple-800 mb-2 flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
                 Date de création (created_at)
@@ -1609,7 +1615,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 value={formData.customCreatedAt}
                 onChange={handleInputChange}
                 disabled={isRetourTechniqueMode || isRetourContentieuxMode}
-                className="w-full p-3 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 bg-white"
+                className="w-full p-3 border border-purple-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 bg-white"
               />
               <p className="text-xs text-purple-600 mt-1">
                 Laisser vide pour utiliser la date de session automatique
@@ -1623,7 +1629,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               <button
                 type="button"
                 onClick={handleRetourTechniqueClick}
-                className={`px-4 py-2 bg-gradient-to-r ${isRetourTechniqueMode ? 'from-red-600 to-red-700 hover:from-red-700 hover:to-red-800' : 'from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'} text-white rounded-lg transition-all duration-200 flex items-center space-x-2 shadow-md hover:shadow-lg`}
+                className={`px-4 py-2 bg-gradient-to-r ${isRetourTechniqueMode ? 'from-red-600 to-red-700 hover:from-red-700 hover:to-red-800' : 'from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'} text-white rounded-xl transition-all duration-200 flex items-center space-x-2 shadow-md hover:shadow-lg`}
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>{isRetourTechniqueMode ? 'Annuler Modification' : 'Retour Technique'}</span>
@@ -1632,7 +1638,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               <button
                 type="button"
                 onClick={handleRetourContentieuxClick}
-                className={`px-4 py-2 bg-gradient-to-r ${isRetourContentieuxMode ? 'from-red-600 to-red-700 hover:from-red-700 hover:to-red-800' : 'from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800'} text-white rounded-lg transition-all duration-200 flex items-center space-x-2 shadow-md hover:shadow-lg`}
+                className={`px-4 py-2 bg-gradient-to-r ${isRetourContentieuxMode ? 'from-red-600 to-red-700 hover:from-red-700 hover:to-red-800' : 'from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800'} text-white rounded-xl transition-all duration-200 flex items-center space-x-2 shadow-md hover:shadow-lg`}
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>{isRetourContentieuxMode ? 'Annuler Modification' : 'Retour Contentieux'}</span>
@@ -1642,7 +1648,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
           {/* Message de statut */}
           {message && (
-            <div className={`p-4 rounded-lg border ${
+            <div className={`p-4 rounded-xl border ${
               message.includes('✅') || message.includes('succès') || message.includes('trouvé')
                 ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border-green-200'
                 : message.includes('⚠️')
@@ -1663,7 +1669,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             <button
               type="submit"
               disabled={isLoading}
-              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-2 sm:py-3 px-4 sm:px-8 rounded-lg transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none text-sm sm:text-base"
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-2 sm:py-3 px-4 sm:px-8 rounded-xl transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none text-sm sm:text-base"
             >
               {isLoading ? (
                 <>
@@ -1679,6 +1685,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
             </button>
           </div>
         </form>
+        </div>
       </div>
 
       {termeSuspenduData && (
