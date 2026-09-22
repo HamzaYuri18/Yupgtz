@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { LogOut, FileText, Download, AlertCircle, X, Key, Wallet } from 'lucide-react';
+import { LogOut, FileText, Download, AlertCircle, X, Key, Wallet, ShieldCheck } from 'lucide-react';
 import { printSessionReport } from '../utils/pdfGenerator';
 import { saveSessionData } from '../utils/sessionService';
 import { getSessionDate, lockUserForToday, isRestrictedUser } from '../utils/auth';
 import { getCreditsDueToday } from '../utils/supabaseService';
 import { supabase } from '../lib/supabase';
+import CreditDateValidationModal from './CreditDateValidationModal';
 
 interface LogoutConfirmationProps {
   username: string;
@@ -19,7 +20,31 @@ interface UnpaidCredit {
   montant_credit: number;
   solde: number | null;
   statut: string;
+  date_paiement_prevue: string;
 }
+
+type ReportingMotif = 'report_client' | 'injoignable' | 'partiel';
+
+const MOTIF_LABELS: Record<ReportingMotif, string> = {
+  report_client: 'Date de paiement reportée suite demande du client',
+  injoignable: 'Client injoignable',
+  partiel: 'Crédit payé partiellement',
+};
+
+interface CreditReportingEntry {
+  motif: ReportingMotif | '';
+  nouvelleDate: string;
+  telegramValidated: boolean;
+}
+
+const addDaysISO = (iso: string, n: number): string => {
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return d.toISOString().split('T')[0];
+};
+
+const diffDaysISO = (a: string, b: string): number =>
+  Math.round((new Date(b + 'T00:00:00').getTime() - new Date(a + 'T00:00:00').getTime()) / 86400000);
 
 const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onConfirm, onCancel }) => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -35,9 +60,36 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
   const [isCheckingTasks, setIsCheckingTasks] = useState(false);
   const [showCreditReportingModal, setShowCreditReportingModal] = useState(false);
   const [unpaidCreditsToday, setUnpaidCreditsToday] = useState<UnpaidCredit[]>([]);
-  const [creditReportingTemp, setCreditReportingTemp] = useState<{ [key: string]: string }>({});
+  const [creditEntries, setCreditEntries] = useState<{ [key: string]: CreditReportingEntry }>({});
   const [creditReportingError, setCreditReportingError] = useState('');
   const [isSavingCreditReporting, setIsSavingCreditReporting] = useState(false);
+  const [pendingTelegramValidation, setPendingTelegramValidation] = useState<{ creditId: string; numeroContrat: string; assure: string; ancienneDate: string; nouvelleDate: string } | null>(null);
+
+  const updateCreditEntry = (creditId: string, patch: Partial<CreditReportingEntry>) => {
+    setCreditEntries(prev => ({
+      ...prev,
+      [creditId]: { motif: '', nouvelleDate: '', telegramValidated: false, ...prev[creditId], ...patch },
+    }));
+  };
+
+  const getEffectiveNouvelleDate = (credit: UnpaidCredit, entry?: CreditReportingEntry): string => {
+    if (!entry) return '';
+    if (entry.motif === 'injoignable') return addDaysISO(credit.date_paiement_prevue, 2);
+    return entry.nouvelleDate;
+  };
+
+  const isCreditReady = (credit: UnpaidCredit): boolean => {
+    const entry = creditEntries[credit.id];
+    if (!entry || !entry.motif) return false;
+    if (entry.motif === 'injoignable') return true;
+    if (!entry.nouvelleDate) return false;
+    const diff = diffDaysISO(credit.date_paiement_prevue, entry.nouvelleDate);
+    if (diff <= 0) return false;
+    if (entry.motif === 'partiel') return diff <= 7;
+    // report_client
+    if (diff <= 7) return true;
+    return entry.telegramValidated;
+  };
 
   // Sauvegarder la session si l'utilisateur ferme l'application après avoir généré la FC
   React.useEffect(() => {
@@ -87,7 +139,7 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
       const unpaidCredits = await getCreditsDueToday(sessionDate);
       if (unpaidCredits.length > 0) {
         setUnpaidCreditsToday(unpaidCredits);
-        setCreditReportingTemp({});
+        setCreditEntries({});
         setCreditReportingError('');
         setShowCreditReportingModal(true);
         return;
@@ -102,9 +154,9 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
   };
 
   const handleSaveCreditReporting = async () => {
-    const missing = unpaidCreditsToday.some((credit) => !(creditReportingTemp[credit.id] || '').trim());
-    if (missing) {
-      setCreditReportingError('Veuillez saisir le reporting de recouvrement pour chaque crédit non payé.');
+    const notReady = unpaidCreditsToday.some((credit) => !isCreditReady(credit));
+    if (notReady) {
+      setCreditReportingError('Veuillez choisir un motif et une date valides pour chaque crédit (et obtenir la validation de Hamza si la date dépasse 7 jours).');
       return;
     }
 
@@ -112,16 +164,23 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
     setCreditReportingError('');
     try {
       const sessionDate = getSessionDate();
-      const rows = unpaidCreditsToday.map((credit) => ({
-        numero_contrat: credit.numero_contrat,
-        assure: credit.assure,
-        montant_credit: credit.montant_credit,
-        solde: credit.solde ?? credit.montant_credit,
-        statut: credit.statut,
-        reporting: creditReportingTemp[credit.id].trim(),
-        utilisateur: username,
-        session_date: sessionDate,
-      }));
+      const rows = unpaidCreditsToday.map((credit) => {
+        const entry = creditEntries[credit.id];
+        const motifLabel = MOTIF_LABELS[entry.motif as ReportingMotif];
+        return {
+          numero_contrat: credit.numero_contrat,
+          assure: credit.assure,
+          montant_credit: credit.montant_credit,
+          solde: credit.solde ?? credit.montant_credit,
+          statut: credit.statut,
+          reporting: motifLabel,
+          motif: motifLabel,
+          ancienne_date_paiement: credit.date_paiement_prevue,
+          nouvelle_date_paiement: getEffectiveNouvelleDate(credit, entry),
+          utilisateur: username,
+          session_date: sessionDate,
+        };
+      });
 
       const { error } = await supabase.from('reporting_recouvrement').insert(rows);
       if (error) throw error;
@@ -430,32 +489,106 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
               <span className="font-bold text-red-600">{unpaidCreditsToday.length}</span> crédit(s) à payer aujourd'hui ne sont pas encore payés en totalité.
             </p>
             <p className="text-sm text-gray-600 mb-4">
-              Saisissez le reporting des opérations de recouvrement effectuées pour chacun. La session ne peut pas être clôturée tant que ce reporting n'est pas enregistré.
+              Choisissez le motif de reporting de recouvrement pour chacun. La session ne peut pas être clôturée tant que ce reporting n'est pas enregistré.
             </p>
 
             <div className="space-y-3 mb-4">
-              {unpaidCreditsToday.map((credit) => (
-                <div key={credit.id} className="border-2 border-gray-200 rounded-lg p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <div className="text-sm">
-                      <span className="font-semibold text-gray-900">{credit.numero_contrat}</span>
-                      <span className="text-gray-500 ml-2">{credit.assure}</span>
+              {unpaidCreditsToday.map((credit) => {
+                const entry = creditEntries[credit.id] || { motif: '' as const, nouvelleDate: '', telegramValidated: false };
+                const diff = entry.nouvelleDate ? diffDaysISO(credit.date_paiement_prevue, entry.nouvelleDate) : null;
+                const exceeds7Days = entry.motif === 'report_client' && diff !== null && diff > 7;
+                const minDate = addDaysISO(credit.date_paiement_prevue, 1);
+                const maxDatePartiel = addDaysISO(credit.date_paiement_prevue, 7);
+
+                return (
+                  <div key={credit.id} className="border-2 border-gray-200 rounded-lg p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                      <div className="text-sm">
+                        <span className="font-semibold text-gray-900">{credit.numero_contrat}</span>
+                        <span className="text-gray-500 ml-2">{credit.assure}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="px-2 py-1 rounded-full bg-red-100 text-red-800 font-semibold">{credit.statut}</span>
+                        <span className="text-gray-600">Solde: <span className="font-semibold">{parseFloat(String(credit.solde ?? credit.montant_credit ?? 0)).toFixed(2)} DT</span></span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="px-2 py-1 rounded-full bg-red-100 text-red-800 font-semibold">{credit.statut}</span>
-                      <span className="text-gray-600">Solde: <span className="font-semibold">{parseFloat(credit.solde ?? credit.montant_credit ?? 0).toFixed(2)} DT</span></span>
-                    </div>
+
+                    <select
+                      value={entry.motif}
+                      onChange={(e) => updateCreditEntry(credit.id, { motif: e.target.value as ReportingMotif, nouvelleDate: '', telegramValidated: false })}
+                      disabled={isSavingCreditReporting}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 mb-2"
+                    >
+                      <option value="">Sélectionnez un motif de reporting...</option>
+                      <option value="report_client">{MOTIF_LABELS.report_client}</option>
+                      <option value="injoignable">{MOTIF_LABELS.injoignable}</option>
+                      <option value="partiel">{MOTIF_LABELS.partiel}</option>
+                    </select>
+
+                    {entry.motif === 'injoignable' && (
+                      <p className="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
+                        Nouvelle date de paiement (automatique, +2 jours) : <span className="font-semibold">{new Date(addDaysISO(credit.date_paiement_prevue, 2) + 'T00:00:00').toLocaleDateString('fr-FR')}</span>
+                      </p>
+                    )}
+
+                    {entry.motif === 'report_client' && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Nouvelle date de paiement</label>
+                        <input
+                          type="date"
+                          value={entry.nouvelleDate}
+                          min={minDate}
+                          onChange={(e) => updateCreditEntry(credit.id, { nouvelleDate: e.target.value, telegramValidated: false })}
+                          disabled={isSavingCreditReporting}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500"
+                        />
+                        {exceeds7Days && !entry.telegramValidated && (
+                          <div className="mt-2 flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                            <p className="text-xs text-amber-800">Cette date dépasse 7 jours : l'accord de Hamza est requis.</p>
+                            <button
+                              type="button"
+                              onClick={() => setPendingTelegramValidation({
+                                creditId: credit.id,
+                                numeroContrat: credit.numero_contrat,
+                                assure: credit.assure,
+                                ancienneDate: credit.date_paiement_prevue,
+                                nouvelleDate: entry.nouvelleDate,
+                              })}
+                              className="shrink-0 flex items-center gap-1 px-3 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 transition-colors"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              Envoyer à Hamza
+                            </button>
+                          </div>
+                        )}
+                        {exceeds7Days && entry.telegramValidated && (
+                          <p className="mt-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center gap-1">
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            Validé par Hamza
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {entry.motif === 'partiel' && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Date de liquidation du solde restant <span className="text-gray-400 font-normal">(max 7 jours)</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={entry.nouvelleDate}
+                          min={minDate}
+                          max={maxDatePartiel}
+                          onChange={(e) => updateCreditEntry(credit.id, { nouvelleDate: e.target.value })}
+                          disabled={isSavingCreditReporting}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500"
+                        />
+                      </div>
+                    )}
                   </div>
-                  <textarea
-                    value={creditReportingTemp[credit.id] || ''}
-                    onChange={(e) => setCreditReportingTemp({ ...creditReportingTemp, [credit.id]: e.target.value })}
-                    placeholder="Reporting de l'opération de recouvrement pour ce crédit..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500"
-                    rows={2}
-                    disabled={isSavingCreditReporting}
-                  />
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {creditReportingError && (
@@ -533,6 +666,21 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
             </div>
           </div>
         </div>
+      )}
+
+      {pendingTelegramValidation && (
+        <CreditDateValidationModal
+          numeroContrat={pendingTelegramValidation.numeroContrat}
+          assure={pendingTelegramValidation.assure}
+          ancienneDate={pendingTelegramValidation.ancienneDate}
+          nouvelleDate={pendingTelegramValidation.nouvelleDate}
+          requestedBy={username}
+          onClose={() => setPendingTelegramValidation(null)}
+          onValidated={() => {
+            updateCreditEntry(pendingTelegramValidation.creditId, { telegramValidated: true });
+            setPendingTelegramValidation(null);
+          }}
+        />
       )}
     </div>
   );
