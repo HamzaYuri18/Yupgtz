@@ -1002,15 +1002,15 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="bg-white rounded-3xl shadow-2xl shadow-indigo-100/60 border border-slate-100 overflow-hidden">
-        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-900 px-4 sm:px-6 lg:px-8 py-5 sm:py-6">
+      <div className="bg-white rounded-3xl shadow-2xl shadow-emerald-100/60 border border-slate-100 overflow-hidden">
+        <div className="bg-gradient-to-r from-black via-gray-900 to-emerald-900 px-4 sm:px-6 lg:px-8 py-5 sm:py-6">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
-              <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-300" />
+              <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-300" />
             </div>
             <div>
               <h2 className="text-xl sm:text-2xl font-bold text-white">Nouveau Contrat</h2>
-              <p className="text-slate-400 text-xs sm:text-sm mt-0.5">Créer ou enregistrer une opération</p>
+              <p className="text-emerald-200/70 text-xs sm:text-sm mt-0.5">Créer ou enregistrer une opération</p>
             </div>
           </div>
         </div>
