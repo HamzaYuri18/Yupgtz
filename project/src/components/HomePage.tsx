@@ -726,6 +726,11 @@ const HomePage: React.FC<HomePageProps> = ({ username }) => {
                       Total: {calculateCreditTotal(creditsDueToday).toFixed(2)} DT
                     </p>
                   )}
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-left">
+                    <p className="text-sm text-amber-800 font-medium">
+                      Important : la clôture de la caisse en cours ne pourra pas se faire tant que ces crédits ne sont pas payés en totalité. S'ils restent impayés, un reporting des opérations de recouvrement sera exigé (et enregistré dans reporting_recouvrement) avant de pouvoir demander la clé de clôture.
+                    </p>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">

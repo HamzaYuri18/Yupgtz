@@ -1,14 +1,24 @@
 import React, { useState } from 'react';
-import { LogOut, FileText, Download, AlertCircle, X, Key } from 'lucide-react';
+import { LogOut, FileText, Download, AlertCircle, X, Key, Wallet } from 'lucide-react';
 import { printSessionReport } from '../utils/pdfGenerator';
 import { saveSessionData } from '../utils/sessionService';
 import { getSessionDate, lockUserForToday, isRestrictedUser } from '../utils/auth';
+import { getCreditsDueToday } from '../utils/supabaseService';
 import { supabase } from '../lib/supabase';
 
 interface LogoutConfirmationProps {
   username: string;
   onConfirm: () => void;
   onCancel: () => void;
+}
+
+interface UnpaidCredit {
+  id: string;
+  numero_contrat: string;
+  assure: string;
+  montant_credit: number;
+  solde: number | null;
+  statut: string;
 }
 
 const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onConfirm, onCancel }) => {
@@ -23,6 +33,11 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
   const [showTasksBlockingModal, setShowTasksBlockingModal] = useState(false);
   const [pendingTasksCount, setPendingTasksCount] = useState(0);
   const [isCheckingTasks, setIsCheckingTasks] = useState(false);
+  const [showCreditReportingModal, setShowCreditReportingModal] = useState(false);
+  const [unpaidCreditsToday, setUnpaidCreditsToday] = useState<UnpaidCredit[]>([]);
+  const [creditReportingTemp, setCreditReportingTemp] = useState<{ [key: string]: string }>({});
+  const [creditReportingError, setCreditReportingError] = useState('');
+  const [isSavingCreditReporting, setIsSavingCreditReporting] = useState(false);
 
   // Sauvegarder la session si l'utilisateur ferme l'application après avoir généré la FC
   React.useEffect(() => {
@@ -40,10 +55,17 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
     };
   }, [pdfGenerated, username]);
 
+  const openKeyModal = () => {
+    setClotureCle('');
+    setCleError('');
+    setShowKeyModal(true);
+  };
+
   // Avant même de demander la clé de clôture : aucune tâche "A faire" de
-  // cette session ne doit rester sans reporting. En cas d'erreur de
-  // vérification (réseau…), on laisse passer plutôt que de bloquer la
-  // clôture pour un souci technique indépendant des tâches.
+  // cette session ne doit rester sans reporting, et tous les crédits à payer
+  // aujourd'hui doivent être payés en totalité (sinon un reporting de
+  // recouvrement est exigé). En cas d'erreur de vérification (réseau…), on
+  // laisse passer plutôt que de bloquer la clôture pour un souci technique.
   const handleGeneratePDFClick = async () => {
     setIsCheckingTasks(true);
     try {
@@ -61,15 +83,57 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
         setShowTasksBlockingModal(true);
         return;
       }
+
+      const unpaidCredits = await getCreditsDueToday(sessionDate);
+      if (unpaidCredits.length > 0) {
+        setUnpaidCreditsToday(unpaidCredits);
+        setCreditReportingTemp({});
+        setCreditReportingError('');
+        setShowCreditReportingModal(true);
+        return;
+      }
     } catch (err) {
-      console.error('Erreur lors de la vérification des tâches avant clôture:', err);
+      console.error('Erreur lors de la vérification des tâches/crédits avant clôture:', err);
     } finally {
       setIsCheckingTasks(false);
     }
 
-    setClotureCle('');
-    setCleError('');
-    setShowKeyModal(true);
+    openKeyModal();
+  };
+
+  const handleSaveCreditReporting = async () => {
+    const missing = unpaidCreditsToday.some((credit) => !(creditReportingTemp[credit.id] || '').trim());
+    if (missing) {
+      setCreditReportingError('Veuillez saisir le reporting de recouvrement pour chaque crédit non payé.');
+      return;
+    }
+
+    setIsSavingCreditReporting(true);
+    setCreditReportingError('');
+    try {
+      const sessionDate = getSessionDate();
+      const rows = unpaidCreditsToday.map((credit) => ({
+        numero_contrat: credit.numero_contrat,
+        assure: credit.assure,
+        montant_credit: credit.montant_credit,
+        solde: credit.solde ?? credit.montant_credit,
+        statut: credit.statut,
+        reporting: creditReportingTemp[credit.id].trim(),
+        utilisateur: username,
+        session_date: sessionDate,
+      }));
+
+      const { error } = await supabase.from('reporting_recouvrement').insert(rows);
+      if (error) throw error;
+
+      setShowCreditReportingModal(false);
+      openKeyModal();
+    } catch (err) {
+      console.error('Erreur lors de l\'enregistrement du reporting de recouvrement:', err);
+      setCreditReportingError('Erreur lors de l\'enregistrement du reporting. Réessayez.');
+    } finally {
+      setIsSavingCreditReporting(false);
+    }
   };
 
   const handleValidateCle = async () => {
@@ -213,7 +277,7 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
             {isCheckingTasks ? (
               <>
                 <div className="w-5 h-5 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></div>
-                <span>Vérification des tâches...</span>
+                <span>Vérification des tâches et crédits...</span>
               </>
             ) : isGeneratingPDF ? (
               <>
@@ -349,6 +413,73 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
             >
               J'ai compris
             </button>
+          </div>
+        </div>
+      )}
+
+      {showCreditReportingModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg shadow-2xl p-6 max-w-2xl w-full mx-4 border-4 border-red-400 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-3 bg-red-100 rounded-full">
+                <Wallet className="w-8 h-8 text-red-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900">Crédits non payés aujourd'hui</h2>
+            </div>
+            <p className="text-gray-700 mb-2">
+              <span className="font-bold text-red-600">{unpaidCreditsToday.length}</span> crédit(s) à payer aujourd'hui ne sont pas encore payés en totalité.
+            </p>
+            <p className="text-sm text-gray-600 mb-4">
+              Saisissez le reporting des opérations de recouvrement effectuées pour chacun. La session ne peut pas être clôturée tant que ce reporting n'est pas enregistré.
+            </p>
+
+            <div className="space-y-3 mb-4">
+              {unpaidCreditsToday.map((credit) => (
+                <div key={credit.id} className="border-2 border-gray-200 rounded-lg p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <div className="text-sm">
+                      <span className="font-semibold text-gray-900">{credit.numero_contrat}</span>
+                      <span className="text-gray-500 ml-2">{credit.assure}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="px-2 py-1 rounded-full bg-red-100 text-red-800 font-semibold">{credit.statut}</span>
+                      <span className="text-gray-600">Solde: <span className="font-semibold">{parseFloat(credit.solde ?? credit.montant_credit ?? 0).toFixed(2)} DT</span></span>
+                    </div>
+                  </div>
+                  <textarea
+                    value={creditReportingTemp[credit.id] || ''}
+                    onChange={(e) => setCreditReportingTemp({ ...creditReportingTemp, [credit.id]: e.target.value })}
+                    placeholder="Reporting de l'opération de recouvrement pour ce crédit..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500"
+                    rows={2}
+                    disabled={isSavingCreditReporting}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {creditReportingError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-800 text-sm mb-4">
+                {creditReportingError}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCreditReportingModal(false)}
+                disabled={isSavingCreditReporting}
+                className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-semibold transition-colors disabled:opacity-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleSaveCreditReporting}
+                disabled={isSavingCreditReporting}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
+              >
+                {isSavingCreditReporting ? 'Enregistrement...' : 'Enregistrer et poursuivre'}
+              </button>
+            </div>
           </div>
         </div>
       )}
