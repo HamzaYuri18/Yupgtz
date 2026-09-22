@@ -257,36 +257,47 @@ const AttestationSequences: React.FC = () => {
     }
   };
 
-  // Détecte le carnet actif (celui dont le dernier numéro d'attestation
-  // servi/utilisé est le plus élevé), puis compte pour CE carnet précis les
-  // attestations restantes / annulées / en prolongation. Si le stock restant
-  // passe sous le seuil, alerte visuelle + notification Telegram à Hamza
-  // (une seule fois par jour et par carnet, via localStorage, pour ne pas
-  // spammer à chaque ouverture de la page).
+  // Cherche dans "rapport" (colonne numatt) le dernier numéro d'attestation
+  // saisi sur une opération du jour ; s'il n'y en a aucune aujourd'hui, on
+  // retombe sur celles d'hier.
+  const findLastNumattForDate = async (dateStr: string): Promise<number | null> => {
+    const { data, error } = await supabase
+      .from('rapport')
+      .select('numatt, created_at')
+      .not('numatt', 'is', null)
+      .neq('numatt', '')
+      .gte('created_at', `${dateStr}T00:00:00`)
+      .lte('created_at', `${dateStr}T23:59:59.999`)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error || !data || data.length === 0) return null;
+    const parsed = parseInt(data[0].numatt, 10);
+    return isNaN(parsed) ? null : parsed;
+  };
+
+  // Détecte le carnet actif à partir du dernier numéro d'attestation saisi
+  // dans le rapport aujourd'hui (hier si rien aujourd'hui), puis compte pour
+  // CE carnet précis les attestations restantes / annulées / en
+  // prolongation. Si le stock restant passe sous le seuil, alerte visuelle +
+  // notification Telegram à Hamza (une seule fois par jour et par carnet,
+  // via localStorage, pour ne pas spammer à chaque ouverture de la page).
   const loadActiveCarnetNotif = async () => {
     try {
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+      const lastNum = (await findLastNumattForDate(todayStr)) ?? (await findLastNumattForDate(yesterdayStr));
+      if (lastNum === null) return;
+
       const { data: carnetsData, error: carnetsErr } = await supabase
         .from('carnets_attestations')
-        .select('table_name, nom_carnet');
+        .select('table_name, nom_carnet, numero_debut, numero_fin');
       if (carnetsErr || !carnetsData || carnetsData.length === 0) return;
 
-      let active: { table_name: string; nom_carnet: string } | null = null;
-      let highestUsed = -1;
-
-      for (const carnet of carnetsData) {
-        const { data, error } = await supabase
-          .from(carnet.table_name)
-          .select('numero_attestation')
-          .not('statut', 'is', null)
-          .order('numero_attestation', { ascending: false })
-          .limit(1);
-        if (error || !data || data.length === 0) continue;
-        const lastNum = parseInt(data[0].numero_attestation, 10);
-        if (!isNaN(lastNum) && lastNum > highestUsed) {
-          highestUsed = lastNum;
-          active = carnet;
-        }
-      }
+      const active = carnetsData.find(c => lastNum >= c.numero_debut && lastNum <= c.numero_fin) || null;
 
       if (!active) return;
 
