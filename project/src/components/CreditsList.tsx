@@ -944,11 +944,13 @@ const CreditsList: React.FC = () => {
           letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;
         }
       `}</style>
-      <div className="bg-white rounded-lg shadow-lg p-4 lg:p-6">
+      <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 ring-1 ring-slate-100 p-4 lg:p-6">
         {/* En-tête avec informations utilisateur */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-3">
-            <CreditCard className="w-6 h-6 text-blue-600" />
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-md shadow-indigo-200/60 shrink-0">
+              <CreditCard className="w-5 h-5 text-white" />
+            </div>
             <h2 className="text-2xl font-bold text-gray-900">
               {activeFilter === 'echeances'
                 ? 'Échéances dans 7 jours'
@@ -991,7 +993,7 @@ const CreditsList: React.FC = () => {
               onClick={() => handleSync(false)}
               disabled={syncing}
               title="Synchroniser les crédits manquants depuis le rapport"
-              className="flex items-center gap-1.5 px-3 py-2 bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-sm font-medium hover:bg-amber-200 transition-colors disabled:opacity-60"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-sm font-semibold hover:bg-amber-100 hover:shadow-sm transition-all disabled:opacity-60"
             >
               <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1003,7 +1005,7 @@ const CreditsList: React.FC = () => {
                 onClick={handleShowDuplicates}
                 disabled={loadingDuplicates}
                 title="Afficher les crédits doublons (même contrat + même echeanceV)"
-                className="flex items-center gap-1.5 px-3 py-2 bg-red-100 text-red-800 border border-red-300 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors disabled:opacity-60"
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm font-semibold hover:bg-red-100 hover:shadow-sm transition-all disabled:opacity-60"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 12.604a8.716 8.716 0 0 0-1.07-1.234 9.634 9.634 0 0 0-3.5-2.3l-.213-.08a8.76 8.76 0 0 0-6.488.433 8.76 8.76 0 0 0-3.5 2.3 8.716 8.716 0 0 0-1.07 1.234M19 19l-7-7m0 0l-7 7m7-7v12" />
@@ -1014,35 +1016,35 @@ const CreditsList: React.FC = () => {
             <button
               onClick={() => setShowReportingRecouvrementModal(true)}
               title="Consulter le reporting de recouvrement des crédits"
-              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-100 text-indigo-800 border border-indigo-300 rounded-lg text-sm font-medium hover:bg-indigo-200 transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-sm font-semibold hover:bg-indigo-100 hover:shadow-sm transition-all"
             >
               <FileSpreadsheet className="w-4 h-4" />
               Reporting recouvrement
             </button>
-            <div className="flex items-center space-x-2 bg-gray-100 rounded-lg px-3 py-2">
-              <User className="w-4 h-4 text-gray-600" />
-              <span className="text-sm font-medium text-gray-700">
-                Connecté en tant que: <span className="text-blue-600">{currentUser || 'Non connecté'}</span>
+            <div className="flex items-center space-x-2 bg-slate-100 rounded-xl px-3.5 py-2 border border-slate-200">
+              <User className="w-4 h-4 text-slate-500" />
+              <span className="text-sm font-medium text-slate-700">
+                Connecté : <span className="text-indigo-600 font-semibold">{currentUser || 'Non connecté'}</span>
               </span>
             </div>
             
             <div className="flex space-x-2">
               <button
                 onClick={() => handleViewModeChange('mois')}
-                className={`px-4 py-2 rounded-lg transition-colors ${
+                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
                   viewMode === 'mois' && activeFilter === 'none'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
                 Vue Mensuelle
               </button>
               <button
                 onClick={() => handleViewModeChange('tous')}
-                className={`px-4 py-2 rounded-lg transition-colors ${
+                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
                   viewMode === 'tous' && activeFilter === 'none'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
                 Tous les Crédits
@@ -1050,7 +1052,7 @@ const CreditsList: React.FC = () => {
               {(activeFilter === 'echeances' || activeFilter === 'retard' || activeFilter === 'calendrier') && (
                 <button
                   onClick={clearFilters}
-                  className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                  className="px-4 py-2 bg-slate-600 text-white rounded-xl text-sm font-semibold hover:bg-slate-700 transition-all"
                 >
                   Effacer Filtres
                 </button>
@@ -1185,115 +1187,128 @@ const CreditsList: React.FC = () => {
 
         {/* Statistiques Détaillées */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-blue-50 rounded-lg p-4 cursor-pointer hover:bg-blue-100 transition-colors">
+          <div className="relative bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md p-4 pl-5 overflow-hidden transition-shadow">
+            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-500" />
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-600">
+                <p className="text-sm font-medium text-slate-500">
                   {viewMode === 'mois' ? 'Crédits du Mois' : 'Total Crédits'}
                 </p>
-                <p className="text-xl font-bold text-blue-900">{stats.totalCredits}</p>
-                <p className="text-sm text-blue-700">{stats.totalMontant.toLocaleString('fr-FR')} DT</p>
+                <p className="text-xl font-bold text-slate-900 mt-1">{stats.totalCredits}</p>
+                <p className="text-sm text-blue-600 font-medium">{stats.totalMontant.toLocaleString('fr-FR')} DT</p>
               </div>
-              <CreditCard className="w-8 h-8 text-blue-600" />
+              <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+                <CreditCard className="w-5 h-5 text-blue-600" />
+              </div>
             </div>
           </div>
 
           <div
-            className="bg-green-50 rounded-lg p-4 cursor-pointer hover:bg-green-100 transition-colors"
+            className="relative bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md p-4 pl-5 overflow-hidden cursor-pointer transition-shadow"
             onClick={() => openStatsModal('payes')}
           >
+            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-emerald-500" />
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-green-600">Montant Payé</p>
-                <p className="text-xl font-bold text-green-900">{stats.montantPaye.toLocaleString('fr-FR')} DT</p>
-                <p className="text-sm text-green-700">{stats.payes} crédits</p>
+                <p className="text-sm font-medium text-slate-500">Montant Payé</p>
+                <p className="text-xl font-bold text-slate-900 mt-1">{stats.montantPaye.toLocaleString('fr-FR')} DT</p>
+                <p className="text-sm text-emerald-600 font-medium">{stats.payes} crédits</p>
               </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
+              <div className="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
+              </div>
             </div>
           </div>
 
           <div
-            className="bg-orange-50 rounded-lg p-4 cursor-pointer hover:bg-orange-100 transition-colors"
+            className="relative bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md p-4 pl-5 overflow-hidden cursor-pointer transition-shadow"
             onClick={() => openStatsModal('nonPayes')}
           >
+            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-orange-500" />
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-orange-600">Montant Non Payé</p>
-                <p className="text-xl font-bold text-orange-900">{stats.montantNonPaye.toLocaleString('fr-FR')} DT</p>
-                <p className="text-sm text-orange-700">{stats.nonPayes} crédits</p>
+                <p className="text-sm font-medium text-slate-500">Montant Non Payé</p>
+                <p className="text-xl font-bold text-slate-900 mt-1">{stats.montantNonPaye.toLocaleString('fr-FR')} DT</p>
+                <p className="text-sm text-orange-600 font-medium">{stats.nonPayes} crédits</p>
               </div>
-              <Clock className="w-8 h-8 text-orange-600" />
+              <div className="w-11 h-11 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
+                <Clock className="w-5 h-5 text-orange-600" />
+              </div>
             </div>
           </div>
 
           <div
-            className={`rounded-lg p-4 cursor-pointer transition-colors ${
-              activeFilter === 'echeances'
-                ? 'bg-yellow-100 border-2 border-yellow-400'
-                : 'bg-purple-50 hover:bg-purple-100'
+            className={`relative bg-white rounded-2xl shadow-sm hover:shadow-md p-4 pl-5 overflow-hidden cursor-pointer transition-shadow ${
+              activeFilter === 'echeances' ? 'ring-2 ring-purple-400' : 'border border-slate-100'
             }`}
             onClick={() => {
               showDueIn7Days();
               openStatsModal('echeances');
             }}
           >
+            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-purple-500" />
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-purple-600">Échéances 7 jours</p>
-                <p className="text-xl font-bold text-purple-900">{stats.montantDueIn7Days.toLocaleString('fr-FR')} DT</p>
-                <p className="text-sm text-purple-700">{stats.creditsDueIn7Days} crédits</p>
+                <p className="text-sm font-medium text-slate-500">Échéances 7 jours</p>
+                <p className="text-xl font-bold text-slate-900 mt-1">{stats.montantDueIn7Days.toLocaleString('fr-FR')} DT</p>
+                <p className="text-sm text-purple-600 font-medium">{stats.creditsDueIn7Days} crédits</p>
               </div>
-              <AlertTriangle className="w-8 h-8 text-purple-600" />
+              <div className="w-11 h-11 rounded-xl bg-purple-50 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-purple-600" />
+              </div>
             </div>
           </div>
         </div>
 
         {/* Taux de Recouvrement et Retards */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-lg p-4">
+          <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-cyan-900 rounded-2xl p-5 shadow-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <TrendingUp className="w-6 h-6 text-cyan-600" />
+                <div className="w-11 h-11 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
+                  <TrendingUp className="w-5 h-5 text-cyan-300" />
+                </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-cyan-900">
+                  <h3 className="text-base font-semibold text-white">
                     {viewMode === 'mois' ? 'Taux de Recouvrement Mois' : 'Taux de Recouvrement Global'}
                   </h3>
-                  <p className="text-cyan-700">Pourcentage du montant total récupéré</p>
+                  <p className="text-cyan-200/80 text-sm">Pourcentage du montant total récupéré</p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-3xl font-bold text-cyan-900">{stats.tauxRecouvrement.toFixed(1)}%</p>
-                <p className="text-cyan-700">
-                  {stats.montantPaye.toLocaleString('fr-FR')} DT / {stats.totalMontant.toLocaleString('fr-FR')} DT
+              <div className="text-right shrink-0">
+                <p className="text-3xl font-bold text-white">{stats.tauxRecouvrement.toFixed(1)}%</p>
+                <p className="text-cyan-200/80 text-xs">
+                  {stats.montantPaye.toLocaleString('fr-FR')} / {stats.totalMontant.toLocaleString('fr-FR')} DT
                 </p>
               </div>
             </div>
-            <div className="mt-3 w-full bg-cyan-200 rounded-full h-2">
-              <div 
-                className="bg-cyan-600 h-2 rounded-full transition-all duration-500"
+            <div className="mt-4 w-full bg-white/10 rounded-full h-2">
+              <div
+                className="bg-gradient-to-r from-cyan-400 to-emerald-400 h-2 rounded-full transition-all duration-500"
                 style={{ width: `${Math.min(stats.tauxRecouvrement, 100)}%` }}
               ></div>
             </div>
           </div>
 
           <div
-            className={`rounded-lg p-4 cursor-pointer transition-colors ${
-              activeFilter === 'retard'
-                ? 'bg-red-100 border-2 border-red-400'
-                : 'bg-red-50 hover:bg-red-100'
+            className={`relative bg-white rounded-2xl shadow-sm hover:shadow-md p-5 pl-6 overflow-hidden cursor-pointer transition-shadow ${
+              activeFilter === 'retard' ? 'ring-2 ring-red-400' : 'border border-slate-100'
             }`}
             onClick={() => {
               showOverdueCredits();
               openStatsModal('retard');
             }}
           >
+            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-red-500" />
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-red-600">Crédits en Retard</p>
-                <p className="text-xl font-bold text-red-900">{stats.montantOverdue.toLocaleString('fr-FR')} DT</p>
-                <p className="text-sm text-red-700">{stats.overdueCredits} crédits</p>
+                <p className="text-sm font-medium text-slate-500">Crédits en Retard</p>
+                <p className="text-2xl font-bold text-slate-900 mt-1">{stats.montantOverdue.toLocaleString('fr-FR')} DT</p>
+                <p className="text-sm text-red-600 font-medium">{stats.overdueCredits} crédits</p>
               </div>
-              <XCircle className="w-8 h-8 text-red-600" />
+              <div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+                <XCircle className="w-5 h-5 text-red-600" />
+              </div>
             </div>
           </div>
         </div>
@@ -1302,7 +1317,7 @@ const CreditsList: React.FC = () => {
         <div className="mb-6">
           <button
             onClick={() => setIsEvolutionModalOpen(true)}
-            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold py-4 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center space-x-3"
+            className="w-full bg-gradient-to-r from-indigo-600 via-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-semibold py-4 px-6 rounded-2xl shadow-lg shadow-indigo-200 hover:shadow-xl transition-all duration-300 flex items-center justify-center space-x-3"
           >
             <BarChart3 className="w-6 h-6" />
             <span className="text-lg">Evolution P/C - Analyse 15 Derniers Jours</span>
@@ -1446,10 +1461,12 @@ const CreditsList: React.FC = () => {
 
         {/* Filtres (masqués quand un filtre spécial est actif) */}
         {activeFilter === 'none' && (
-          <div className="bg-gray-50 rounded-lg p-4 mb-6">
-            <div className="flex items-center space-x-2 mb-4">
-              <Filter className="w-5 h-5 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Filtres</h3>
+          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
+                <Filter className="w-4 h-4 text-indigo-600" />
+              </div>
+              <h3 className="text-base font-semibold text-slate-800">Filtres</h3>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
               {viewMode === 'mois' && (
@@ -1458,7 +1475,7 @@ const CreditsList: React.FC = () => {
                   name="mois"
                   value={filters.mois}
                   onChange={handleFilterChange}
-                  className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="p-2 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                 />
               )}
 
@@ -1468,14 +1485,14 @@ const CreditsList: React.FC = () => {
                 value={filters.nomClient}
                 onChange={handleFilterChange}
                 placeholder="Nom du client..."
-                className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="p-2 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
               />
 
               <select
                 name="statut"
                 value={filters.statut}
                 onChange={handleFilterChange}
-                className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="p-2 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
               >
                 <option value="all">Tous les statuts</option>
                 <option value="Non payé">Non payé</option>
@@ -1489,7 +1506,7 @@ const CreditsList: React.FC = () => {
                 name="branche"
                 value={filters.branche}
                 onChange={handleFilterChange}
-                className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="p-2 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
               >
                 <option value="all">Toutes les branches</option>
                 <option value="Auto">Auto</option>
@@ -1502,7 +1519,7 @@ const CreditsList: React.FC = () => {
                 name="createdBy"
                 value={filters.createdBy}
                 onChange={handleFilterChange}
-                className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="p-2 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
               >
                 <option value="all">Tous les utilisateurs</option>
                 {uniqueUsers.map(user => (
@@ -1515,7 +1532,7 @@ const CreditsList: React.FC = () => {
                 name="dateFrom"
                 value={filters.dateFrom}
                 onChange={handleFilterChange}
-                className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="p-2 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                 placeholder="Date début"
               />
 
@@ -1524,7 +1541,7 @@ const CreditsList: React.FC = () => {
                 name="dateTo"
                 value={filters.dateTo}
                 onChange={handleFilterChange}
-                className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="p-2 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                 placeholder="Date fin"
               />
             </div>
@@ -1565,7 +1582,7 @@ const CreditsList: React.FC = () => {
         )}
 
         {/* Liste des crédits */}
-        <div id="credits-table" className="overflow-x-auto rounded-lg border border-gray-100 mt-2 w-full shadow-sm bg-white">
+        <div id="credits-table" className="overflow-x-auto rounded-2xl border border-slate-100 mt-2 w-full shadow-sm bg-white">
           <table className="divide-y divide-gray-200 text-sm" style={{ tableLayout: 'fixed', minWidth: '1350px', width: '100%' }}>
             <colgroup>
               <col style={{ width: '35px' }} />   {/* Checkbox */}
@@ -1583,7 +1600,7 @@ const CreditsList: React.FC = () => {
               <col style={{ width: '80px' }} />   {/* Créé par */}
               {isHamza && <col style={{ width: '70px' }} />}  {/* Actions */}
             </colgroup>
-            <thead className="bg-gray-50">
+            <thead className="bg-slate-50">
               <tr>
                 <th className="px-2 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide">
                   <input
