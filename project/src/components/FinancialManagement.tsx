@@ -380,14 +380,20 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     setAvanceData(null);
 
     try {
-      const { data: avance, error: avanceError } = await supabase
+      // Un contrat peut avoir plusieurs anciennes avances : .maybeSingle()
+      // plantait avec PGRST116 dès qu'il y en avait plus d'une. On prend
+      // désormais la plus récente (created_at décroissant).
+      const { data: avanceRows, error: avanceError } = await supabase
         .from('recettes_exceptionnelles')
         .select('*')
         .eq('Numero_Contrat', newDepense.numero_contrat)
         .eq('type_recette', 'Avance Client')
-        .maybeSingle();
+        .order('created_at', { ascending: false })
+        .limit(1);
 
       if (avanceError) throw avanceError;
+
+      const avance = avanceRows?.[0] || null;
 
       if (!avance) {
         setAvanceSearchMessage('❌ Aucune avance trouvée pour ce contrat');
