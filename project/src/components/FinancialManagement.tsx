@@ -587,6 +587,38 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
     const success = await saveDepense(depense);
     if (success) {
+      // Reprise sur Avance Client enregistrée : marquer la prolongation
+      // correspondante (même numéro de contrat + même échéance) comme payée,
+      // sauf si elle l'est déjà.
+      if (newDepense.type_depense === 'Reprise sur Avance Client' && avanceData) {
+        try {
+          const { data: prolongationRow, error: prolongationFetchError } = await supabase
+            .from('prolongation')
+            .select('id, statut')
+            .eq('numero_contrat', avanceData.Numero_Contrat)
+            .eq('date_echeance', avanceData.Echeance)
+            .maybeSingle();
+
+          if (prolongationFetchError) throw prolongationFetchError;
+
+          if (prolongationRow) {
+            if (prolongationRow.statut === 'payée') {
+              alert('Cette avance est déjà payée');
+            } else {
+              const { error: prolongationUpdateError } = await supabase
+                .from('prolongation')
+                .update({ statut: 'payée', date_paiement: new Date().toISOString().split('T')[0] })
+                .eq('id', prolongationRow.id);
+              if (prolongationUpdateError) {
+                console.error('Erreur mise à jour statut prolongation:', prolongationUpdateError);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Erreur lors de la synchronisation avec la table prolongation:', err);
+        }
+      }
+
       if (newDepense.type_depense === 'Remise' && newDepense.type_paiement === 'Cheque') {
         try {
           const { error: chequeError } = await supabase

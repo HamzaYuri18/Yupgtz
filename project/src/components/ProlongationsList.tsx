@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, Send, RefreshCw, X, AlertCircle, Filter, ArrowLeft, Trash2 } from 'lucide-react';
+import { Calendar, Send, RefreshCw, X, AlertCircle, Filter, ArrowLeft, Trash2, CreditCard, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getSession } from '../utils/auth';
 
@@ -14,6 +14,8 @@ interface ProlongationRow {
   date_fin_prolongation: string;
   pour_le_compte: string;
   date_demande: string;
+  statut: string | null;
+  date_paiement: string | null;
 }
 
 const formatDateFR = (iso: string): string => {
@@ -43,6 +45,10 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
   const [smsTarget, setSmsTarget] = useState<ProlongationRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProlongationRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [paiementTarget, setPaiementTarget] = useState<ProlongationRow | null>(null);
+  const [paiementStatut, setPaiementStatut] = useState<'payée' | 'non payée'>('non payée');
+  const [paiementDate, setPaiementDate] = useState('');
+  const [savingPaiement, setSavingPaiement] = useState(false);
 
   const isHamza = getSession()?.username === 'Hamza';
 
@@ -85,6 +91,34 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
       setError(err instanceof Error ? err.message : 'Erreur lors de la suppression.');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const openPaiementModal = (row: ProlongationRow) => {
+    if (!isHamza) return;
+    setPaiementTarget(row);
+    setPaiementStatut(row.statut === 'payée' ? 'payée' : 'non payée');
+    setPaiementDate(row.date_paiement || new Date().toISOString().split('T')[0]);
+  };
+
+  const handleSavePaiement = async () => {
+    if (!paiementTarget) return;
+    setSavingPaiement(true);
+    try {
+      const { error: err } = await supabase
+        .from('prolongation')
+        .update({
+          statut: paiementStatut === 'payée' ? 'payée' : null,
+          date_paiement: paiementStatut === 'payée' ? paiementDate : null,
+        })
+        .eq('id', paiementTarget.id);
+      if (err) throw err;
+      setPaiementTarget(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur lors de la mise à jour du paiement.');
+    } finally {
+      setSavingPaiement(false);
     }
   };
 
@@ -167,6 +201,7 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
                   <th className="py-2 pr-3">Date d'effet</th>
                   <th className="py-2 pr-3">Fin prolongation</th>
                   <th className="py-2 pr-3">Jours restants</th>
+                  <th className="py-2 pr-3">Paiement</th>
                   <th className="py-2 pr-3"></th>
                 </tr>
               </thead>
@@ -188,6 +223,23 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
                         <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${badgeClass}`}>
                           {remaining < 0 ? `Expirée (${Math.abs(remaining)} j)` : `${remaining} j`}
                         </span>
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <button
+                          onClick={() => openPaiementModal(row)}
+                          disabled={!isHamza}
+                          title={!isHamza ? 'Seul Hamza peut modifier le paiement' : undefined}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${
+                            row.statut === 'payée'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-slate-100 text-slate-600'
+                          } ${isHamza ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`}
+                        >
+                          {row.statut === 'payée' && <CheckCircle2 className="w-3.5 h-3.5" />}
+                          {row.statut === 'payée'
+                            ? `Payée${row.date_paiement ? ` — ${formatDateFR(row.date_paiement)}` : ''}`
+                            : 'Non payée'}
+                        </button>
                       </td>
                       <td className="py-2.5 pr-3">
                         <div className="flex items-center gap-2">
@@ -249,6 +301,65 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
                 className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
                 {deleting ? 'Suppression…' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {paiementTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4" onClick={() => setPaiementTarget(null)}>
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-violet-600" />
+              Paiement de la prolongation
+            </h3>
+            <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-600 space-y-1">
+              <p><span className="font-semibold">Contrat :</span> {paiementTarget.numero_contrat}</p>
+              <p><span className="font-semibold">Assuré :</span> {paiementTarget.assure}</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Statut</label>
+              <select
+                value={paiementStatut}
+                onChange={e => setPaiementStatut(e.target.value as 'payée' | 'non payée')}
+                className="w-full border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-violet-500 outline-none bg-white"
+              >
+                <option value="non payée">Non payée</option>
+                <option value="payée">Payée</option>
+              </select>
+            </div>
+
+            {paiementStatut === 'payée' && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Date de paiement</label>
+                <input
+                  type="date"
+                  value={paiementDate}
+                  onChange={e => setPaiementDate(e.target.value)}
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-violet-500 outline-none"
+                />
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPaiementTarget(null)}
+                disabled={savingPaiement}
+                className="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleSavePaiement}
+                disabled={savingPaiement || (paiementStatut === 'payée' && !paiementDate)}
+                className="flex-1 px-4 py-2.5 bg-violet-600 text-white rounded-xl hover:bg-violet-700 disabled:opacity-50 transition-colors"
+              >
+                {savingPaiement ? 'Enregistrement…' : 'Enregistrer'}
               </button>
             </div>
           </div>
