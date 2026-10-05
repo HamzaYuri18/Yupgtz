@@ -62,18 +62,28 @@ const formatDateFR = (d: Date): string => d.toLocaleDateString('fr-FR');
 const escapeXml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-export interface DeclarationEspeceData {
+export type TypeDeclaration = 'espece' | 'ristourne' | 'bns';
+
+const TEMPLATES: Record<TypeDeclaration, string> = {
+  espece: '/forms/attestation_espece.docx',
+  ristourne: '/forms/ristourne.docx',
+  bns: '/forms/bns.docx',
+};
+
+export interface DeclarationData {
+  type: TypeDeclaration;
   nomAssure: string;
   montant: number;
   cin: string;
-  numeroSinistre: string;
+  numeroSinistre?: string;
+  numeroContrat?: string;
   date?: Date;
 }
 
-// Remplit le modèle "Attestation espece.docx" : X1 nom, X2 montant (chiffres),
-// X3 montant (lettres), X4 date, X5 CIN, X6 numéro de sinistre.
-export const generateDeclarationEspeceDocx = async (data: DeclarationEspeceData): Promise<Blob> => {
-  const response = await fetch('/forms/attestation_espece.docx');
+// Remplit le modèle choisi : X1 nom, X2 montant (chiffres), X3 montant (lettres),
+// X4 date, X5 CIN, X6 numéro de sinistre, X7 numéro de contrat.
+export const generateDeclarationDocx = async (data: DeclarationData): Promise<Blob> => {
+  const response = await fetch(TEMPLATES[data.type]);
   if (!response.ok) throw new Error('Le modèle de déclaration est introuvable.');
   const zip = await JSZip.loadAsync(await response.arrayBuffer());
 
@@ -86,7 +96,8 @@ export const generateDeclarationEspeceDocx = async (data: DeclarationEspeceData)
     x2: formatMontantChiffres(data.montant),
     x3: montantEnLettres(data.montant),
     x5: data.cin,
-    x6: data.numeroSinistre,
+    x6: data.numeroSinistre ?? '',
+    X7: data.numeroContrat ?? '',
     X4: formatDateFR(data.date ?? new Date()),
   };
 

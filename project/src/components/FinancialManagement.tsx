@@ -4,7 +4,7 @@ import { getSessionDate } from '../utils/auth';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import DeclarationEspeceModal, { type SinistreEspece } from './DeclarationEspeceModal';
+import DeclarationEspeceModal, { type DeclarationDossier } from './DeclarationEspeceModal';
 import { sendTelegramToHamza } from '../utils/declarationEspece';
 import {
   saveDepense, 
@@ -107,7 +107,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
   // États pour les sinistres
   const [sinistres, setSinistres] = useState<Sinistre[]>([]);
-  const [declarationEspece, setDeclarationEspece] = useState<SinistreEspece | null>(null);
+  const [declarationEspece, setDeclarationEspece] = useState<DeclarationDossier | null>(null);
   const [newSinistre, setNewSinistre] = useState({
     numero_sinistre: '',
     montant: '',
@@ -1143,6 +1143,24 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         .eq('type', 'Ristourne');
 
       setMessage('✅ Ristourne enregistrée avec succès');
+
+      if (newRistourne.type_paiement === 'Espece') {
+        const amount = parseFloat(newRistourne.montant_ristourne);
+        const telegram = await sendTelegramToHamza(
+          `💵 Ristourne payée en espèce\n\n` +
+          `Client : ${newRistourne.client}\n` +
+          `Montant : ${amount.toFixed(3)} DT\n` +
+          `Enregistrée par : ${username}\n\n` +
+          `Une déclaration signée et légalisée (Ristourne ou BNS) est requise à la clôture de caisse.`
+        );
+        if (!telegram.success) console.error('Erreur Telegram ristourne espèce:', telegram.error);
+        setDeclarationEspece({
+          kind: 'ristourne',
+          reference: '',
+          client: newRistourne.client,
+          montant: amount,
+        });
+      }
       setNewRistourne({
         numero_contrat: '',
         client: '',
@@ -1295,6 +1313,8 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
           console.error('Erreur Telegram sinistre espèce:', telegram.error);
         }
         setDeclarationEspece({
+          kind: 'sinistre',
+          reference: sinistre.numero_sinistre,
           numero_sinistre: sinistre.numero_sinistre,
           montant: sinistre.montant,
           client: sinistre.client,
@@ -3201,7 +3221,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       </div>
 
       {declarationEspece && (
-        <DeclarationEspeceModal sinistre={declarationEspece} onClose={() => setDeclarationEspece(null)} />
+        <DeclarationEspeceModal dossier={declarationEspece} onClose={() => setDeclarationEspece(null)} />
       )}
     </div>
   );

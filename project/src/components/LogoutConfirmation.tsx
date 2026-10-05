@@ -148,19 +148,41 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
         return;
       }
 
-      const { data: pendingEspece, error: especeError } = await supabase
-        .from('sinistres')
-        .select('numero_sinistre, client, montant')
-        .eq('type_paiement', 'Espece')
-        .eq('date_paiement_sinistre', sessionDate)
-        .eq('declaration_validee', false);
-      if (especeError) throw especeError;
-      if (pendingEspece && pendingEspece.length > 0) {
-        setPendingDeclarations(pendingEspece.map(s => ({
-          numero_sinistre: s.numero_sinistre,
+      const [{ data: pendingSinistres, error: sinistreError }, { data: pendingRistournes, error: ristourneError }] = await Promise.all([
+        supabase
+          .from('sinistres')
+          .select('numero_sinistre, client, montant')
+          .eq('type_paiement', 'Espece')
+          .eq('date_paiement_sinistre', sessionDate)
+          .eq('declaration_validee', false),
+        supabase
+          .from('ristournes')
+          .select('id, client, montant_ristourne')
+          .eq('type_paiement', 'Espece')
+          .eq('date_paiement_ristourne', sessionDate)
+          .eq('declaration_validee', false),
+      ]);
+      if (sinistreError) throw sinistreError;
+      if (ristourneError) throw ristourneError;
+
+      const pendingItems: PendingDeclaration[] = [
+        ...(pendingSinistres ?? []).map(s => ({
+          kind: 'sinistre' as const,
+          reference: s.numero_sinistre,
+          label: `Sinistre ${s.numero_sinistre}`,
           client: s.client,
           montant: Number(s.montant) || 0,
-        })));
+        })),
+        ...(pendingRistournes ?? []).map(r => ({
+          kind: 'ristourne' as const,
+          reference: String(r.id),
+          label: 'Ristourne',
+          client: r.client,
+          montant: Number(r.montant_ristourne) || 0,
+        })),
+      ];
+      if (pendingItems.length > 0) {
+        setPendingDeclarations(pendingItems);
         setShowDeclarationModal(true);
         return;
       }

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Upload, CheckCircle2, AlertCircle, Send } from 'lucide-react';
+import { ShieldCheck, Upload, CheckCircle2, AlertCircle, Send, FileCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { sendTelegramToHamza } from '../utils/declarationEspece';
 
 export interface PendingDeclaration {
-  numero_sinistre: string;
+  kind: 'sinistre' | 'ristourne';
+  reference: string;
+  label: string;
   client: string;
   montant: number;
 }
@@ -26,80 +28,100 @@ interface RowState {
   phase: RowPhase;
   file: File | null;
   scanUrl: string;
+  derogation: boolean;
   codeInput: string;
   error: string;
 }
 
-const emptyRow = (): RowState => ({ phase: 'idle', file: null, scanUrl: '', codeInput: '', error: '' });
+const emptyRow = (): RowState => ({ phase: 'idle', file: null, scanUrl: '', derogation: false, codeInput: '', error: '' });
 
 const DeclarationScanValidationModal: React.FC<Props> = ({ pending, username, onAllValidated, onCancel }) => {
   const [rows, setRows] = useState<Record<string, RowState>>({});
 
-  const getRow = (numero: string): RowState => rows[numero] ?? emptyRow();
-  const patchRow = (numero: string, patch: Partial<RowState>) =>
-    setRows(prev => ({ ...prev, [numero]: { ...(prev[numero] ?? emptyRow()), ...patch } }));
+  const keyOf = (p: PendingDeclaration) => `${p.kind}:${p.reference}`;
+  const getRow = (p: PendingDeclaration): RowState => rows[keyOf(p)] ?? emptyRow();
+  const patchRow = (p: PendingDeclaration, patch: Partial<RowState>) =>
+    setRows(prev => ({ ...prev, [keyOf(p)]: { ...(prev[keyOf(p)] ?? emptyRow()), ...patch } }));
 
-  const allValidated = pending.length > 0 && pending.every(p => getRow(p.numero_sinistre).phase === 'validated');
+  const allValidated = pending.length > 0 && pending.every(p => getRow(p).phase === 'validated');
+
+  const createCodeAndNotify = async (p: PendingDeclaration, derogation: boolean, scanUrl: string) => {
+    const code = generateCode();
+    const expiresAt = new Date(Date.now() + CODE_VALIDITY_MINUTES * 60000).toISOString();
+    const { error: insertErr } = await supabase.from('sinistre_declaration_codes').insert({
+      type_dossier: p.kind,
+      reference: p.reference,
+      numero_sinistre: p.kind === 'sinistre' ? p.reference : null,
+      code,
+      requested_by: username,
+      scan_url: scanUrl || null,
+      derogation,
+      expires_at: expiresAt,
+    });
+    if (insertErr) throw new Error(`Échec de l'enregistrement du code : ${insertErr.message}`);
+
+    const titre = p.kind === 'sinistre' ? 'sinistre' : 'ristourne';
+    const lignes = [
+      derogation
+        ? `🔔 Demande de DÉROGATION — déclaration signée non fournie (${titre})`
+        : `🔔 Validation déclaration signée — ${titre}`,
+      '',
+      `Demandé par : ${username}`,
+      `Référence : ${p.label}`,
+      `Client : ${p.client}`,
+      `Montant : ${p.montant.toFixed(3)} DT`,
+    ];
+    if (scanUrl) lignes.push('', `Scan de la déclaration signée : ${scanUrl}`);
+    lignes.push('', `Code de validation : ${code}`, `(valable ${CODE_VALIDITY_MINUTES} minutes, uniquement pour ${username})`);
+    const telegram = await sendTelegramToHamza(lignes.join('\n'));
+    if (!telegram.success) throw new Error(telegram.error || "Échec de l'envoi Telegram à Mr Hamza.");
+  };
 
   const handleSendScan = async (p: PendingDeclaration) => {
-    const row = getRow(p.numero_sinistre);
+    const row = getRow(p);
     if (!row.file) {
-      patchRow(p.numero_sinistre, { error: 'Veuillez sélectionner le scan de la déclaration signée.' });
+      patchRow(p, { error: 'Veuillez sélectionner le scan de la déclaration signée.' });
       return;
     }
-    patchRow(p.numero_sinistre, { phase: 'sending', error: '' });
+    patchRow(p, { phase: 'sending', error: '' });
     try {
       const ext = row.file.name.split('.').pop() || 'pdf';
-      const filePath = `declarations_sinistres/declaration_${p.numero_sinistre}_${Date.now()}.${ext}`;
+      const filePath = `declarations/${p.kind}_${p.reference}_${Date.now()}.${ext}`;
       const { error: uploadErr } = await supabase.storage.from('attestations').upload(filePath, row.file);
       if (uploadErr) throw new Error(`Échec de l'envoi du scan : ${uploadErr.message}`);
       const { data: urlData } = supabase.storage.from('attestations').getPublicUrl(filePath);
       const scanUrl = urlData.publicUrl;
 
-      const code = generateCode();
-      const expiresAt = new Date(Date.now() + CODE_VALIDITY_MINUTES * 60000).toISOString();
-      const { error: insertErr } = await supabase.from('sinistre_declaration_codes').insert({
-        numero_sinistre: p.numero_sinistre,
-        code,
-        requested_by: username,
-        scan_url: scanUrl,
-        expires_at: expiresAt,
-      });
-      if (insertErr) throw new Error(`Échec de l'enregistrement du code : ${insertErr.message}`);
-
-      const telegram = await sendTelegramToHamza(
-        `🔔 Validation déclaration espèce — sinistre\n\n` +
-        `Demandé par : ${username}\n` +
-        `N° sinistre : ${p.numero_sinistre}\n` +
-        `Client : ${p.client}\n` +
-        `Montant : ${p.montant.toFixed(3)} DT\n\n` +
-        `Scan de la déclaration signée : ${scanUrl}\n\n` +
-        `Code de validation : ${code}\n` +
-        `(valable ${CODE_VALIDITY_MINUTES} minutes, uniquement pour ${username})`
-      );
-      if (!telegram.success) throw new Error(telegram.error || "Échec de l'envoi Telegram à Hamza.");
-
-      patchRow(p.numero_sinistre, { phase: 'awaiting_code', scanUrl, file: null });
+      await createCodeAndNotify(p, false, scanUrl);
+      patchRow(p, { phase: 'awaiting_code', scanUrl, derogation: false, file: null });
     } catch (err) {
-      patchRow(p.numero_sinistre, {
-        phase: 'idle',
-        error: err instanceof Error ? err.message : 'Erreur lors de l\'envoi.',
-      });
+      patchRow(p, { phase: 'idle', error: err instanceof Error ? err.message : "Erreur lors de l'envoi." });
+    }
+  };
+
+  const handleRequestDerogation = async (p: PendingDeclaration) => {
+    patchRow(p, { phase: 'sending', error: '' });
+    try {
+      await createCodeAndNotify(p, true, '');
+      patchRow(p, { phase: 'awaiting_code', derogation: true, scanUrl: '' });
+    } catch (err) {
+      patchRow(p, { phase: 'idle', error: err instanceof Error ? err.message : 'Erreur lors de la demande de dérogation.' });
     }
   };
 
   const handleValidateCode = async (p: PendingDeclaration) => {
-    const row = getRow(p.numero_sinistre);
+    const row = getRow(p);
     if (!row.codeInput.trim()) {
-      patchRow(p.numero_sinistre, { error: 'Veuillez saisir le code reçu par Mr Hamza.' });
+      patchRow(p, { error: 'Veuillez saisir le code reçu par Mr Hamza.' });
       return;
     }
-    patchRow(p.numero_sinistre, { phase: 'verifying', error: '' });
+    patchRow(p, { phase: 'verifying', error: '' });
     try {
       const { data, error } = await supabase
         .from('sinistre_declaration_codes')
-        .select('id, expires_at, scan_url')
-        .eq('numero_sinistre', p.numero_sinistre)
+        .select('id, expires_at, scan_url, derogation')
+        .eq('type_dossier', p.kind)
+        .eq('reference', p.reference)
         .eq('requested_by', username)
         .eq('code', row.codeInput.trim())
         .eq('used', false)
@@ -109,11 +131,11 @@ const DeclarationScanValidationModal: React.FC<Props> = ({ pending, username, on
       if (error) throw new Error(error.message);
 
       if (!data) {
-        patchRow(p.numero_sinistre, { phase: 'awaiting_code', error: 'Code invalide. Vérifiez le code envoyé à Mr Hamza.' });
+        patchRow(p, { phase: 'awaiting_code', error: 'Code invalide. Vérifiez le code envoyé à Mr Hamza.' });
         return;
       }
       if (new Date(data.expires_at).getTime() < Date.now()) {
-        patchRow(p.numero_sinistre, { phase: 'awaiting_code', error: 'Ce code a expiré (20 minutes). Renvoyez le scan pour obtenir un nouveau code.' });
+        patchRow(p, { phase: 'awaiting_code', error: 'Ce code a expiré (20 minutes). Relancez la demande pour obtenir un nouveau code.' });
         return;
       }
 
@@ -122,18 +144,19 @@ const DeclarationScanValidationModal: React.FC<Props> = ({ pending, username, on
         .update({ used: true, used_at: new Date().toISOString() })
         .eq('id', data.id);
 
-      const { error: sinistreErr } = await supabase
-        .from('sinistres')
-        .update({ declaration_validee: true, declaration_scan_url: data.scan_url })
-        .eq('numero_sinistre', p.numero_sinistre);
-      if (sinistreErr) throw new Error(sinistreErr.message);
+      const update = {
+        declaration_validee: true,
+        declaration_scan_url: data.scan_url,
+        declaration_derogation: !!data.derogation,
+      };
+      const { error: targetErr } = p.kind === 'sinistre'
+        ? await supabase.from('sinistres').update(update).eq('numero_sinistre', p.reference)
+        : await supabase.from('ristournes').update(update).eq('id', p.reference);
+      if (targetErr) throw new Error(targetErr.message);
 
-      patchRow(p.numero_sinistre, { phase: 'validated', error: '' });
+      patchRow(p, { phase: 'validated', error: '' });
     } catch (err) {
-      patchRow(p.numero_sinistre, {
-        phase: 'awaiting_code',
-        error: err instanceof Error ? err.message : 'Erreur lors de la vérification du code.',
-      });
+      patchRow(p, { phase: 'awaiting_code', error: err instanceof Error ? err.message : 'Erreur lors de la vérification du code.' });
     }
   };
 
@@ -145,23 +168,23 @@ const DeclarationScanValidationModal: React.FC<Props> = ({ pending, username, on
             <ShieldCheck className="w-6 h-6 text-emerald-300" />
             <div>
               <h3 className="text-white font-bold">Déclarations signées requises</h3>
-              <p className="text-emerald-200/70 text-xs">Sinistres payés en espèce non encore validés</p>
+              <p className="text-emerald-200/70 text-xs">Paiements en espèce non encore validés</p>
             </div>
           </div>
         </div>
 
         <div className="p-6 space-y-4">
           <p className="text-sm text-slate-700">
-            Pour clôturer la caisse, scannez la déclaration signée et légalisée de chaque sinistre payé en espèce, puis saisissez le code envoyé à Mr Hamza par Telegram (valable {CODE_VALIDITY_MINUTES} minutes, uniquement pour vous).
+            Pour clôturer la caisse, pour chaque paiement en espèce : envoyez le scan de la déclaration signée et légalisée, ou demandez une dérogation à Mr Hamza. Dans les deux cas, saisissez le code reçu par Telegram (valable {CODE_VALIDITY_MINUTES} minutes, uniquement pour vous).
           </p>
 
           {pending.map(p => {
-            const row = getRow(p.numero_sinistre);
+            const row = getRow(p);
             return (
-              <div key={p.numero_sinistre} className={`border-2 rounded-xl p-4 space-y-3 ${row.phase === 'validated' ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200'}`}>
+              <div key={keyOf(p)} className={`border-2 rounded-xl p-4 space-y-3 ${row.phase === 'validated' ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200'}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm">
-                    <span className="font-semibold text-slate-900">Sinistre {p.numero_sinistre}</span>
+                    <span className="font-semibold text-slate-900">{p.label}</span>
                     <span className="text-slate-500 ml-2">{p.client}</span>
                   </div>
                   <span className="text-sm font-semibold text-slate-700">{p.montant.toFixed(3)} DT</span>
@@ -169,18 +192,22 @@ const DeclarationScanValidationModal: React.FC<Props> = ({ pending, username, on
 
                 {row.phase === 'validated' ? (
                   <p className="flex items-center gap-2 text-sm text-emerald-700 font-medium">
-                    <CheckCircle2 className="w-4 h-4" /> Déclaration validée par Mr Hamza
+                    <CheckCircle2 className="w-4 h-4" />
+                    {row.derogation ? 'Dérogation accordée par Mr Hamza' : 'Déclaration validée par Mr Hamza'}
                   </p>
                 ) : row.phase === 'awaiting_code' || row.phase === 'verifying' ? (
                   <div className="space-y-2">
-                    <p className="text-xs text-slate-600">Saisissez le code reçu par Telegram :</p>
+                    <p className="text-xs text-slate-600">
+                      {row.derogation ? 'Demande de dérogation envoyée. ' : 'Scan envoyé. '}
+                      Saisissez le code reçu par Telegram :
+                    </p>
                     <div className="flex gap-2">
                       <input
                         type="text"
                         inputMode="numeric"
                         maxLength={6}
                         value={row.codeInput}
-                        onChange={e => patchRow(p.numero_sinistre, { codeInput: e.target.value.replace(/\D/g, '') })}
+                        onChange={e => patchRow(p, { codeInput: e.target.value.replace(/\D/g, '') })}
                         onKeyDown={e => e.key === 'Enter' && handleValidateCode(p)}
                         placeholder="Ex: 482913"
                         className="flex-1 border border-slate-300 rounded-xl px-4 py-2 text-center tracking-widest font-mono focus:ring-2 focus:ring-emerald-500 outline-none"
@@ -194,10 +221,10 @@ const DeclarationScanValidationModal: React.FC<Props> = ({ pending, username, on
                       </button>
                     </div>
                     <button
-                      onClick={() => patchRow(p.numero_sinistre, { phase: 'idle', error: '' })}
+                      onClick={() => patchRow(p, { phase: 'idle', error: '' })}
                       className="text-xs text-slate-500 hover:text-slate-700 underline"
                     >
-                      Renvoyer un scan
+                      Revenir au choix
                     </button>
                   </div>
                 ) : (
@@ -211,17 +238,27 @@ const DeclarationScanValidationModal: React.FC<Props> = ({ pending, username, on
                         type="file"
                         accept="image/*,application/pdf"
                         className="hidden"
-                        onChange={e => patchRow(p.numero_sinistre, { file: e.target.files?.[0] ?? null, error: '' })}
+                        onChange={e => patchRow(p, { file: e.target.files?.[0] ?? null, error: '' })}
                       />
                     </label>
-                    <button
-                      onClick={() => handleSendScan(p)}
-                      disabled={row.phase === 'sending'}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800 disabled:opacity-60 transition-colors"
-                    >
-                      <Send className="w-4 h-4" />
-                      {row.phase === 'sending' ? 'Envoi à Mr Hamza…' : 'Envoyer à Mr Hamza pour validation'}
-                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleSendScan(p)}
+                        disabled={row.phase === 'sending'}
+                        className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 disabled:opacity-60 transition-colors"
+                      >
+                        <Send className="w-4 h-4" />
+                        {row.phase === 'sending' ? 'Envoi…' : 'Envoyer le scan'}
+                      </button>
+                      <button
+                        onClick={() => handleRequestDerogation(p)}
+                        disabled={row.phase === 'sending'}
+                        className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl border-2 border-amber-400 text-amber-800 bg-amber-50 text-sm font-medium hover:bg-amber-100 disabled:opacity-60 transition-colors"
+                      >
+                        <FileCheck className="w-4 h-4" />
+                        Demander une dérogation
+                      </button>
+                    </div>
                   </div>
                 )}
 
