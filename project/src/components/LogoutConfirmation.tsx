@@ -6,6 +6,7 @@ import { getSessionDate, lockUserForToday, isRestrictedUser } from '../utils/aut
 import { getCreditsDueToday } from '../utils/supabaseService';
 import { supabase } from '../lib/supabase';
 import CreditDateValidationModal from './CreditDateValidationModal';
+import DeclarationScanValidationModal, { type PendingDeclaration } from './DeclarationScanValidationModal';
 
 interface LogoutConfirmationProps {
   username: string;
@@ -58,6 +59,8 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
   const [showTasksBlockingModal, setShowTasksBlockingModal] = useState(false);
   const [pendingTasksCount, setPendingTasksCount] = useState(0);
   const [isCheckingTasks, setIsCheckingTasks] = useState(false);
+  const [showDeclarationModal, setShowDeclarationModal] = useState(false);
+  const [pendingDeclarations, setPendingDeclarations] = useState<PendingDeclaration[]>([]);
   const [showCreditReportingModal, setShowCreditReportingModal] = useState(false);
   const [unpaidCreditsToday, setUnpaidCreditsToday] = useState<UnpaidCredit[]>([]);
   const [creditEntries, setCreditEntries] = useState<{ [key: string]: CreditReportingEntry }>({});
@@ -144,8 +147,25 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
         setShowCreditReportingModal(true);
         return;
       }
+
+      const { data: pendingEspece, error: especeError } = await supabase
+        .from('sinistres')
+        .select('numero_sinistre, client, montant')
+        .eq('type_paiement', 'Espece')
+        .eq('date_paiement_sinistre', sessionDate)
+        .eq('declaration_validee', false);
+      if (especeError) throw especeError;
+      if (pendingEspece && pendingEspece.length > 0) {
+        setPendingDeclarations(pendingEspece.map(s => ({
+          numero_sinistre: s.numero_sinistre,
+          client: s.client,
+          montant: Number(s.montant) || 0,
+        })));
+        setShowDeclarationModal(true);
+        return;
+      }
     } catch (err) {
-      console.error('Erreur lors de la vérification des tâches/crédits avant clôture:', err);
+      console.error('Erreur lors de la vérification des tâches/crédits/déclarations avant clôture:', err);
     } finally {
       setIsCheckingTasks(false);
     }
@@ -615,6 +635,18 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
             </div>
           </div>
         </div>
+      )}
+
+      {showDeclarationModal && (
+        <DeclarationScanValidationModal
+          pending={pendingDeclarations}
+          username={username}
+          onAllValidated={() => {
+            setShowDeclarationModal(false);
+            openKeyModal();
+          }}
+          onCancel={() => setShowDeclarationModal(false)}
+        />
       )}
 
       {showKeyModal && (

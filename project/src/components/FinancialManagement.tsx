@@ -4,7 +4,9 @@ import { getSessionDate } from '../utils/auth';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import { 
+import DeclarationEspeceModal, { type SinistreEspece } from './DeclarationEspeceModal';
+import { sendTelegramToHamza } from '../utils/declarationEspece';
+import {
   saveDepense, 
   getDepenses, 
   saveRecetteExceptionnelle, 
@@ -105,6 +107,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
   // États pour les sinistres
   const [sinistres, setSinistres] = useState<Sinistre[]>([]);
+  const [declarationEspece, setDeclarationEspece] = useState<SinistreEspece | null>(null);
   const [newSinistre, setNewSinistre] = useState({
     numero_sinistre: '',
     montant: '',
@@ -1278,6 +1281,26 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       }
 
       setMessage('✅ Sinistre enregistré avec succès');
+
+      if (sinistre.type_paiement === 'Espece') {
+        const telegram = await sendTelegramToHamza(
+          `💵 Sinistre payé en espèce\n\n` +
+          `N° sinistre : ${sinistre.numero_sinistre}\n` +
+          `Client : ${sinistre.client}\n` +
+          `Montant : ${sinistre.montant.toFixed(3)} DT\n` +
+          `Enregistré par : ${username}\n\n` +
+          `Une déclaration signée et légalisée par l'assuré est requise (scan demandé à la clôture de caisse).`
+        );
+        if (!telegram.success) {
+          console.error('Erreur Telegram sinistre espèce:', telegram.error);
+        }
+        setDeclarationEspece({
+          numero_sinistre: sinistre.numero_sinistre,
+          montant: sinistre.montant,
+          client: sinistre.client,
+        });
+      }
+
       setNewSinistre({
         numero_sinistre: '',
         montant: '',
@@ -3176,6 +3199,10 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
           renderContent()
         )}
       </div>
+
+      {declarationEspece && (
+        <DeclarationEspeceModal sinistre={declarationEspece} onClose={() => setDeclarationEspece(null)} />
+      )}
     </div>
   );
 };
