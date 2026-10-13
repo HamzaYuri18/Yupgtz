@@ -84,7 +84,6 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     dateTo: ''
   });
   const [showRistourneDateFilter, setShowRistourneDateFilter] = useState(false);
-  const [ristourneDateFilterField, setRistourneDateFilterField] = useState<'date_ristourne' | 'date_paiement_ristourne'>('date_ristourne');
   const [ristourneCheckMessage, setRistourneCheckMessage] = useState('');
 
   // État pour la recherche AvenantPDF
@@ -254,15 +253,13 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         case 'ristournes':
           let ristournesData = await getRistournes();
 
-          // Filtrer par date de session ou par plage de dates (sur la colonne choisie : Date ou Date Paiement)
+          // Filtrer par date de session ou par plage de dates
           if (showRistourneDateFilter && ristourneDateFilter.dateFrom && ristourneDateFilter.dateTo) {
+            // Filtre par plage de dates
             ristournesData = ristournesData.filter(r => {
-              const rawDate = ristourneDateFilterField === 'date_paiement_ristourne'
-                ? r.date_paiement_ristourne
-                : r.date_ristourne;
-              if (!rawDate) return false;
-              const compareDate = rawDate.split('T')[0];
-              return compareDate >= ristourneDateFilter.dateFrom && compareDate <= ristourneDateFilter.dateTo;
+              if (!r.created_at) return false;
+              const createdDate = r.created_at.split('T')[0];
+              return createdDate >= ristourneDateFilter.dateFrom && createdDate <= ristourneDateFilter.dateTo;
             });
           } else {
             // Filtre par date de session (par défaut)
@@ -2156,13 +2153,6 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         <h3 className="text-lg font-semibold text-purple-800">Gestion des Ristournes</h3>
         <div className="flex items-center space-x-2">
           <button
-            onClick={() => setShowRistourneDateFilter(!showRistourneDateFilter)}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Calendar className="w-4 h-4" />
-            <span>{showRistourneDateFilter ? 'Session' : 'Filtrer'}</span>
-          </button>
-          <button
             onClick={handleSyncRistournesToRapport}
             disabled={syncingRistournesRapport}
             className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2179,63 +2169,6 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
           </button>
         </div>
       </div>
-
-      {showRistourneDateFilter && (
-        <div className="bg-white rounded-lg p-4 mb-4 border border-purple-200">
-          <div className="mb-3">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Filtrer par</label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setRistourneDateFilterField('date_ristourne')}
-                className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                  ristourneDateFilterField === 'date_ristourne'
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Date
-              </button>
-              <button
-                onClick={() => setRistourneDateFilterField('date_paiement_ristourne')}
-                className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                  ristourneDateFilterField === 'date_paiement_ristourne'
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Date Paiement
-              </button>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4 mb-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Date début</label>
-              <input
-                type="date"
-                value={ristourneDateFilter.dateFrom}
-                onChange={(e) => setRistourneDateFilter({...ristourneDateFilter, dateFrom: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Date fin</label>
-              <input
-                type="date"
-                value={ristourneDateFilter.dateTo}
-                onChange={(e) => setRistourneDateFilter({...ristourneDateFilter, dateTo: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-lg"
-              />
-            </div>
-          </div>
-          <button
-            onClick={() => loadData()}
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
-          >
-            Appliquer le filtre
-          </button>
-        </div>
-      )}
-
       {syncRistournesRapportMsg && (
         <div className={`mb-4 p-3 rounded-lg text-sm ${syncRistournesRapportMsg.includes('✅') ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>
           {syncRistournesRapportMsg}
