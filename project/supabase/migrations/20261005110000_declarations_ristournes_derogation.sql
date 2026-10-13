@@ -23,5 +23,6 @@ ALTER TABLE sinistre_declaration_codes ADD COLUMN IF NOT EXISTS derogation boole
 CREATE INDEX IF NOT EXISTS idx_sinistre_declaration_codes_reference
   ON sinistre_declaration_codes(type_dossier, reference, requested_by, code);
 
+DROP POLICY IF EXISTS "Allow update ristournes declaration" ON ristournes;
 CREATE POLICY "Allow update ristournes declaration"
   ON ristournes FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);

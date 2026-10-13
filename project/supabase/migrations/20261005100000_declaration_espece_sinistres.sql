@@ -16,6 +16,7 @@
 ALTER TABLE sinistres ADD COLUMN IF NOT EXISTS declaration_validee boolean NOT NULL DEFAULT false;
 ALTER TABLE sinistres ADD COLUMN IF NOT EXISTS declaration_scan_url text;
 
+DROP POLICY IF EXISTS "Allow update sinistres declaration" ON sinistres;
 CREATE POLICY "Allow update sinistres declaration"
   ON sinistres FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
 
@@ -33,12 +34,15 @@ CREATE TABLE IF NOT EXISTS sinistre_declaration_codes (
 
 ALTER TABLE sinistre_declaration_codes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Allow read sinistre_declaration_codes" ON sinistre_declaration_codes;
 CREATE POLICY "Allow read sinistre_declaration_codes"
   ON sinistre_declaration_codes FOR SELECT TO anon, authenticated USING (true);
 
+DROP POLICY IF EXISTS "Allow insert sinistre_declaration_codes" ON sinistre_declaration_codes;
 CREATE POLICY "Allow insert sinistre_declaration_codes"
   ON sinistre_declaration_codes FOR INSERT TO anon, authenticated WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Allow update sinistre_declaration_codes" ON sinistre_declaration_codes;
 CREATE POLICY "Allow update sinistre_declaration_codes"
   ON sinistre_declaration_codes FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
 
