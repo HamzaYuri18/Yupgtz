@@ -7,6 +7,7 @@ import { getCreditsDueToday } from '../utils/supabaseService';
 import { supabase } from '../lib/supabase';
 import CreditDateValidationModal from './CreditDateValidationModal';
 import DeclarationScanValidationModal, { type PendingDeclaration } from './DeclarationScanValidationModal';
+import { sendTelegramToHamza } from '../utils/declarationEspece';
 
 interface LogoutConfirmationProps {
   username: string;
@@ -67,6 +68,11 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
   const [creditReportingError, setCreditReportingError] = useState('');
   const [isSavingCreditReporting, setIsSavingCreditReporting] = useState(false);
   const [pendingTelegramValidation, setPendingTelegramValidation] = useState<{ creditId: string; numeroContrat: string; assure: string; ancienneDate: string; nouvelleDate: string } | null>(null);
+  const [especeDerogationGranted, setEspeceDerogationGranted] = useState(false);
+  const [showEspeceDerogationModal, setShowEspeceDerogationModal] = useState(false);
+  const [especeDerogationPhase, setEspeceDerogationPhase] = useState<'idle' | 'sending' | 'awaiting_code' | 'verifying'>('idle');
+  const [especeDerogationCode, setEspeceDerogationCode] = useState('');
+  const [especeDerogationError, setEspeceDerogationError] = useState('');
 
   const updateCreditEntry = (creditId: string, patch: Partial<CreditReportingEntry>) => {
     setCreditEntries(prev => ({
@@ -148,51 +154,144 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
         return;
       }
 
-      const [{ data: pendingSinistres, error: sinistreError }, { data: pendingRistournes, error: ristourneError }] = await Promise.all([
-        supabase
-          .from('sinistres')
-          .select('numero_sinistre, client, montant')
-          .eq('type_paiement', 'Espece')
-          .eq('date_paiement_sinistre', sessionDate)
-          .eq('declaration_validee', false),
-        supabase
-          .from('ristournes')
-          .select('id, client, montant_ristourne')
-          .eq('type_paiement', 'Espece')
-          .eq('date_paiement_ristourne', sessionDate)
-          .eq('declaration_validee', false),
-      ]);
-      if (sinistreError) throw sinistreError;
-      if (ristourneError) throw ristourneError;
+      if (!especeDerogationGranted) {
+        const [{ data: pendingSinistres, error: sinistreError }, { data: pendingRistournes, error: ristourneError }] = await Promise.all([
+          supabase
+            .from('sinistres')
+            .select('numero_sinistre, client, montant')
+            .eq('type_paiement', 'Espece')
+            .eq('date_paiement_sinistre', sessionDate)
+            .eq('declaration_validee', false),
+          supabase
+            .from('ristournes')
+            .select('id, client, montant_ristourne')
+            .eq('type_paiement', 'Espece')
+            .eq('date_paiement_ristourne', sessionDate)
+            .eq('declaration_validee', false),
+        ]);
+        if (sinistreError) throw sinistreError;
+        if (ristourneError) throw ristourneError;
 
-      const pendingItems: PendingDeclaration[] = [
-        ...(pendingSinistres ?? []).map(s => ({
-          kind: 'sinistre' as const,
-          reference: s.numero_sinistre,
-          label: `Sinistre ${s.numero_sinistre}`,
-          client: s.client,
-          montant: Number(s.montant) || 0,
-        })),
-        ...(pendingRistournes ?? []).map(r => ({
-          kind: 'ristourne' as const,
-          reference: String(r.id),
-          label: 'Ristourne',
-          client: r.client,
-          montant: Number(r.montant_ristourne) || 0,
-        })),
-      ];
-      if (pendingItems.length > 0) {
-        setPendingDeclarations(pendingItems);
-        setShowDeclarationModal(true);
-        return;
+        const pendingItems: PendingDeclaration[] = [
+          ...(pendingSinistres ?? []).map(s => ({
+            kind: 'sinistre' as const,
+            reference: s.numero_sinistre,
+            label: `Sinistre ${s.numero_sinistre}`,
+            client: s.client,
+            montant: Number(s.montant) || 0,
+          })),
+          ...(pendingRistournes ?? []).map(r => ({
+            kind: 'ristourne' as const,
+            reference: String(r.id),
+            label: 'Ristourne',
+            client: r.client,
+            montant: Number(r.montant_ristourne) || 0,
+          })),
+        ];
+        if (pendingItems.length > 0) {
+          setPendingDeclarations(pendingItems);
+          setShowDeclarationModal(true);
+          return;
+        }
       }
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error('Erreur lors de la vérification des tâches/crédits/déclarations avant clôture:', err);
+      // On laisse passer plutôt que de bloquer la clôture, mais on le signale
+      // clairement : une erreur silencieuse ici donnait l'impression que la
+      // vérification n'existait pas du tout (ex. migration Supabase non
+      // appliquée → colonne manquante).
+      alert(
+        "⚠️ La vérification des tâches / crédits / engagements espèce a échoué, la clôture va continuer sans elle.\n\n" +
+        "Détail : " + msg + "\n\n" +
+        "Si des sinistres ou ristournes en espèce existent pour cette session, pensez à régulariser leur déclaration manuellement et signalez cette erreur."
+      );
     } finally {
       setIsCheckingTasks(false);
     }
 
     openKeyModal();
+  };
+
+  const handleRequestEspeceDerogation = async () => {
+    setEspeceDerogationPhase('sending');
+    setEspeceDerogationError('');
+    try {
+      const sessionDate = getSessionDate();
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = new Date(Date.now() + 20 * 60000).toISOString();
+      const { error: insertErr } = await supabase.from('sinistre_declaration_codes').insert({
+        type_dossier: 'global',
+        reference: sessionDate,
+        code,
+        requested_by: username,
+        derogation: true,
+        expires_at: expiresAt,
+      });
+      if (insertErr) throw new Error(insertErr.message);
+
+      const telegram = await sendTelegramToHamza(
+        `🔔 Demande de DÉROGATION GLOBALE — engagements espèce\n\n` +
+        `Demandé par : ${username}\n` +
+        `Session : ${sessionDate}\n\n` +
+        `L'utilisateur souhaite clôturer la caisse sans fournir les engagements de paiement espèce (sinistres/ristournes).\n\n` +
+        `Code de validation : ${code}\n(valable 20 minutes, uniquement pour ${username})`
+      );
+      if (!telegram.success) throw new Error(telegram.error || "Échec de l'envoi Telegram à Mr Hamza.");
+
+      setEspeceDerogationPhase('awaiting_code');
+    } catch (err) {
+      setEspeceDerogationPhase('idle');
+      setEspeceDerogationError(err instanceof Error ? err.message : 'Erreur lors de la demande.');
+    }
+  };
+
+  const handleValidateEspeceDerogation = async () => {
+    if (!especeDerogationCode.trim()) {
+      setEspeceDerogationError('Veuillez saisir le code reçu par Mr Hamza.');
+      return;
+    }
+    setEspeceDerogationPhase('verifying');
+    setEspeceDerogationError('');
+    try {
+      const sessionDate = getSessionDate();
+      const { data, error } = await supabase
+        .from('sinistre_declaration_codes')
+        .select('id, expires_at')
+        .eq('type_dossier', 'global')
+        .eq('reference', sessionDate)
+        .eq('requested_by', username)
+        .eq('code', especeDerogationCode.trim())
+        .eq('used', false)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+
+      if (!data) {
+        setEspeceDerogationPhase('awaiting_code');
+        setEspeceDerogationError('Code invalide. Vérifiez le code envoyé à Mr Hamza.');
+        return;
+      }
+      if (new Date(data.expires_at).getTime() < Date.now()) {
+        setEspeceDerogationPhase('awaiting_code');
+        setEspeceDerogationError('Ce code a expiré (20 minutes). Renvoyez une demande.');
+        return;
+      }
+
+      await supabase
+        .from('sinistre_declaration_codes')
+        .update({ used: true, used_at: new Date().toISOString() })
+        .eq('id', data.id);
+
+      setEspeceDerogationGranted(true);
+      setShowEspeceDerogationModal(false);
+      setEspeceDerogationPhase('idle');
+      setEspeceDerogationCode('');
+    } catch (err) {
+      setEspeceDerogationPhase('awaiting_code');
+      setEspeceDerogationError(err instanceof Error ? err.message : 'Erreur lors de la vérification du code.');
+    }
   };
 
   const handleSaveCreditReporting = async () => {
@@ -397,6 +496,25 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
               </>
             )}
           </button>
+
+          {!pdfGenerated && (
+            especeDerogationGranted ? (
+              <div className="flex items-center justify-center space-x-2 py-2 px-4 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-800 text-sm font-medium">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Dérogation engagements espèce accordée par Mr Hamza</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setShowEspeceDerogationModal(true); setEspeceDerogationError(''); }}
+                disabled={isCheckingTasks || isGeneratingPDF}
+                className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-lg font-medium text-sm border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 transition-colors disabled:opacity-50"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>Dérogation engagements espèce (code Mr Hamza)</span>
+              </button>
+            )
+          )}
 
           <div className="flex space-x-3">
             <button
@@ -669,6 +787,87 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
           }}
           onCancel={() => setShowDeclarationModal(false)}
         />
+      )}
+
+      {showEspeceDerogationModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[70]">
+          <div className="bg-white rounded-lg shadow-2xl p-6 max-w-sm w-full mx-4">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-amber-100 rounded-full">
+                  <ShieldCheck className="w-6 h-6 text-amber-600" />
+                </div>
+                <h2 className="text-lg font-bold text-gray-900">Dérogation engagements espèce</h2>
+              </div>
+              <button
+                onClick={() => { setShowEspeceDerogationModal(false); setEspeceDerogationPhase('idle'); setEspeceDerogationError(''); setEspeceDerogationCode(''); }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {especeDerogationPhase === 'idle' && (
+              <>
+                <p className="text-sm text-gray-700 mb-4">
+                  Cette dérogation permet de clôturer la caisse sans fournir les engagements de paiement espèce (sinistres/ristournes). Une demande sera envoyée à Mr Hamza par Telegram avec un code valable 20 minutes, utilisable uniquement par vous.
+                </p>
+                {especeDerogationError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">{especeDerogationError}</div>
+                )}
+                <button
+                  onClick={handleRequestEspeceDerogation}
+                  className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-colors"
+                >
+                  Envoyer la demande à Mr Hamza
+                </button>
+              </>
+            )}
+
+            {especeDerogationPhase === 'sending' && (
+              <div className="flex flex-col items-center py-4 space-y-3">
+                <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-sm text-gray-600">Envoi de la demande à Mr Hamza...</p>
+              </div>
+            )}
+
+            {(especeDerogationPhase === 'awaiting_code' || especeDerogationPhase === 'verifying') && (
+              <>
+                <p className="text-sm text-gray-700 mb-4">
+                  Demande envoyée à Mr Hamza. Saisissez le code de validation qu'il vous a communiqué (valable 20 minutes).
+                </p>
+                <input
+                  type="text"
+                  value={especeDerogationCode}
+                  onChange={e => setEspeceDerogationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="Code à 6 chiffres"
+                  maxLength={6}
+                  disabled={especeDerogationPhase === 'verifying'}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 font-mono text-center text-lg tracking-widest mb-4 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none"
+                />
+                {especeDerogationError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">{especeDerogationError}</div>
+                )}
+                <div className="flex space-x-3">
+                  <button
+                    onClick={handleRequestEspeceDerogation}
+                    disabled={especeDerogationPhase === 'verifying'}
+                    className="flex-1 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50"
+                  >
+                    Renvoyer
+                  </button>
+                  <button
+                    onClick={handleValidateEspeceDerogation}
+                    disabled={especeDerogationPhase === 'verifying'}
+                    className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
+                  >
+                    {especeDerogationPhase === 'verifying' ? 'Vérification...' : 'Valider'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
 
       {showKeyModal && (
