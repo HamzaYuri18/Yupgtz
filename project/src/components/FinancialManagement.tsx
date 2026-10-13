@@ -28,6 +28,7 @@ interface FinancialManagementProps {
 }
 
 const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) => {
+  const isHamza = username === 'Hamza';
   const [activeSection, setActiveSection] = useState<'depenses' | 'recettes' | 'ristournes' | 'sinistres'>('depenses');
   
   // États pour les dépenses
@@ -101,6 +102,10 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
   const [avenantPDFTotal, setAvenantPDFTotal] = useState(0);
   const [avenantPDFDateFilter, setAvenantPDFDateFilter] = useState({ dateFrom: '', dateTo: '' });
   const [avenantPDFDateField, setAvenantPDFDateField] = useState<'Date' | 'Date de paiement'>('Date');
+  const [markPaidTarget, setMarkPaidTarget] = useState<{ id: number; numContrat: string; souscripteur: string | null } | null>(null);
+  const [markPaidDate, setMarkPaidDate] = useState('');
+  const [markPaidSaving, setMarkPaidSaving] = useState(false);
+  const [markPaidError, setMarkPaidError] = useState('');
   const [avenantPDFPaidCount, setAvenantPDFPaidCount] = useState(0);
   const [avenantPDFUnpaidCount, setAvenantPDFUnpaidCount] = useState(0);
   const [avenantPDFPaidAmount, setAvenantPDFPaidAmount] = useState(0);
@@ -2482,6 +2487,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                         <th className="px-4 py-3 text-left text-xs font-medium text-purple-600 uppercase">Statut</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-purple-600 uppercase">Mode Paiement</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-purple-600 uppercase">Date Paiement</th>
+                        {isHamza && <th className="px-4 py-3 text-left text-xs font-medium text-purple-600 uppercase">Action</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -2509,6 +2515,24 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                             <td className="px-4 py-3 whitespace-nowrap text-gray-900">
                               {row['Date de paiement'] ? new Date(row['Date de paiement']).toLocaleDateString('fr-FR') : '-'}
                             </td>
+                            {isHamza && (
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                {isPaid ? (
+                                  <span className="text-xs text-gray-400">—</span>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      setMarkPaidTarget(row);
+                                      setMarkPaidDate(new Date().toISOString().split('T')[0]);
+                                      setMarkPaidError('');
+                                    }}
+                                    className="px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-xs font-medium"
+                                  >
+                                    Marquer payé
+                                  </button>
+                                )}
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
@@ -3018,6 +3042,31 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     exportToExcel(dataToExport, 'ristournes', 'Ristournes');
   };
 
+  // Seul Hamza peut marquer une ristourne (AvenantPDF) comme payée et saisir sa date de paiement.
+  const handleMarkAvenantPaid = async () => {
+    if (!isHamza || !markPaidTarget) return;
+    if (!markPaidDate) {
+      setMarkPaidError('Veuillez saisir la date de paiement.');
+      return;
+    }
+    setMarkPaidSaving(true);
+    setMarkPaidError('');
+    try {
+      const { error } = await supabase
+        .from('AvenantPDF')
+        .update({ 'Statut de paiement': 'Payé', 'Date de paiement': markPaidDate })
+        .eq('id', markPaidTarget.id);
+      if (error) throw error;
+      setMarkPaidTarget(null);
+      setMarkPaidDate('');
+      await loadAvenantPDF(avenantPDFPage, avenantPDFDateFilter.dateFrom, avenantPDFDateFilter.dateTo);
+    } catch (err) {
+      setMarkPaidError(err instanceof Error ? err.message : 'Erreur lors de l\'enregistrement.');
+    } finally {
+      setMarkPaidSaving(false);
+    }
+  };
+
   const loadAvenantPDF = async (page = 1, dateFrom = '', dateTo = '') => {
     setAvenantPDFLoading(true);
     try {
@@ -3248,6 +3297,46 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
       {declarationEspece && (
         <DeclarationEspeceModal dossier={declarationEspece} onClose={() => setDeclarationEspece(null)} />
+      )}
+
+      {markPaidTarget && isHamza && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[80] p-4" onClick={() => setMarkPaidTarget(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-900">Marquer la ristourne comme payée</h3>
+            <div className="bg-purple-50 rounded-lg p-3 text-sm text-gray-700 space-y-1">
+              <p><span className="font-semibold">Contrat :</span> {markPaidTarget.numContrat}</p>
+              <p><span className="font-semibold">Souscripteur :</span> {markPaidTarget.souscripteur || '-'}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Date de paiement</label>
+              <input
+                type="date"
+                value={markPaidDate}
+                onChange={(e) => setMarkPaidDate(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+              />
+            </div>
+            {markPaidError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{markPaidError}</div>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setMarkPaidTarget(null)}
+                disabled={markPaidSaving}
+                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleMarkAvenantPaid}
+                disabled={markPaidSaving}
+                className="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
+              >
+                {markPaidSaving ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
