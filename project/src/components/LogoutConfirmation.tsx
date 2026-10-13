@@ -220,6 +220,30 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
       const sessionDate = getSessionDate();
       const code = String(Math.floor(100000 + Math.random() * 900000));
       const expiresAt = new Date(Date.now() + 20 * 60000).toISOString();
+
+      const [{ data: pendingSinistres }, { data: pendingRistournes }] = await Promise.all([
+        supabase
+          .from('sinistres')
+          .select('numero_sinistre, client, montant')
+          .eq('type_paiement', 'Espece')
+          .eq('date_paiement_sinistre', sessionDate)
+          .eq('declaration_validee', false),
+        supabase
+          .from('ristournes')
+          .select('client, montant_ristourne')
+          .eq('type_paiement', 'Espece')
+          .eq('date_paiement_ristourne', sessionDate)
+          .eq('declaration_validee', false),
+      ]);
+
+      const operationsLines = [
+        ...(pendingSinistres ?? []).map(s => `• Sinistre ${s.numero_sinistre} — ${s.client} — ${(Number(s.montant) || 0).toFixed(3)} DT`),
+        ...(pendingRistournes ?? []).map(r => `• Ristourne — ${r.client} — ${(Number(r.montant_ristourne) || 0).toFixed(3)} DT`),
+      ];
+      const operationsTxt = operationsLines.length > 0
+        ? `Opérations espèce concernées :\n${operationsLines.join('\n')}\n\n`
+        : '';
+
       const { error: insertErr } = await supabase.from('sinistre_declaration_codes').insert({
         type_dossier: 'global',
         reference: sessionDate,
@@ -235,6 +259,7 @@ const LogoutConfirmation: React.FC<LogoutConfirmationProps> = ({ username, onCon
         `Demandé par : ${username}\n` +
         `Session : ${sessionDate}\n\n` +
         `L'utilisateur souhaite clôturer la caisse sans fournir les engagements de paiement espèce (sinistres/ristournes).\n\n` +
+        operationsTxt +
         `Code de validation : ${code}\n(valable 20 minutes, uniquement pour ${username})`
       );
       if (!telegram.success) throw new Error(telegram.error || "Échec de l'envoi Telegram à Mr Hamza.");
