@@ -100,6 +100,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
   const [avenantPDFPage, setAvenantPDFPage] = useState(1);
   const [avenantPDFTotal, setAvenantPDFTotal] = useState(0);
   const [avenantPDFDateFilter, setAvenantPDFDateFilter] = useState({ dateFrom: '', dateTo: '' });
+  const [avenantPDFDateField, setAvenantPDFDateField] = useState<'Date' | 'Date de paiement'>('Date');
   const [avenantPDFPaidCount, setAvenantPDFPaidCount] = useState(0);
   const [avenantPDFUnpaidCount, setAvenantPDFUnpaidCount] = useState(0);
   const [avenantPDFPaidAmount, setAvenantPDFPaidAmount] = useState(0);
@@ -2361,6 +2362,31 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
             {/* Filtres de date */}
             <div className="flex flex-wrap items-end gap-3 mb-4">
               <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Filtrer par</label>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setAvenantPDFDateField('Date')}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      avenantPDFDateField === 'Date'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Date
+                  </button>
+                  <button
+                    onClick={() => setAvenantPDFDateField('Date de paiement')}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      avenantPDFDateField === 'Date de paiement'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Date Paiement
+                  </button>
+                </div>
+              </div>
+              <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Date du</label>
                 <input
                   type="date"
@@ -2999,12 +3025,12 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         .from('AvenantPDF')
         .select('id, numContrat, primeEmise, souscripteur, "Date", "Statut de paiement", "Mode de paiement", "Date de paiement"', { count: 'exact' });
 
-      if (dateFrom) query = query.gte('Date', dateFrom);
-      if (dateTo) query = query.lte('Date', dateTo);
+      if (dateFrom) query = query.gte(avenantPDFDateField, dateFrom);
+      if (dateTo) query = query.lte(avenantPDFDateField, dateTo);
 
       const from = (page - 1) * 10;
       const { data, error, count } = await query
-        .order('Date', { ascending: false })
+        .order(avenantPDFDateField, { ascending: false })
         .range(from, from + 9);
 
       if (error) throw error;
@@ -3023,12 +3049,12 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         .neq('Statut de paiement', 'Payé');
 
       if (dateFrom) {
-        statsQueryPaid = statsQueryPaid.gte('Date', dateFrom);
-        statsQueryUnpaid = statsQueryUnpaid.gte('Date', dateFrom);
+        statsQueryPaid = statsQueryPaid.gte(avenantPDFDateField, dateFrom);
+        statsQueryUnpaid = statsQueryUnpaid.gte(avenantPDFDateField, dateFrom);
       }
       if (dateTo) {
-        statsQueryPaid = statsQueryPaid.lte('Date', dateTo);
-        statsQueryUnpaid = statsQueryUnpaid.lte('Date', dateTo);
+        statsQueryPaid = statsQueryPaid.lte(avenantPDFDateField, dateTo);
+        statsQueryUnpaid = statsQueryUnpaid.lte(avenantPDFDateField, dateTo);
       }
 
       const [paidResult, unpaidResult] = await Promise.all([statsQueryPaid, statsQueryUnpaid]);
@@ -3054,10 +3080,10 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         .from('AvenantPDF')
         .select('numContrat, primeEmise, souscripteur, "Date", "Statut de paiement", "Mode de paiement", "Date de paiement"');
 
-      if (avenantPDFDateFilter.dateFrom) query = query.gte('Date', avenantPDFDateFilter.dateFrom);
-      if (avenantPDFDateFilter.dateTo) query = query.lte('Date', avenantPDFDateFilter.dateTo);
+      if (avenantPDFDateFilter.dateFrom) query = query.gte(avenantPDFDateField, avenantPDFDateFilter.dateFrom);
+      if (avenantPDFDateFilter.dateTo) query = query.lte(avenantPDFDateField, avenantPDFDateFilter.dateTo);
 
-      const { data, error } = await query.order('Date', { ascending: false });
+      const { data, error } = await query.order(avenantPDFDateField, { ascending: false });
       if (error) throw error;
 
       const dataToExport = (data || []).map((r: any) => ({
