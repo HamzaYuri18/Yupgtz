@@ -995,6 +995,10 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       alert('Veuillez saisir le numéro de contrat, la date de ristourne et le montant (prime émise).');
       return;
     }
+    if (parseFloat(ristourneSearchInput.primeEmise) >= 0) {
+      alert('Le montant (prime émise) doit être négatif pour une ristourne.');
+      return;
+    }
 
     setRistourneSearching(true);
     try {
@@ -2230,14 +2234,15 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Montant (prime émise)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Montant (prime émise, négatif)</label>
                   <input
                     type="number"
                     step="0.001"
+                    max="0"
                     value={ristourneSearchInput.primeEmise}
                     onChange={(e) => setRistourneSearchInput({ ...ristourneSearchInput, primeEmise: e.target.value })}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="Montant"
+                    placeholder="Ex : -120.000"
                   />
                 </div>
               </div>
