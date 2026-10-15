@@ -2244,6 +2244,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="Ex : -120.000"
                   />
+                  <p className="text-xs text-amber-600 mt-1">⚠️ La prime (montant) doit être négative.</p>
                 </div>
               </div>
               <div className="flex justify-end space-x-3 mt-6">
