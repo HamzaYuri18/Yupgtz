@@ -998,16 +998,14 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
     setRistourneSearching(true);
     try {
-      const nextDay = new Date(ristourneSearchInput.date);
-      nextDay.setDate(nextDay.getDate() + 1);
-      const nextDayStr = nextDay.toISOString().split('T')[0];
-
-      const { data: rows, error } = await supabase
+      // On récupère toutes les lignes du contrat (insensible à la casse) et on
+      // filtre la date côté client : certaines dates en base ont une
+      // composante horaire/fuseau qui fait échouer un filtre gte/lt trop
+      // strict, alors que l'avenant existe bel et bien pour ce contrat.
+      const { data: allRows, error } = await supabase
         .from('AvenantPDF')
         .select('id, numContrat, souscripteur, primeEmise, "Date", "Statut de paiement", "Mode de paiement", "Date de paiement"')
         .ilike('numContrat', ristourneSearchInput.numContrat.trim())
-        .gte('Date', ristourneSearchInput.date)
-        .lt('Date', nextDayStr)
         .order('id', { ascending: false });
 
       if (error) {
@@ -1015,10 +1013,27 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         return;
       }
 
-      const data = rows?.[0];
-      if (!data) {
+      if (!allRows || allRows.length === 0) {
         alert('Aucune ristourne trouvée avec ce numéro de contrat et cette date.');
         return;
+      }
+
+      const requestedDay = ristourneSearchInput.date;
+      let data = allRows.find(r => r['Date'] && String(r['Date']).slice(0, 10) === requestedDay);
+
+      if (!data) {
+        // Pas de correspondance exacte sur la date : on prend l'avenant le
+        // plus récent de ce contrat et on signale l'écart à l'utilisateur
+        // plutôt que de bloquer la recherche.
+        data = allRows[0];
+        const dateTrouvee = data['Date'] ? new Date(data['Date']).toLocaleDateString('fr-FR') : 'inconnue';
+        const dateDemandee = new Date(requestedDay).toLocaleDateString('fr-FR');
+        const proceed = confirm(
+          `Aucun avenant trouvé exactement à la date du ${dateDemandee} pour ce contrat.\n` +
+          `Un avenant existe avec la date du ${dateTrouvee}.\n\n` +
+          `Voulez-vous utiliser cet avenant (${dateTrouvee}) ?`
+        );
+        if (!proceed) return;
       }
 
       const statut = data['Statut de paiement'];
