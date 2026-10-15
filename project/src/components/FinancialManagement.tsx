@@ -89,7 +89,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
   // État pour la recherche AvenantPDF
   const [showRistourneSearch, setShowRistourneSearch] = useState(false);
-  const [ristourneSearchInput, setRistourneSearchInput] = useState({ numContrat: '', date: '' });
+  const [ristourneSearchInput, setRistourneSearchInput] = useState({ numContrat: '', date: '', primeEmise: '' });
   const [ristourneSearching, setRistourneSearching] = useState(false);
   const [foundAvenantId, setFoundAvenantId] = useState<number | null>(null);
   const [ristourneFieldsLocked, setRistourneFieldsLocked] = useState(false);
@@ -991,16 +991,16 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
   };
 
   const handleSearchRistourne = async () => {
-    if (!ristourneSearchInput.numContrat || !ristourneSearchInput.date) {
-      alert('Veuillez saisir le numéro de contrat et la date de ristourne.');
+    if (!ristourneSearchInput.numContrat || !ristourneSearchInput.date || !ristourneSearchInput.primeEmise) {
+      alert('Veuillez saisir le numéro de contrat, la date de ristourne et le montant (prime émise).');
       return;
     }
 
     setRistourneSearching(true);
     try {
       // On récupère toutes les lignes du contrat (insensible à la casse) et on
-      // filtre la date côté client : certaines dates en base ont une
-      // composante horaire/fuseau qui fait échouer un filtre gte/lt trop
+      // filtre la date/le montant côté client : certaines dates en base ont
+      // une composante horaire/fuseau qui fait échouer un filtre gte/lt trop
       // strict, alors que l'avenant existe bel et bien pour ce contrat.
       const { data: allRows, error } = await supabase
         .from('AvenantPDF')
@@ -1013,27 +1013,16 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         return;
       }
 
-      if (!allRows || allRows.length === 0) {
-        alert('Aucune ristourne trouvée avec ce numéro de contrat et cette date.');
-        return;
-      }
-
       const requestedDay = ristourneSearchInput.date;
-      let data = allRows.find(r => r['Date'] && String(r['Date']).slice(0, 10) === requestedDay);
+      const requestedMontant = parseFloat(ristourneSearchInput.primeEmise);
+      const data = (allRows || []).find(r =>
+        r['Date'] && String(r['Date']).slice(0, 10) === requestedDay &&
+        r.primeEmise != null && Math.abs(Number(r.primeEmise) - requestedMontant) < 0.001
+      );
 
       if (!data) {
-        // Pas de correspondance exacte sur la date : on prend l'avenant le
-        // plus récent de ce contrat et on signale l'écart à l'utilisateur
-        // plutôt que de bloquer la recherche.
-        data = allRows[0];
-        const dateTrouvee = data['Date'] ? new Date(data['Date']).toLocaleDateString('fr-FR') : 'inconnue';
-        const dateDemandee = new Date(requestedDay).toLocaleDateString('fr-FR');
-        const proceed = confirm(
-          `Aucun avenant trouvé exactement à la date du ${dateDemandee} pour ce contrat.\n` +
-          `Un avenant existe avec la date du ${dateTrouvee}.\n\n` +
-          `Voulez-vous utiliser cet avenant (${dateTrouvee}) ?`
-        );
-        if (!proceed) return;
+        alert('Aucune ristourne trouvée avec ce numéro de contrat, cette date et ce montant.');
+        return;
       }
 
       const statut = data['Statut de paiement'];
@@ -1200,7 +1189,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       setRistourneCheckMessage('');
       setFoundAvenantId(null);
       setRistourneFieldsLocked(false);
-      setRistourneSearchInput({ numContrat: '', date: '' });
+      setRistourneSearchInput({ numContrat: '', date: '', primeEmise: '' });
       loadData();
     } else {
       setMessage('❌ Erreur lors de l\'enregistrement de la ristourne');
@@ -2240,10 +2229,21 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Montant (prime émise)</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    value={ristourneSearchInput.primeEmise}
+                    onChange={(e) => setRistourneSearchInput({ ...ristourneSearchInput, primeEmise: e.target.value })}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Montant"
+                  />
+                </div>
               </div>
               <div className="flex justify-end space-x-3 mt-6">
                 <button
-                  onClick={() => { setShowRistourneSearch(false); setRistourneSearchInput({ numContrat: '', date: '' }); }}
+                  onClick={() => { setShowRistourneSearch(false); setRistourneSearchInput({ numContrat: '', date: '', primeEmise: '' }); }}
                   className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
                 >
                   Annuler
