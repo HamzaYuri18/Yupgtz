@@ -998,18 +998,24 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
     setRistourneSearching(true);
     try {
-      const { data, error } = await supabase
+      const nextDay = new Date(ristourneSearchInput.date);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const nextDayStr = nextDay.toISOString().split('T')[0];
+
+      const { data: rows, error } = await supabase
         .from('AvenantPDF')
         .select('id, numContrat, souscripteur, primeEmise, "Date", "Statut de paiement", "Mode de paiement", "Date de paiement"')
         .eq('numContrat', ristourneSearchInput.numContrat)
-        .eq('Date', ristourneSearchInput.date)
-        .maybeSingle();
+        .gte('Date', ristourneSearchInput.date)
+        .lt('Date', nextDayStr)
+        .order('id', { ascending: false });
 
       if (error) {
         alert('Erreur lors de la recherche.');
         return;
       }
 
+      const data = rows?.[0];
       if (!data) {
         alert('Aucune ristourne trouvée avec ce numéro de contrat et cette date.');
         return;
