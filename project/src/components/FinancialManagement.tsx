@@ -1005,7 +1005,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       const { data: rows, error } = await supabase
         .from('AvenantPDF')
         .select('id, numContrat, souscripteur, primeEmise, "Date", "Statut de paiement", "Mode de paiement", "Date de paiement"')
-        .eq('numContrat', ristourneSearchInput.numContrat)
+        .ilike('numContrat', ristourneSearchInput.numContrat.trim())
         .gte('Date', ristourneSearchInput.date)
         .lt('Date', nextDayStr)
         .order('id', { ascending: false });
