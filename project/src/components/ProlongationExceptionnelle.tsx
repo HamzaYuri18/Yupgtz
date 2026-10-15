@@ -945,8 +945,8 @@ const ProlongationExceptionnelle: React.FC = () => {
                 <input
                   type="date"
                   value={form.date_effet}
-                  onChange={e => upd('date_effet', e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none"
+                  readOnly
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 bg-slate-50 text-slate-600 cursor-not-allowed"
                 />
               </div>
 

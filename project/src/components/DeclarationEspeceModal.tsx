@@ -65,8 +65,8 @@ const DeclarationEspeceModal: React.FC<Props> = ({ dossier, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[80] p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="bg-gradient-to-r from-black via-gray-900 to-emerald-900 px-6 py-5 flex items-center justify-between">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="bg-gradient-to-r from-black via-gray-900 to-emerald-900 px-6 py-5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center">
               <FileText className="w-5 h-5 text-emerald-300" />
@@ -85,7 +85,7 @@ const DeclarationEspeceModal: React.FC<Props> = ({ dossier, onClose }) => {
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="p-6 space-y-5 overflow-y-auto">
           <div className="flex items-start gap-3 bg-amber-50 border border-amber-300 rounded-xl p-4">
             <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <p className="text-sm text-amber-900">
