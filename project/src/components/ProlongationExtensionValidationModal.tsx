@@ -24,10 +24,11 @@ interface Props {
 
 type Phase = 'sending' | 'awaiting_code' | 'verifying' | 'error';
 
-// Étendre la date de paiement d'une prolongation déjà existante nécessite
-// l'accord de Mr Hamza : un code à 6 chiffres lui est envoyé par Telegram,
-// valable 10 minutes et utilisable uniquement par l'utilisateur demandeur.
-const ProlongationPaiementValidationModal: React.FC<Props> = ({ numeroContrat, assure, ancienneDate, nouvelleDate, requestedBy, onClose, onValidated }) => {
+// Étendre la date de fin (date_fin_prolongation) d'une prolongation non
+// payée nécessite l'accord de Mr Hamza : un code à 6 chiffres lui est
+// envoyé par Telegram, valable 10 minutes et utilisable uniquement par
+// l'utilisateur demandeur.
+const ProlongationExtensionValidationModal: React.FC<Props> = ({ numeroContrat, assure, ancienneDate, nouvelleDate, requestedBy, onClose, onValidated }) => {
   const [phase, setPhase] = useState<Phase>('sending');
   const [initError, setInitError] = useState<string | null>(null);
   const [codeInput, setCodeInput] = useState('');
@@ -43,23 +44,23 @@ const ProlongationPaiementValidationModal: React.FC<Props> = ({ numeroContrat, a
       const code = generateCode();
       const expiresAt = new Date(Date.now() + CODE_VALIDITY_MINUTES * 60000).toISOString();
 
-      const { error: insertErr } = await supabase.from('prolongation_paiement_validation_codes').insert({
+      const { error: insertErr } = await supabase.from('prolongation_extension_validation_codes').insert({
         numero_contrat: numeroContrat,
         code,
         requested_by: requestedBy,
-        ancienne_date_paiement: ancienneDate,
-        nouvelle_date_paiement: nouvelleDate,
+        ancienne_date_fin_prolongation: ancienneDate,
+        nouvelle_date_fin_prolongation: nouvelleDate,
         expires_at: expiresAt,
       });
       if (insertErr) throw new Error(`Échec de l'enregistrement du code: ${insertErr.message}`);
 
       const message = [
-        '🔔 Demande de validation — Extension paiement prolongation',
+        '🔔 Demande de validation — Extension de prolongation',
         '',
         `Demandé par : ${requestedBy}`,
         `Contrat : ${numeroContrat}`,
         `Assuré : ${assure}`,
-        `Date de paiement actuelle : ${formatDateFR(ancienneDate)}`,
+        `Date de fin actuelle : ${formatDateFR(ancienneDate)}`,
         `Nouvelle date demandée : ${formatDateFR(nouvelleDate)}`,
         '',
         `Code de validation : ${code}`,
@@ -113,7 +114,7 @@ const ProlongationPaiementValidationModal: React.FC<Props> = ({ numeroContrat, a
 
     try {
       const { data, error: err } = await supabase
-        .from('prolongation_paiement_validation_codes')
+        .from('prolongation_extension_validation_codes')
         .select('id, expires_at')
         .eq('numero_contrat', numeroContrat)
         .eq('requested_by', requestedBy)
@@ -138,7 +139,7 @@ const ProlongationPaiementValidationModal: React.FC<Props> = ({ numeroContrat, a
       }
 
       await supabase
-        .from('prolongation_paiement_validation_codes')
+        .from('prolongation_extension_validation_codes')
         .update({ used: true, used_at: new Date().toISOString() })
         .eq('id', data.id);
 
@@ -195,7 +196,7 @@ const ProlongationPaiementValidationModal: React.FC<Props> = ({ numeroContrat, a
         {(phase === 'awaiting_code' || phase === 'verifying') && (
           <div className="space-y-4">
             <p className="text-sm text-slate-600">
-              Un code de validation a été envoyé à <span className="font-semibold">Mr Hamza</span> par Telegram. Saisissez ce code pour étendre la date de paiement.
+              Un code de validation a été envoyé à <span className="font-semibold">Mr Hamza</span> par Telegram. Saisissez ce code pour étendre la date de fin de la prolongation.
             </p>
 
             <div>
@@ -244,4 +245,4 @@ const ProlongationPaiementValidationModal: React.FC<Props> = ({ numeroContrat, a
   );
 };
 
-export default ProlongationPaiementValidationModal;
+export default ProlongationExtensionValidationModal;

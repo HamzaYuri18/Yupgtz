@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Calendar, Send, RefreshCw, X, AlertCircle, Filter, ArrowLeft, Trash2, CreditCard, CheckCircle2, CalendarClock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getSession } from '../utils/auth';
-import ProlongationPaiementValidationModal from './ProlongationPaiementValidationModal';
+import ProlongationExtensionValidationModal from './ProlongationExtensionValidationModal';
 
 interface ProlongationRow {
   id: string;
@@ -130,18 +130,18 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
 
   const openExtendModal = (row: ProlongationRow) => {
     setExtendTarget(row);
-    setExtendNewDate(row.date_paiement || '');
+    setExtendNewDate(row.date_fin_prolongation || '');
     setExtendError('');
   };
 
   const handleRequestExtend = () => {
     if (!extendTarget) return;
     if (!extendNewDate) {
-      setExtendError('Veuillez choisir la nouvelle date de paiement.');
+      setExtendError('Veuillez choisir la nouvelle date de fin de prolongation.');
       return;
     }
-    if (extendTarget.date_paiement && extendNewDate <= extendTarget.date_paiement) {
-      setExtendError('La nouvelle date doit être postérieure à la date de paiement actuelle.');
+    if (extendTarget.date_fin_prolongation && extendNewDate <= extendTarget.date_fin_prolongation) {
+      setExtendError('La nouvelle date doit être postérieure à la date de fin actuelle.');
       return;
     }
     setExtendValidation({ row: extendTarget, newDate: extendNewDate });
@@ -153,13 +153,13 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
     try {
       const { error: err } = await supabase
         .from('prolongation')
-        .update({ date_paiement: extendValidation.newDate })
+        .update({ date_fin_prolongation: extendValidation.newDate })
         .eq('id', extendValidation.row.id);
       if (err) throw err;
       setExtendValidation(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de l'extension de la date de paiement.");
+      setError(err instanceof Error ? err.message : "Erreur lors de l'extension de la date de fin de prolongation.");
       setExtendValidation(null);
     }
   };
@@ -282,10 +282,10 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
                             ? `Payée${row.date_paiement ? ` — ${formatDateFR(row.date_paiement)}` : ''}`
                             : 'Non payée'}
                         </button>
-                        {!isHamza && row.statut === 'payée' && row.date_paiement && (
+                        {!isHamza && row.statut !== 'payée' && (
                           <button
                             onClick={() => openExtendModal(row)}
-                            title="Étendre la date de paiement (accord de Mr Hamza requis)"
+                            title="Étendre la date de fin de prolongation (accord de Mr Hamza requis)"
                             className="ml-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
                           >
                             <CalendarClock className="w-3.5 h-3.5" />
@@ -332,18 +332,18 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
           >
             <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
               <CalendarClock className="w-5 h-5 text-amber-600" />
-              Étendre la date de paiement
+              Étendre la date de fin de prolongation
             </h3>
             <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-600 space-y-1">
               <p><span className="font-semibold">Contrat :</span> {extendTarget.numero_contrat}</p>
               <p><span className="font-semibold">Assuré :</span> {extendTarget.assure}</p>
-              <p><span className="font-semibold">Date de paiement actuelle :</span> {formatDateFR(extendTarget.date_paiement || '')}</p>
+              <p><span className="font-semibold">Date de fin actuelle :</span> {formatDateFR(extendTarget.date_fin_prolongation || '')}</p>
             </div>
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
               Cette extension nécessite l'accord de Mr Hamza : un code de validation lui sera envoyé par Telegram (valable 10 minutes).
             </p>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Nouvelle date de paiement</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Nouvelle date de fin de prolongation</label>
               <input
                 type="date"
                 value={extendNewDate}
@@ -376,10 +376,10 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
       )}
 
       {extendValidation && (
-        <ProlongationPaiementValidationModal
+        <ProlongationExtensionValidationModal
           numeroContrat={extendValidation.row.numero_contrat}
           assure={extendValidation.row.assure}
-          ancienneDate={extendValidation.row.date_paiement || ''}
+          ancienneDate={extendValidation.row.date_fin_prolongation || ''}
           nouvelleDate={extendValidation.newDate}
           requestedBy={username}
           onClose={() => setExtendValidation(null)}
