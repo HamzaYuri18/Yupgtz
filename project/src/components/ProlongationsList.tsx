@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, Send, RefreshCw, X, AlertCircle, Filter, ArrowLeft, Trash2, CreditCard, CheckCircle2 } from 'lucide-react';
+import { Calendar, Send, RefreshCw, X, AlertCircle, Filter, ArrowLeft, Trash2, CreditCard, CheckCircle2, CalendarClock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getSession } from '../utils/auth';
+import ProlongationPaiementValidationModal from './ProlongationPaiementValidationModal';
 
 interface ProlongationRow {
   id: string;
@@ -49,8 +50,13 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
   const [paiementStatut, setPaiementStatut] = useState<'payée' | 'non payée'>('non payée');
   const [paiementDate, setPaiementDate] = useState('');
   const [savingPaiement, setSavingPaiement] = useState(false);
+  const [extendTarget, setExtendTarget] = useState<ProlongationRow | null>(null);
+  const [extendNewDate, setExtendNewDate] = useState('');
+  const [extendError, setExtendError] = useState('');
+  const [extendValidation, setExtendValidation] = useState<{ row: ProlongationRow; newDate: string } | null>(null);
 
-  const isHamza = getSession()?.username === 'Hamza';
+  const username = getSession()?.username || '';
+  const isHamza = username === 'Hamza';
 
   const load = async () => {
     setLoading(true);
@@ -119,6 +125,42 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
       setError(err instanceof Error ? err.message : 'Erreur lors de la mise à jour du paiement.');
     } finally {
       setSavingPaiement(false);
+    }
+  };
+
+  const openExtendModal = (row: ProlongationRow) => {
+    setExtendTarget(row);
+    setExtendNewDate(row.date_paiement || '');
+    setExtendError('');
+  };
+
+  const handleRequestExtend = () => {
+    if (!extendTarget) return;
+    if (!extendNewDate) {
+      setExtendError('Veuillez choisir la nouvelle date de paiement.');
+      return;
+    }
+    if (extendTarget.date_paiement && extendNewDate <= extendTarget.date_paiement) {
+      setExtendError('La nouvelle date doit être postérieure à la date de paiement actuelle.');
+      return;
+    }
+    setExtendValidation({ row: extendTarget, newDate: extendNewDate });
+    setExtendTarget(null);
+  };
+
+  const handleExtendValidated = async () => {
+    if (!extendValidation) return;
+    try {
+      const { error: err } = await supabase
+        .from('prolongation')
+        .update({ date_paiement: extendValidation.newDate })
+        .eq('id', extendValidation.row.id);
+      if (err) throw err;
+      setExtendValidation(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur lors de l'extension de la date de paiement.");
+      setExtendValidation(null);
     }
   };
 
@@ -240,6 +282,16 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
                             ? `Payée${row.date_paiement ? ` — ${formatDateFR(row.date_paiement)}` : ''}`
                             : 'Non payée'}
                         </button>
+                        {!isHamza && row.statut === 'payée' && row.date_paiement && (
+                          <button
+                            onClick={() => openExtendModal(row)}
+                            title="Étendre la date de paiement (accord de Mr Hamza requis)"
+                            className="ml-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
+                          >
+                            <CalendarClock className="w-3.5 h-3.5" />
+                            Étendre
+                          </button>
+                        )}
                       </td>
                       <td className="py-2.5 pr-3">
                         <div className="flex items-center gap-2">
@@ -271,6 +323,69 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
       </div>
 
       {smsTarget && <ProlongationSMSModal row={smsTarget} onClose={() => setSmsTarget(null)} />}
+
+      {extendTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4" onClick={() => setExtendTarget(null)}>
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <CalendarClock className="w-5 h-5 text-amber-600" />
+              Étendre la date de paiement
+            </h3>
+            <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-600 space-y-1">
+              <p><span className="font-semibold">Contrat :</span> {extendTarget.numero_contrat}</p>
+              <p><span className="font-semibold">Assuré :</span> {extendTarget.assure}</p>
+              <p><span className="font-semibold">Date de paiement actuelle :</span> {formatDateFR(extendTarget.date_paiement || '')}</p>
+            </div>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+              Cette extension nécessite l'accord de Mr Hamza : un code de validation lui sera envoyé par Telegram (valable 10 minutes).
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Nouvelle date de paiement</label>
+              <input
+                type="date"
+                value={extendNewDate}
+                onChange={e => setExtendNewDate(e.target.value)}
+                className="w-full border border-slate-300 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-amber-500 outline-none"
+              />
+            </div>
+            {extendError && (
+              <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <p className="text-sm">{extendError}</p>
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setExtendTarget(null)}
+                className="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleRequestExtend}
+                className="flex-1 px-4 py-2.5 bg-amber-600 text-white rounded-xl hover:bg-amber-700 transition-colors"
+              >
+                Demander la validation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {extendValidation && (
+        <ProlongationPaiementValidationModal
+          numeroContrat={extendValidation.row.numero_contrat}
+          assure={extendValidation.row.assure}
+          ancienneDate={extendValidation.row.date_paiement || ''}
+          nouvelleDate={extendValidation.newDate}
+          requestedBy={username}
+          onClose={() => setExtendValidation(null)}
+          onValidated={handleExtendValidated}
+        />
+      )}
 
       {deleteTarget && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4" onClick={() => setDeleteTarget(null)}>
