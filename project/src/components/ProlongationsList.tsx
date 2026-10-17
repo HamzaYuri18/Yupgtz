@@ -3,14 +3,21 @@ import { Calendar, Send, RefreshCw, X, AlertCircle, Filter, ArrowLeft, Trash2, C
 import { supabase } from '../lib/supabase';
 import { getSession } from '../utils/auth';
 import ProlongationExtensionValidationModal from './ProlongationExtensionValidationModal';
+import { buildProlongationPDFBytes, downloadPDFBytes } from '../utils/prolongationPdf';
 
 interface ProlongationRow {
   id: string;
   numero_contrat: string;
   assure: string;
+  prime: number;
+  date_echeance: string;
   classe: string;
   marque: string;
+  puissance: string;
   immatriculation: string;
+  usage: string;
+  adresse: string;
+  numero_attestation: string;
   date_effet: string;
   date_fin_prolongation: string;
   pour_le_compte: string;
@@ -150,14 +157,35 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
 
   const handleExtendValidated = async () => {
     if (!extendValidation) return;
+    const { row, newDate } = extendValidation;
     try {
       const { error: err } = await supabase
         .from('prolongation')
-        .update({ date_fin_prolongation: extendValidation.newDate })
-        .eq('id', extendValidation.row.id);
+        .update({ date_fin_prolongation: newDate })
+        .eq('id', row.id);
       if (err) throw err;
       setExtendValidation(null);
       await load();
+
+      // Le PDF de prolongation doit refléter la nouvelle date de fin,
+      // au même titre que lors de la création initiale.
+      const pdfBytes = await buildProlongationPDFBytes({
+        numero_contrat: row.numero_contrat,
+        assure: row.assure,
+        prime: row.prime,
+        date_echeance: row.date_echeance,
+        pour_le_compte: row.pour_le_compte,
+        classe: row.classe,
+        date_effet: row.date_effet,
+        date_fin_prolongation: newDate,
+        marque: row.marque,
+        puissance: row.puissance,
+        immatriculation: row.immatriculation,
+        usage: row.usage,
+        adresse: row.adresse,
+        numero_attestation: row.numero_attestation,
+      });
+      downloadPDFBytes(pdfBytes, row.numero_contrat);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur lors de l'extension de la date de fin de prolongation.");
       setExtendValidation(null);
