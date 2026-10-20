@@ -1019,15 +1019,20 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
       const requestedDay = ristourneSearchInput.date;
       const requestedMontant = parseFloat(ristourneSearchInput.primeEmise);
-      const data = (allRows || []).find(r =>
+      const matches = (allRows || []).filter(r =>
         r['Date'] && String(r['Date']).slice(0, 10) === requestedDay &&
         r.primeEmise != null && Math.abs(Number(r.primeEmise) - requestedMontant) < 0.001
       );
 
-      if (!data) {
+      if (matches.length === 0) {
         alert('Aucune ristourne trouvée avec ce numéro de contrat, cette date et ce montant.');
         return;
       }
+
+      // Si plusieurs avenants identiques existent pour ce contrat/date/montant
+      // (ex. avenant ré-émis), on privilégie celui non payé plutôt que de
+      // bloquer la saisie à cause d'un doublon déjà réglé.
+      const data = matches.find(r => (r['Statut de paiement'] || '').toLowerCase() !== 'payé') || matches[0];
 
       const statut = data['Statut de paiement'];
       if (statut && statut.toLowerCase() === 'payé') {
@@ -1035,7 +1040,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
           ? new Date(data['Date de paiement']).toLocaleDateString('fr-FR')
           : '-';
         const modePaiement = data['Mode de paiement'] || '-';
-        alert(`Cette ristourne est déjà payée.\nMode de paiement : ${modePaiement}\nDate de paiement : ${datePaiement}`);
+        alert(`Cette ristourne est déjà payée.\nMode de paiement : ${modePaiement}\nDate de paiement : ${datePaiement}\n(AvenantPDF id : ${data.id})`);
         return;
       }
 
