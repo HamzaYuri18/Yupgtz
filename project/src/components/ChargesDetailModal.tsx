@@ -4,6 +4,7 @@ import { expensesSupabase, ExpenseDetail } from '../lib/expensesSupabase';
 
 interface Props {
   dateSession: string;
+  montantManuel?: number;
   onClose: () => void;
 }
 
@@ -15,7 +16,7 @@ const formatDateTimeFR = (iso: string): string => {
   });
 };
 
-const ChargesDetailModal: React.FC<Props> = ({ dateSession, onClose }) => {
+const ChargesDetailModal: React.FC<Props> = ({ dateSession, montantManuel = 0, onClose }) => {
   const [rows, setRows] = useState<ExpenseDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +42,20 @@ const ChargesDetailModal: React.FC<Props> = ({ dateSession, onClose }) => {
     load();
   }, [dateSession]);
 
-  const total = rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+  // La charge ajoutée manuellement via le formulaire de Versement Bancaire
+  // (sessions.charges) n'existe pas dans la table "expenses" externe : on
+  // l'ajoute ici comme une ligne synthétique pour qu'elle reste visible.
+  const manualRow: ExpenseDetail | null = montantManuel > 0 ? {
+    id: 'manuel',
+    expense_date: dateSession,
+    description: 'Charge manuelle',
+    category: null,
+    amount: montantManuel,
+    source: 'Charge manuelle',
+    created_at: '',
+  } : null;
+  const allRows = manualRow ? [...rows, manualRow] : rows;
+  const total = allRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4" onClick={onClose}>
@@ -67,7 +81,7 @@ const ChargesDetailModal: React.FC<Props> = ({ dateSession, onClose }) => {
               <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
               <p className="text-sm">{error}</p>
             </div>
-          ) : rows.length === 0 ? (
+          ) : allRows.length === 0 ? (
             <p className="text-sm text-gray-500 py-8 text-center">Aucune charge détaillée pour cette session.</p>
           ) : (
             <>
@@ -83,8 +97,8 @@ const ChargesDetailModal: React.FC<Props> = ({ dateSession, onClose }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {rows.map(r => (
-                      <tr key={r.id}>
+                    {allRows.map(r => (
+                      <tr key={r.id} className={r.id === 'manuel' ? 'bg-amber-50/50' : undefined}>
                         <td className="py-2.5 pr-3 text-gray-900">{r.description || '-'}</td>
                         <td className="py-2.5 pr-3 text-gray-600">{r.category || '-'}</td>
                         <td className="py-2.5 pr-3 text-gray-600">{r.source || '-'}</td>

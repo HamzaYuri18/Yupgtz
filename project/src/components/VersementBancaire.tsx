@@ -42,7 +42,7 @@ interface QuinzaineStats {
 const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [filteredSessions, setFilteredSessions] = useState<SessionData[]>([]);
-  const [chargesDetailDate, setChargesDetailDate] = useState<string | null>(null);
+  const [chargesDetail, setChargesDetail] = useState<{ date: string; manuel: number } | null>(null);
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [message, setMessage] = useState('');
@@ -121,15 +121,14 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     return () => { cancelled = true; };
   }, [filteredSessions, versementsParDate]);
 
-  // Total des charges d'une session : dès que la table "expenses" de l'autre
-  // projet a des lignes pour cette date, elle fait foi (elle seule) — sinon
-  // on retombe sur la valeur enregistrée manuellement dans sessions.charges.
-  // Les deux ne sont PAS additionnées : la valeur manuelle a souvent été
-  // saisie à la main pour représenter le même total que celui de la table
-  // "expenses", donc les additionner comptait deux fois la même charge.
+  // Total des charges d'une session = charges détaillées de la table
+  // "expenses" (autre projet) + charges ajoutées manuellement via le
+  // formulaire de versement (sessions.charges), ces dernières apparaissant
+  // dans le détail comme "Charge manuelle".
   const getTotalCharges = (session: SessionData): number => {
-    const externalTotal = externalChargesByDate[session.date_session];
-    return externalTotal !== undefined ? externalTotal : (Number(session.charges) || 0);
+    const externalTotal = externalChargesByDate[session.date_session] || 0;
+    const manualTotal = Number(session.charges) || 0;
+    return externalTotal + manualTotal;
   };
 
   useEffect(() => {
@@ -891,7 +890,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{session.total_espece.toFixed(2)} DT</td>
                     <td
                       className="px-4 py-3 whitespace-nowrap text-sm text-blue-700 underline decoration-dotted cursor-pointer hover:text-blue-900 hover:bg-blue-50"
-                      onClick={() => setChargesDetailDate(session.date_session)}
+                      onClick={() => setChargesDetail({ date: session.date_session, manuel: Number(session.charges) || 0 })}
                       title="Voir le détail des charges"
                     >
                       {getTotalCharges(session).toFixed(2)} DT
@@ -1100,7 +1099,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                       </td>
                       <td
                         className="px-4 py-3 whitespace-nowrap text-sm text-blue-700 underline decoration-dotted cursor-pointer hover:text-blue-900 hover:bg-blue-50"
-                        onClick={() => setChargesDetailDate(session.date_session)}
+                        onClick={() => setChargesDetail({ date: session.date_session, manuel: Number(session.charges) || 0 })}
                         title="Voir le détail des charges"
                       >
                         {getTotalCharges(session).toFixed(2)} DT
@@ -1268,10 +1267,11 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
         </div>
       )}
 
-      {chargesDetailDate && (
+      {chargesDetail && (
         <ChargesDetailModal
-          dateSession={chargesDetailDate}
-          onClose={() => setChargesDetailDate(null)}
+          dateSession={chargesDetail.date}
+          montantManuel={chargesDetail.manuel}
+          onClose={() => setChargesDetail(null)}
         />
       )}
     </div>
