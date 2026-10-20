@@ -43,6 +43,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [filteredSessions, setFilteredSessions] = useState<SessionData[]>([]);
   const [chargesDetail, setChargesDetail] = useState<{ date: string; manuel: number } | null>(null);
+  const [isSavingVersement, setIsSavingVersement] = useState(false);
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [message, setMessage] = useState('');
@@ -513,68 +514,74 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   );
 
   const handleSaveVersement = async () => {
+    if (isSavingVersement) return;
     if (!formData.versement || !formData.dateVersement || !formData.dateSession) {
       setMessage('Veuillez remplir tous les champs obligatoires');
       setTimeout(() => setMessage(''), 3000);
       return;
     }
 
-    let session = sessions.find(s => s.date_session === formData.dateSession);
+    setIsSavingVersement(true);
+    try {
+      let session = sessions.find(s => s.date_session === formData.dateSession);
 
-    if (!session) {
-      const { data, error } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('date_session', formData.dateSession)
-        .maybeSingle();
+      if (!session) {
+        const { data, error } = await supabase
+          .from('sessions')
+          .select('*')
+          .eq('date_session', formData.dateSession)
+          .maybeSingle();
 
-      if (error || !data) {
-        setMessage('Session introuvable pour cette date');
-        setTimeout(() => setMessage(''), 3000);
-        return;
+        if (error || !data) {
+          setMessage('Session introuvable pour cette date');
+          setTimeout(() => setMessage(''), 3000);
+          return;
+        }
+        session = data as SessionData;
       }
-      session = data as SessionData;
+
+      // La charge saisie ici s'ajoute à la charge déjà enregistrée pour la
+      // session au lieu de l'écraser. On relit la valeur actuelle en base
+      // juste avant d'additionner, pour ne pas repartir d'un état local
+      // potentiellement obsolète.
+      const { data: currentSessionData } = await supabase
+        .from('sessions')
+        .select('charges')
+        .eq('id', session.id)
+        .maybeSingle();
+      const chargesActuelles = Number(currentSessionData?.charges ?? session.charges) || 0;
+      const chargesAAjouter = parseFloat(formData.charges) || 0;
+      const nouvellesCharges = chargesActuelles + chargesAAjouter;
+
+      const success = await updateSessionVersement(
+        session.id,
+        parseFloat(formData.versement),
+        formData.dateVersement,
+        formData.banque,
+        nouvellesCharges
+      );
+
+      if (success) {
+        setMessage('Versement enregistré avec succès');
+
+        setFormData({
+          sessionId: '',
+          dateSession: '',
+          versement: '',
+          dateVersement: '',
+          charges: '',
+          banque: 'ATTIJARI'
+        });
+        loadSessions();
+        calculateTotalAVerserAujourdhui();
+      } else {
+        setMessage('Erreur lors de l\'enregistrement');
+      }
+
+      setTimeout(() => setMessage(''), 3000);
+    } finally {
+      setIsSavingVersement(false);
     }
-
-    // La charge saisie ici s'ajoute à la charge déjà enregistrée pour la
-    // session au lieu de l'écraser. On relit la valeur actuelle en base
-    // juste avant d'additionner, pour ne pas repartir d'un état local
-    // potentiellement obsolète.
-    const { data: currentSessionData } = await supabase
-      .from('sessions')
-      .select('charges')
-      .eq('id', session.id)
-      .maybeSingle();
-    const chargesActuelles = Number(currentSessionData?.charges ?? session.charges) || 0;
-    const chargesAAjouter = parseFloat(formData.charges) || 0;
-    const nouvellesCharges = chargesActuelles + chargesAAjouter;
-
-    const success = await updateSessionVersement(
-      session.id,
-      parseFloat(formData.versement),
-      formData.dateVersement,
-      formData.banque,
-      nouvellesCharges
-    );
-
-    if (success) {
-      setMessage('Versement enregistré avec succès');
-
-      setFormData({
-        sessionId: '',
-        dateSession: '',
-        versement: '',
-        dateVersement: '',
-        charges: '',
-        banque: 'ATTIJARI'
-      });
-      loadSessions();
-      calculateTotalAVerserAujourdhui();
-    } else {
-      setMessage('Erreur lors de l\'enregistrement');
-    }
-
-    setTimeout(() => setMessage(''), 3000);
   };
 
   const calculateSolde = (session: SessionData): number => {
@@ -799,10 +806,11 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
 
             <button
               onClick={handleSaveVersement}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
+              disabled={isSavingVersement}
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <DollarSign className="w-5 h-5" />
-              <span>Enregistrer le Versement</span>
+              <span>{isSavingVersement ? 'Enregistrement...' : 'Enregistrer le Versement'}</span>
             </button>
           </div>
         </div>
