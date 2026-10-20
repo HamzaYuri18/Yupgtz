@@ -40,6 +40,7 @@ interface QuinzaineStats {
 }
 
 const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
+  const isHamza = username === 'Hamza';
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [filteredSessions, setFilteredSessions] = useState<SessionData[]>([]);
   const [chargesDetail, setChargesDetail] = useState<{ date: string; manuel: number } | null>(null);
@@ -130,6 +131,44 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     const externalTotal = externalChargesByDate[session.date_session] || 0;
     const manualTotal = Number(session.charges) || 0;
     return externalTotal + manualTotal;
+  };
+
+  // Seul Hamza peut supprimer la charge manuelle (sessions.charges) d'une
+  // session depuis le détail des charges.
+  const handleDeleteManualCharge = async (dateSession: string) => {
+    if (!isHamza) return;
+    if (!window.confirm('Supprimer la charge manuelle de cette session ?')) return;
+
+    try {
+      const localSession = sessions.find(s => s.date_session === dateSession)
+        || versementsParDate.find(s => s.date_session === dateSession);
+      let sessionId = localSession?.id;
+
+      if (!sessionId) {
+        const { data } = await supabase
+          .from('sessions')
+          .select('id')
+          .eq('date_session', dateSession)
+          .maybeSingle();
+        sessionId = data?.id;
+      }
+
+      if (!sessionId) {
+        setMessage('Session introuvable.');
+        setTimeout(() => setMessage(''), 3000);
+        return;
+      }
+
+      const { error } = await supabase.from('sessions').update({ charges: 0 }).eq('id', sessionId);
+      if (error) throw error;
+
+      setChargesDetail(prev => prev ? { ...prev, manuel: 0 } : prev);
+      loadSessions();
+      loadVersementsParDate();
+    } catch {
+      setMessage('Erreur lors de la suppression de la charge manuelle.');
+      setTimeout(() => setMessage(''), 3000);
+    }
   };
 
   useEffect(() => {
@@ -1279,6 +1318,8 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
         <ChargesDetailModal
           dateSession={chargesDetail.date}
           montantManuel={chargesDetail.manuel}
+          canDeleteManuel={isHamza}
+          onDeleteManuel={() => handleDeleteManualCharge(chargesDetail.date)}
           onClose={() => setChargesDetail(null)}
         />
       )}

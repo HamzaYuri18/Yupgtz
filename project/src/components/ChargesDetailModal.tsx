@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { X, AlertCircle, Receipt } from 'lucide-react';
+import { X, AlertCircle, Receipt, Trash2 } from 'lucide-react';
 import { expensesSupabase, ExpenseDetail } from '../lib/expensesSupabase';
 
 interface Props {
   dateSession: string;
   montantManuel?: number;
+  canDeleteManuel?: boolean;
+  onDeleteManuel?: () => void;
   onClose: () => void;
 }
 
@@ -16,7 +18,7 @@ const formatDateTimeFR = (iso: string): string => {
   });
 };
 
-const ChargesDetailModal: React.FC<Props> = ({ dateSession, montantManuel = 0, onClose }) => {
+const ChargesDetailModal: React.FC<Props> = ({ dateSession, montantManuel = 0, canDeleteManuel = false, onDeleteManuel, onClose }) => {
   const [rows, setRows] = useState<ExpenseDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +96,7 @@ const ChargesDetailModal: React.FC<Props> = ({ dateSession, montantManuel = 0, o
                       <th className="py-2 pr-3">Source</th>
                       <th className="py-2 pr-3">Créée le</th>
                       <th className="py-2 pr-3 text-right">Montant</th>
+                      {canDeleteManuel && <th className="py-2 pr-3"></th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -106,6 +109,19 @@ const ChargesDetailModal: React.FC<Props> = ({ dateSession, montantManuel = 0, o
                         <td className="py-2.5 pr-3 text-right font-medium text-gray-900">
                           {Number(r.amount).toFixed(2)} DT
                         </td>
+                        {canDeleteManuel && (
+                          <td className="py-2.5 pr-3 text-right">
+                            {r.id === 'manuel' && (
+                              <button
+                                onClick={onDeleteManuel}
+                                title="Supprimer la charge manuelle"
+                                className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
