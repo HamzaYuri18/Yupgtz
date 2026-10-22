@@ -1110,12 +1110,18 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
     setRistourneCheckMessage('');
 
-    // Vérifier si le contrat existe déjà dans la table ristournes
+    // Vérifier si CETTE ristourne précise (même contrat, même date et même
+    // montant) existe déjà dans la table ristournes. Un contrat peut avoir
+    // plusieurs ristournes distinctes dans le temps (montants différents) :
+    // filtrer uniquement sur numero_contrat bloquait à tort toute nouvelle
+    // ristourne d'un contrat ayant déjà une ristourne antérieure enregistrée.
     try {
       const { data: existingRistourne, error } = await supabase
         .from('ristournes')
         .select('numero_contrat, type_paiement, created_at')
         .eq('numero_contrat', newRistourne.numero_contrat)
+        .eq('date_ristourne', newRistourne.date_ristourne)
+        .eq('montant_ristourne', parseFloat(newRistourne.montant_ristourne))
         .maybeSingle();
 
       if (error && error.code !== 'PGRST116') {
