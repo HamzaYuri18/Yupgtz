@@ -257,21 +257,30 @@ export const checkRistourneExists = async (
   }
 };
 
-export const saveRistourne = async (ristourne: Ristourne): Promise<boolean> => {
+export type SaveRistourneResult =
+  | { success: true }
+  | { success: false; reason: 'duplicate' | 'error'; message?: string };
+
+export const saveRistourne = async (ristourne: Ristourne): Promise<SaveRistourneResult> => {
   try {
     console.log('🎁 Sauvegarde de la ristourne:', ristourne);
+
+    // Normalise en YYYY-MM-DD : une date issue d'AvenantPDF peut encore
+    // contenir une composante horaire/fuseau, ce qui ferait echouer la
+    // comparaison exacte ci-dessous et le filtre d'unicite en base.
+    const dateRistourneNormalisee = (ristourne.date_ristourne || new Date().toISOString().split('T')[0]).slice(0, 10);
 
     // Vérifier si la ristourne existe déjà
     const exists = await checkRistourneExists(
       ristourne.numero_contrat,
-      ristourne.date_ristourne || new Date().toISOString().split('T')[0],
+      dateRistourneNormalisee,
       ristourne.montant_ristourne,
       ristourne.client
     );
 
     if (exists) {
       console.log('⚠️ Cette ristourne existe déjà');
-      return false;
+      return { success: false, reason: 'duplicate' };
     }
 
     const { data, error } = await supabase
@@ -280,7 +289,7 @@ export const saveRistourne = async (ristourne: Ristourne): Promise<boolean> => {
         numero_contrat: ristourne.numero_contrat,
         client: ristourne.client,
         montant_ristourne: ristourne.montant_ristourne,
-        date_ristourne: ristourne.date_ristourne || new Date().toISOString().split('T')[0],
+        date_ristourne: dateRistourneNormalisee,
         date_paiement_ristourne: ristourne.date_paiement_ristourne,
         type_paiement: ristourne.type_paiement || 'Espece',
         type_ristourne: ristourne.type_ristourne || 'Ristourne',
@@ -291,7 +300,13 @@ export const saveRistourne = async (ristourne: Ristourne): Promise<boolean> => {
 
     if (error) {
       console.error('❌ Erreur lors de la sauvegarde de la ristourne:', error);
-      return false;
+      // 23505 = violation de contrainte unique (contrat + date + montant +
+      // client) : la ristourne existe deja, meme si la pre-verification
+      // ci-dessus ne l'a pas detectee (ex. decalage de precision/format).
+      if (error.code === '23505') {
+        return { success: false, reason: 'duplicate', message: error.message };
+      }
+      return { success: false, reason: 'error', message: error.message };
     }
 
     console.log('✅ Ristourne sauvegardée avec succès:', data);
@@ -308,18 +323,18 @@ export const saveRistourne = async (ristourne: Ristourne): Promise<boolean> => {
         type_paiement: 'Au comptant',
         cree_par: ristourne.cree_par
       }, {
-        date_ristourne: ristourne.date_ristourne,
+        date_ristourne: dateRistourneNormalisee,
         date_paiement_ristourne: data[0].date_paiement_ristourne,
         client: ristourne.client
       });
     } catch (rapportError) {
       console.error('⚠️ Erreur lors de la sauvegarde dans rapport:', rapportError);
     }
-    
-    return true;
+
+    return { success: true };
   } catch (error) {
     console.error('❌ Erreur générale lors de la sauvegarde de la ristourne:', error);
-    return false;
+    return { success: false, reason: 'error', message: error instanceof Error ? error.message : undefined };
   }
 };
 

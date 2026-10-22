@@ -1070,7 +1070,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         numero_contrat: data.numContrat || '',
         client: data.souscripteur || '',
         montant_ristourne: data.primeEmise != null ? String(data.primeEmise) : '',
-        date_ristourne: data['Date'] || prev.date_ristourne
+        date_ristourne: data['Date'] ? String(data['Date']).slice(0, 10) : prev.date_ristourne
       }));
       setRistourneFieldsLocked(true);
       setShowRistourneSearch(false);
@@ -1159,8 +1159,8 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       cree_par: username
     };
 
-    const success = await saveRistourne(ristourne);
-    if (success) {
+    const saveResult = await saveRistourne(ristourne);
+    if (saveResult.success) {
       // Mettre à jour le statut dans AvenantPDF
       if (foundAvenantId !== null) {
         await supabase
@@ -1226,10 +1226,12 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
       setRistourneFieldsLocked(false);
       setRistourneSearchInput({ numContrat: '', date: '', primeEmise: '' });
       loadData();
+    } else if (saveResult.reason === 'duplicate') {
+      setMessage('⚠️ Cette ristourne (même contrat, date et montant) existe déjà en base.');
     } else {
-      setMessage('❌ Erreur lors de l\'enregistrement de la ristourne');
+      setMessage(`❌ Erreur lors de l'enregistrement de la ristourne${saveResult.message ? ` : ${saveResult.message}` : ''}`);
     }
-    setTimeout(() => setMessage(''), 3000);
+    setTimeout(() => setMessage(''), 5000);
   };
 
   const [syncingRistournesRapport, setSyncingRistournesRapport] = useState(false);
