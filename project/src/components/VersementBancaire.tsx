@@ -1222,7 +1222,11 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedVersements.map((groupe) => (
+                {paginatedVersements.map((groupe) => {
+                  const suppForGroup = versementsSupplementaires.filter(v =>
+                    (v.date_versement || '—') === groupe.dateVersement && (v.banque || '—') === groupe.banque
+                  );
+                  return (
                   <tr key={`${groupe.dateVersement}|${groupe.banque}`} className="hover:bg-indigo-50/30 transition-colors duration-150">
                     <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-indigo-700">
                       {groupe.dateVersement}
@@ -1234,7 +1238,24 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                       {groupe.nombre}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-green-700">
-                      {groupe.total.toFixed(2)} DT
+                      {suppForGroup.length > 0 ? (
+                        <span className="relative group/tooltip cursor-help border-b border-dotted border-green-400">
+                          {groupe.total.toFixed(2)} DT
+                          <div className="invisible group-hover/tooltip:visible absolute left-0 top-full mt-1 z-20 w-64 bg-gray-900 text-white text-xs rounded-lg shadow-xl p-3 space-y-1.5 whitespace-normal">
+                            <p className="font-semibold text-indigo-200 border-b border-gray-700 pb-1 mb-1.5">
+                              Versement{suppForGroup.length > 1 ? 's' : ''} supplémentaire{suppForGroup.length > 1 ? 's' : ''}
+                            </p>
+                            {suppForGroup.map(v => (
+                              <div key={v.id} className="flex justify-between gap-3">
+                                <span className="text-gray-200">{v.libelle}</span>
+                                <span className="font-semibold text-green-300 whitespace-nowrap">{Number(v.montant).toFixed(2)} DT</span>
+                              </div>
+                            ))}
+                          </div>
+                        </span>
+                      ) : (
+                        `${groupe.total.toFixed(2)} DT`
+                      )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right">
                       <button
@@ -1247,7 +1268,8 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
               <tfoot className="bg-gray-50">
                 <tr>
