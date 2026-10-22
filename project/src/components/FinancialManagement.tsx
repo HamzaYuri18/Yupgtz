@@ -1030,8 +1030,18 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         r.primeEmise != null && Math.round(Number(r.primeEmise) * 1000) === requestedMillimes
       );
 
+      // Dump diagnostique de toutes les lignes AvenantPDF de ce contrat
+      // (id, date, montant, statut) : utile pour comprendre un resultat
+      // inattendu sans avoir a ouvrir Supabase.
+      const debugDump = (allRows || [])
+        .map(r => `#${r.id} — ${r['Date']} — ${Number(r.primeEmise).toFixed(3)} DT — ${r['Statut de paiement'] || '(vide)'}`)
+        .join('\n');
+
       if (matches.length === 0) {
-        alert('Aucune ristourne trouvée avec ce numéro de contrat, cette date et ce montant.');
+        alert(
+          'Aucune ristourne trouvée avec ce numéro de contrat, cette date et ce montant.\n\n' +
+          `Lignes AvenantPDF existantes pour ce contrat :\n${debugDump || '(aucune)'}`
+        );
         return;
       }
 
@@ -1048,7 +1058,8 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         const modePaiement = data['Mode de paiement'] || '-';
         alert(
           `Cette ristourne est déjà payée.\nMode de paiement : ${modePaiement}\nDate de paiement : ${datePaiement}\n\n` +
-          `Ligne trouvée — Date : ${data['Date']} — Montant : ${Number(data.primeEmise).toFixed(3)} DT — AvenantPDF id : ${data.id}`
+          `Ligne trouvée — Date : ${data['Date']} — Montant : ${Number(data.primeEmise).toFixed(3)} DT — AvenantPDF id : ${data.id}\n\n` +
+          `Lignes AvenantPDF existantes pour ce contrat :\n${debugDump}`
         );
         return;
       }
