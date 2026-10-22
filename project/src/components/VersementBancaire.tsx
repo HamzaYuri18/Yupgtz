@@ -538,16 +538,26 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     (sum, s) => sum + (s.versement || 0),
     0
   );
-  // Regroupement par date_versement pour les totaux journaliers
-  const versementsGroupesParDate = versementsParDate.reduce<Record<string, number>>((acc, s) => {
-    const key = s.date_versement || '—';
-    acc[key] = (acc[key] || 0) + (s.versement || 0);
-    return acc;
-  }, {});
 
-  // Pagination des versements par date
-  const totalVersementPages = Math.max(1, Math.ceil(versementsParDate.length / versementsPerPage));
-  const paginatedVersements = versementsParDate.slice(
+  // Regroupement par (date de versement, banque) : total versé et nombre
+  // de versements effectués pour chaque combinaison.
+  const versementsGroupes = Object.values(
+    versementsParDate.reduce<Record<string, { dateVersement: string; banque: string; total: number; nombre: number }>>((acc, s) => {
+      const dateVersement = s.date_versement || '—';
+      const banque = s.banque || '—';
+      const key = `${dateVersement}|${banque}`;
+      if (!acc[key]) {
+        acc[key] = { dateVersement, banque, total: 0, nombre: 0 };
+      }
+      acc[key].total += s.versement || 0;
+      acc[key].nombre += 1;
+      return acc;
+    }, {})
+  ).sort((a, b) => b.dateVersement.localeCompare(a.dateVersement));
+
+  // Pagination des versements groupés par date + banque
+  const totalVersementPages = Math.max(1, Math.ceil(versementsGroupes.length / versementsPerPage));
+  const paginatedVersements = versementsGroupes.slice(
     (versementPage - 1) * versementsPerPage,
     versementPage * versementsPerPage
   );
@@ -1107,7 +1117,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
               <RefreshCw className="w-6 h-6 animate-spin mr-3" />
               <span className="text-sm">Chargement des versements…</span>
             </div>
-          ) : versementsParDate.length === 0 ? (
+          ) : versementsGroupes.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-12 text-gray-400">
               <Calendar className="w-10 h-10 opacity-30" />
               <p className="text-sm font-medium">Aucun versement trouvé</p>
@@ -1118,68 +1128,44 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
               <thead className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-blue-900">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Date Versement</th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Date Session</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Banque</th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Total Espèce</th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Charges</th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Versement</th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Solde</th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Créé par</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Nombre de versements</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Total Versement</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedVersements.map((session) => {
-                  const solde = calculateSolde(session);
-                  return (
-                    <tr key={session.id} className="hover:bg-indigo-50/30 transition-colors duration-150">
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-indigo-700">
-                        {session.date_versement || '—'}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                        {session.date_session}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                        {session.banque || '—'}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {session.total_espece.toFixed(2)} DT
-                      </td>
-                      <td
-                        className="px-4 py-3 whitespace-nowrap text-sm text-blue-700 underline decoration-dotted cursor-pointer hover:text-blue-900 hover:bg-blue-50"
-                        onClick={() => setChargesDetail({ date: session.date_session, manuel: Number(session.charges) || 0 })}
-                        title="Voir le détail des charges"
-                      >
-                        {getTotalCharges(session).toFixed(2)} DT
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-green-700">
-                        {session.versement.toFixed(2)} DT
-                      </td>
-                      <td className={`px-4 py-3 whitespace-nowrap text-sm font-semibold ${solde < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {solde.toFixed(2)} DT
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                        {session.cree_par}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {paginatedVersements.map((groupe) => (
+                  <tr key={`${groupe.dateVersement}|${groupe.banque}`} className="hover:bg-indigo-50/30 transition-colors duration-150">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-indigo-700">
+                      {groupe.dateVersement}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                      {groupe.banque}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                      {groupe.nombre}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-green-700">
+                      {groupe.total.toFixed(2)} DT
+                    </td>
+                  </tr>
+                ))}
               </tbody>
               <tfoot className="bg-gray-50">
                 <tr>
-                  <td colSpan={5} className="px-4 py-3 text-sm font-bold text-gray-700 text-right">Total général :</td>
+                  <td colSpan={3} className="px-4 py-3 text-sm font-bold text-gray-700 text-right">Total général :</td>
                   <td className="px-4 py-3 text-sm font-bold text-green-700">{totalVersementsAffiches.toFixed(2)} DT</td>
-                  <td colSpan={2}></td>
                 </tr>
               </tfoot>
             </table>
           )}
         </div>
 
-        {/* Pagination des versements par date */}
-        {!loadingVersements && versementsParDate.length > versementsPerPage && (
+        {/* Pagination des versements par date + banque */}
+        {!loadingVersements && versementsGroupes.length > versementsPerPage && (
           <div className="flex items-center justify-between mt-6 px-4">
             <div className="text-sm text-gray-600">
-              Affichage {(versementPage - 1) * versementsPerPage + 1} à {Math.min(versementPage * versementsPerPage, versementsParDate.length)} sur {versementsParDate.length} versements
+              Affichage {(versementPage - 1) * versementsPerPage + 1} à {Math.min(versementPage * versementsPerPage, versementsGroupes.length)} sur {versementsGroupes.length} groupes
             </div>
             <div className="flex items-center space-x-2">
               <button
@@ -1199,24 +1185,6 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
               >
                 Suivant →
               </button>
-            </div>
-          </div>
-        )}
-
-        {/* Récapitulatif par date de versement */}
-        {!loadingVersements && versementsParDate.length > 0 && (
-          <div className="mt-6 pt-4 border-t border-gray-200">
-            <h4 className="text-sm font-bold text-gray-700 mb-3">Récapitulatif par date de versement</h4>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(versementsGroupesParDate)
-                .sort(([a], [b]) => b.localeCompare(a))
-                .map(([date, total]) => (
-                  <div key={date} className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-lg">
-                    <Calendar className="w-4 h-4 text-indigo-500" />
-                    <span className="text-sm font-medium text-gray-700">{date}</span>
-                    <span className="text-sm font-bold text-indigo-700">{total.toFixed(2)} DT</span>
-                  </div>
-                ))}
             </div>
           </div>
         )}
