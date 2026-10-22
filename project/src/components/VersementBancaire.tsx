@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw, CreditCard as Edit, Save, X, MessageSquare, RotateCcw } from 'lucide-react';
+import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw, CreditCard as Edit, Save, X, MessageSquare, RotateCcw, Plus } from 'lucide-react';
 import {
   getRecentSessions,
   getSessionsByDateRange,
@@ -37,6 +37,15 @@ interface QuinzaineStats {
   premiere: number;
   deuxieme: number;
   total: number;
+}
+
+interface VersementSupplementaire {
+  id: string;
+  date_versement: string;
+  banque: string;
+  montant: number;
+  libelle: string;
+  cree_par: string;
 }
 
 const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
@@ -85,6 +94,14 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [loadingVersements, setLoadingVersements] = useState(false);
   const [versementPage, setVersementPage] = useState(1);
   const versementsPerPage = 15;
+
+  // Versements supplémentaires (saisie manuelle, avec libellé) rattachés à
+  // une date de versement + banque, sans session associée.
+  const [versementsSupplementaires, setVersementsSupplementaires] = useState<VersementSupplementaire[]>([]);
+  const [addVersementSuppTarget, setAddVersementSuppTarget] = useState<{ dateVersement: string; banque: string } | null>(null);
+  const [suppMontant, setSuppMontant] = useState('');
+  const [suppLibelle, setSuppLibelle] = useState('');
+  const [savingSupp, setSavingSupp] = useState(false);
 
   // Charges détaillées de l'autre projet Supabase (table "expenses"),
   // regroupées et sommées par date de session, pour compléter la valeur
@@ -498,23 +515,39 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
         .not('date_versement', 'is', null)
         .order('date_versement', { ascending: false });
 
+      let suppQuery = supabase
+        .from('versements_supplementaires')
+        .select('*')
+        .order('date_versement', { ascending: false });
+
       if (versementDateDebut) {
         query = query.gte('date_versement', versementDateDebut);
+        suppQuery = suppQuery.gte('date_versement', versementDateDebut);
       }
       if (versementDateFin) {
         query = query.lte('date_versement', versementDateFin);
+        suppQuery = suppQuery.lte('date_versement', versementDateFin);
       }
 
-      const { data, error } = await query;
+      const [{ data, error }, { data: suppData, error: suppError }] = await Promise.all([query, suppQuery]);
+
       if (error) {
         console.error('❌ Erreur chargement versements par date:', error);
         setVersementsParDate([]);
       } else {
         setVersementsParDate(data || []);
       }
+
+      if (suppError) {
+        console.error('❌ Erreur chargement versements supplémentaires:', suppError);
+        setVersementsSupplementaires([]);
+      } else {
+        setVersementsSupplementaires(suppData || []);
+      }
     } catch (err) {
       console.error('❌ Erreur chargement versements par date:', err);
       setVersementsParDate([]);
+      setVersementsSupplementaires([]);
     } finally {
       setLoadingVersements(false);
     }
@@ -533,27 +566,81 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     setTimeout(() => loadVersementsParDate(), 0);
   };
 
-  // Total des versements affichés (par date de versement)
-  const totalVersementsAffiches = versementsParDate.reduce(
-    (sum, s) => sum + (s.versement || 0),
-    0
-  );
+  const openAddVersementSupp = (dateVersement: string, banque: string) => {
+    setAddVersementSuppTarget({ dateVersement, banque });
+    setSuppMontant('');
+    setSuppLibelle('');
+  };
+
+  const handleSaveVersementSupp = async () => {
+    if (!addVersementSuppTarget) return;
+    const montant = parseFloat(suppMontant);
+    if (!montant || montant <= 0) {
+      setMessage('Veuillez saisir un montant valide.');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+    if (!suppLibelle.trim()) {
+      setMessage('Veuillez saisir un libellé.');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+
+    setSavingSupp(true);
+    try {
+      const { error } = await supabase.from('versements_supplementaires').insert({
+        date_versement: addVersementSuppTarget.dateVersement,
+        banque: addVersementSuppTarget.banque,
+        montant,
+        libelle: suppLibelle.trim(),
+        cree_par: username,
+      });
+      if (error) throw error;
+
+      setMessage('Versement supplémentaire enregistré avec succès');
+      setAddVersementSuppTarget(null);
+      setSuppMontant('');
+      setSuppLibelle('');
+      loadVersementsParDate();
+    } catch (err) {
+      setMessage(err instanceof Error ? `Erreur : ${err.message}` : 'Erreur lors de l\'enregistrement.');
+    } finally {
+      setSavingSupp(false);
+      setTimeout(() => setMessage(''), 3000);
+    }
+  };
+
+  // Total des versements affichés (sessions + versements supplémentaires)
+  const totalVersementsAffiches =
+    versementsParDate.reduce((sum, s) => sum + (s.versement || 0), 0) +
+    versementsSupplementaires.reduce((sum, v) => sum + (v.montant || 0), 0);
 
   // Regroupement par (date de versement, banque) : total versé et nombre
-  // de versements effectués pour chaque combinaison.
-  const versementsGroupes = Object.values(
-    versementsParDate.reduce<Record<string, { dateVersement: string; banque: string; total: number; nombre: number }>>((acc, s) => {
-      const dateVersement = s.date_versement || '—';
-      const banque = s.banque || '—';
-      const key = `${dateVersement}|${banque}`;
-      if (!acc[key]) {
-        acc[key] = { dateVersement, banque, total: 0, nombre: 0 };
-      }
-      acc[key].total += s.versement || 0;
-      acc[key].nombre += 1;
-      return acc;
-    }, {})
-  ).sort((a, b) => b.dateVersement.localeCompare(a.dateVersement));
+  // de versements effectués pour chaque combinaison (sessions + versements
+  // supplémentaires saisis manuellement avec un libellé).
+  const versementsGroupesMap = versementsParDate.reduce<Record<string, { dateVersement: string; banque: string; total: number; nombre: number }>>((acc, s) => {
+    const dateVersement = s.date_versement || '—';
+    const banque = s.banque || '—';
+    const key = `${dateVersement}|${banque}`;
+    if (!acc[key]) {
+      acc[key] = { dateVersement, banque, total: 0, nombre: 0 };
+    }
+    acc[key].total += s.versement || 0;
+    acc[key].nombre += 1;
+    return acc;
+  }, {});
+  versementsSupplementaires.forEach(v => {
+    const dateVersement = v.date_versement || '—';
+    const banque = v.banque || '—';
+    const key = `${dateVersement}|${banque}`;
+    if (!versementsGroupesMap[key]) {
+      versementsGroupesMap[key] = { dateVersement, banque, total: 0, nombre: 0 };
+    }
+    versementsGroupesMap[key].total += v.montant || 0;
+    versementsGroupesMap[key].nombre += 1;
+  });
+  const versementsGroupes = Object.values(versementsGroupesMap)
+    .sort((a, b) => b.dateVersement.localeCompare(a.dateVersement));
 
   // Pagination des versements groupés par date + banque
   const totalVersementPages = Math.max(1, Math.ceil(versementsGroupes.length / versementsPerPage));
@@ -1131,6 +1218,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                   <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Banque</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Nombre de versements</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider">Total Versement</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-white/80 uppercase tracking-wider"></th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -1148,6 +1236,16 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                     <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-green-700">
                       {groupe.total.toFixed(2)} DT
                     </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-right">
+                      <button
+                        onClick={() => openAddVersementSupp(groupe.dateVersement, groupe.banque)}
+                        title="Ajouter un versement supplémentaire"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-colors text-xs font-medium"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Versement
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1155,6 +1253,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                 <tr>
                   <td colSpan={3} className="px-4 py-3 text-sm font-bold text-gray-700 text-right">Total général :</td>
                   <td className="px-4 py-3 text-sm font-bold text-green-700">{totalVersementsAffiches.toFixed(2)} DT</td>
+                  <td></td>
                 </tr>
               </tfoot>
             </table>
@@ -1189,6 +1288,70 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
           </div>
         )}
       </div>
+
+      {addVersementSuppTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4" onClick={() => setAddVersementSuppTarget(null)}>
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Plus className="w-5 h-5 text-indigo-600" />
+                Versement supplémentaire
+              </h3>
+              <button onClick={() => setAddVersementSuppTarget(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-indigo-50 rounded-lg p-3 text-sm text-indigo-800 space-y-1">
+              <p><span className="font-semibold">Date de versement :</span> {addVersementSuppTarget.dateVersement}</p>
+              <p><span className="font-semibold">Banque :</span> {addVersementSuppTarget.banque}</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Montant</label>
+              <input
+                type="number"
+                step="0.01"
+                value={suppMontant}
+                onChange={(e) => setSuppMontant(e.target.value)}
+                placeholder="0.00"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Libellé</label>
+              <input
+                type="text"
+                value={suppLibelle}
+                onChange={(e) => setSuppLibelle(e.target.value)}
+                placeholder="Ex : Complément versement espèces"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setAddVersementSuppTarget(null)}
+                disabled={savingSupp}
+                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleSaveVersementSupp}
+                disabled={savingSupp}
+                className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              >
+                {savingSupp ? 'Enregistrement...' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showAvisModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
