@@ -1019,9 +1019,15 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
 
       const requestedDay = ristourneSearchInput.date;
       const requestedMontant = parseFloat(ristourneSearchInput.primeEmise);
+      // Comparaison au millime (3 décimales, la plus petite unité monétaire
+      // utilisée ici) plutôt qu'une tolérance flottante : deux ristournes
+      // d'un même contrat/date peuvent n'être distantes que d'un millime, et
+      // l'imprécision des flottants binaires rendait une tolérance comme
+      // "< 0.001" peu fiable pile à cette limite.
+      const requestedMillimes = Math.round(requestedMontant * 1000);
       const matches = (allRows || []).filter(r =>
         r['Date'] && String(r['Date']).slice(0, 10) === requestedDay &&
-        r.primeEmise != null && Math.abs(Number(r.primeEmise) - requestedMontant) < 0.001
+        r.primeEmise != null && Math.round(Number(r.primeEmise) * 1000) === requestedMillimes
       );
 
       if (matches.length === 0) {
@@ -1040,7 +1046,10 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
           ? new Date(data['Date de paiement']).toLocaleDateString('fr-FR')
           : '-';
         const modePaiement = data['Mode de paiement'] || '-';
-        alert(`Cette ristourne est déjà payée.\nMode de paiement : ${modePaiement}\nDate de paiement : ${datePaiement}\n(AvenantPDF id : ${data.id})`);
+        alert(
+          `Cette ristourne est déjà payée.\nMode de paiement : ${modePaiement}\nDate de paiement : ${datePaiement}\n\n` +
+          `Ligne trouvée — Date : ${data['Date']} — Montant : ${Number(data.primeEmise).toFixed(3)} DT — AvenantPDF id : ${data.id}`
+        );
         return;
       }
 
