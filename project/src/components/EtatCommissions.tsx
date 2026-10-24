@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, CreditCard as Edit2, Check, X, DollarSign, TrendingDown, TrendingUp, Download, Filter, Heart, Unlock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { expensesSupabase } from '../lib/expensesSupabase';
 import * as XLSX from 'xlsx';
 
 interface QuinzaineData {
@@ -107,13 +108,28 @@ const EtatCommissions: React.FC = () => {
 
   const calculateCharges = async (dateDebut: string, dateFin: string): Promise<number> => {
     try {
-      const { data, error } = await supabase
-        .from('sessions')
-        .select('charges')
-        .gte('date_session', dateDebut)
-        .lte('date_session', dateFin);
+      // Charges manuelles (sessions.charges) + charges detaillees de l'autre
+      // projet Supabase (table "expenses", rubrique Versement Bancaire) :
+      // ne compter que les manuelles sous-estimait le total (ex. 390 au lieu
+      // de 935) puisque la plupart des charges y sont saisies en detail.
+      const [{ data, error }, { data: expensesData, error: expensesError }] = await Promise.all([
+        supabase
+          .from('sessions')
+          .select('charges')
+          .gte('date_session', dateDebut)
+          .lte('date_session', dateFin),
+        expensesSupabase
+          .from('expenses')
+          .select('amount')
+          .gte('expense_date', dateDebut)
+          .lte('expense_date', dateFin),
+      ]);
       if (error) throw error;
-      return data?.reduce((sum, s) => sum + (Number(s.charges) || 0), 0) || 0;
+      const manuelles = data?.reduce((sum, s) => sum + (Number(s.charges) || 0), 0) || 0;
+      const detaillees = expensesError
+        ? 0
+        : expensesData?.reduce((sum, e) => sum + (Number(e.amount) || 0), 0) || 0;
+      return manuelles + detaillees;
     } catch { return 0; }
   };
 
