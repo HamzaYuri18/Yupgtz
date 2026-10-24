@@ -903,7 +903,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Charges
+                Charge supplémentaire (manuelle)
               </label>
               <input
                 type="number"
@@ -913,6 +913,22 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                 placeholder="0.00"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+              {(() => {
+                if (!formData.dateSession) return null;
+                const selectedSession = sessions.find(s => s.date_session === formData.dateSession)
+                  || filteredSessions.find(s => s.date_session === formData.dateSession);
+                const externalExistantes = externalChargesByDate[formData.dateSession] || 0;
+                const manuellesExistantes = selectedSession ? Number(selectedSession.charges) || 0 : 0;
+                const totalExistant = externalExistantes + manuellesExistantes;
+                if (totalExistant <= 0) return null;
+                return (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mt-1.5">
+                    ⚠️ Cette session a déjà {totalExistant.toFixed(2)} DT de charges enregistrées
+                    (dont {manuellesExistantes.toFixed(2)} DT de charge manuelle). Ne saisissez ici que le
+                    montant <strong>supplémentaire</strong> à ajouter — pas le total déjà connu.
+                  </p>
+                );
+              })()}
             </div>
 
             <div>
