@@ -159,7 +159,44 @@ const AttestationSequences: React.FC = () => {
         .limit(200);
 
       if (error) throw error;
-      setAttestations(data || []);
+      const combined: Attestation[] = [...(data || [])];
+
+      // Certaines prolongations ne mettent pas à jour la ligne correspondante
+      // dans la table du carnet (ex. prolongations créées avant l'ajout du
+      // statut "prolongation", ou échec silencieux du marquage côté RPC) :
+      // on les retrouve directement via la table "prolongation" par plage de
+      // numéros du carnet, pour qu'elles ne disparaissent jamais du tableau.
+      const carnetInfo = carnets.find(c => c.table_name === tableName);
+      if (carnetInfo) {
+        const { data: prolongations } = await supabase
+          .from('prolongation')
+          .select('numero_attestation, numero_contrat, assure, date_demande')
+          .not('numero_attestation', 'is', null);
+
+        const dejaPresents = new Set(combined.map(a => a.numero_attestation));
+        (prolongations || []).forEach(p => {
+          const num = parseInt(p.numero_attestation, 10);
+          if (isNaN(num) || num < carnetInfo.numero_debut || num > carnetInfo.numero_fin) return;
+          if (dejaPresents.has(p.numero_attestation)) return;
+          combined.push({
+            id: `prolongation-${p.numero_attestation}`,
+            numero_attestation: p.numero_attestation,
+            numero_contrat: p.numero_contrat,
+            assure: p.assure,
+            date_impression: p.date_demande,
+            montant: null,
+            statut: 'prolongation',
+            motif_annulation: null,
+            user_annule: null,
+            scan_barree_url: null,
+            annule_par: null,
+          });
+          dejaPresents.add(p.numero_attestation);
+        });
+        combined.sort((a, b) => (b.date_impression || '').localeCompare(a.date_impression || ''));
+      }
+
+      setAttestations(combined);
       setCurrentPage(1);
     } catch (error) {
       console.error('Erreur chargement attestations:', error);
