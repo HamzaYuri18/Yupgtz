@@ -2314,8 +2314,36 @@ export const getCreditsDueToday = async (sessionDate: string): Promise<any[]> =>
       return [];
     }
 
-    console.log(`✅ Crédits à payer récupérés: ${data?.length || 0}`);
-    return data || [];
+    // liste_credits ne devrait contenir qu'une ligne par contrat (voir la
+    // migration de nettoyage des doublons), mais des doublons peuvent
+    // réapparaître selon la façon dont les crédits y sont (re)synchronisés.
+    // On ne garde ici qu'une ligne par contrat (la plus pertinente : payée/
+    // avec paiement partiel en priorité, sinon la plus ancienne) pour éviter
+    // d'afficher deux fois le même crédit dans le modal de clôture.
+    type CreditRow = { numero_contrat?: string; statut?: string; paiement?: number; id: number };
+    const parPriorite = (c: CreditRow): number => {
+      if (c.statut === 'Payé' || c.statut === 'Payé en total' || c.statut === 'Payé partiellement') return 0;
+      if ((c.paiement || 0) > 0) return 1;
+      return 2;
+    };
+    const meilleurParContrat = new Map<string, CreditRow>();
+    for (const credit of data || []) {
+      const cle = String(credit.numero_contrat || '').trim().toUpperCase();
+      const existant = meilleurParContrat.get(cle);
+      if (!existant) {
+        meilleurParContrat.set(cle, credit);
+        continue;
+      }
+      const priorite = parPriorite(credit);
+      const prioriteExistant = parPriorite(existant);
+      if (priorite < prioriteExistant || (priorite === prioriteExistant && credit.id < existant.id)) {
+        meilleurParContrat.set(cle, credit);
+      }
+    }
+    const resultat = Array.from(meilleurParContrat.values());
+
+    console.log(`✅ Crédits à payer récupérés: ${data?.length || 0} (${resultat.length} après dédoublonnage par contrat)`);
+    return resultat;
   } catch (error) {
     console.error('❌ Erreur générale:', error);
     return [];
