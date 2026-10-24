@@ -283,7 +283,11 @@ const ProlongationsList: React.FC<Props> = ({ onBack }) => {
                     remaining <= 5 ? 'bg-amber-100 text-amber-700' :
                     'bg-emerald-100 text-emerald-700';
                   return (
-                    <tr key={row.id || row.numero_contrat} className="border-b border-slate-100 hover:bg-slate-50">
+                    <tr
+                      key={row.id || row.numero_contrat}
+                      className="border-b border-slate-100 hover:bg-slate-50"
+                      title={row.numero_attestation ? `N° attestation : ${row.numero_attestation}` : 'Aucun numéro d\'attestation enregistré'}
+                    >
                       <td className="py-2.5 pr-3 font-mono text-slate-700">{row.numero_contrat}</td>
                       <td className="py-2.5 pr-3 text-slate-700">{row.assure}</td>
                       <td className="py-2.5 pr-3 text-slate-700">{row.marque} — {row.immatriculation}</td>

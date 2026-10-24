@@ -1032,6 +1032,7 @@ const AttestationSequences: React.FC = () => {
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Assuré</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date Impression</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Montant</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
                     {currentUser === 'Hamza' && (
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Actions</th>
                     )}
@@ -1040,7 +1041,7 @@ const AttestationSequences: React.FC = () => {
                 <tbody className="divide-y divide-gray-200">
                   {paginatedAttestations.length === 0 ? (
                     <tr>
-                      <td colSpan={currentUser === 'Hamza' ? 6 : 5} className="px-4 py-8 text-center text-gray-500">
+                      <td colSpan={currentUser === 'Hamza' ? 7 : 6} className="px-4 py-8 text-center text-gray-500">
                         <Search className="w-12 h-12 mx-auto mb-2 text-gray-400" />
                         Aucune attestation imprimée
                       </td>
@@ -1062,6 +1063,22 @@ const AttestationSequences: React.FC = () => {
                           {attestation.montant
                             ? `${attestation.montant.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`
                             : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
+                            attestation.statut === 'prolongation'
+                              ? 'bg-violet-100 text-violet-700'
+                              : attestation.statut === 'annulee'
+                              ? 'bg-red-100 text-red-700'
+                              : attestation.statut === 'servie'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-emerald-100 text-emerald-700'
+                          }`}>
+                            {attestation.statut === 'prolongation' ? 'Prolongation'
+                              : attestation.statut === 'annulee' ? 'Annulée'
+                              : attestation.statut === 'servie' ? 'Servie'
+                              : attestation.statut || 'Imprimée'}
+                          </span>
                         </td>
                         {currentUser === 'Hamza' && (
                           <td className="px-4 py-3 text-sm">
