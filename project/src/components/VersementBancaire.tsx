@@ -687,6 +687,23 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
         .maybeSingle();
       const chargesActuelles = Number(currentSessionData?.charges ?? session.charges) || 0;
       const chargesAAjouter = parseFloat(formData.charges) || 0;
+
+      // Si une charge manuelle existe déjà pour cette session, on confirme
+      // avant d'additionner : évite qu'une ressaisie par habitude (ou un
+      // nouvel essai) ne double le montant sans que l'utilisateur s'en
+      // rende compte.
+      if (chargesAAjouter > 0 && chargesActuelles > 0) {
+        const confirmed = window.confirm(
+          `Une charge manuelle de ${chargesActuelles.toFixed(2)} DT est déjà enregistrée pour cette session.\n` +
+          `Ajouter ${chargesAAjouter.toFixed(2)} DT supplémentaires (nouveau total : ${(chargesActuelles + chargesAAjouter).toFixed(2)} DT) ?`
+        );
+        if (!confirmed) {
+          setMessage('Enregistrement annulé.');
+          setTimeout(() => setMessage(''), 3000);
+          return;
+        }
+      }
+
       const nouvellesCharges = chargesActuelles + chargesAAjouter;
 
       const success = await updateSessionVersement(
