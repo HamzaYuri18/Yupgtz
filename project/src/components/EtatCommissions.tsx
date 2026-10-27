@@ -185,7 +185,11 @@ const EtatCommissions: React.FC = () => {
             const totalComm = baseCommission + commFromTable;
             const vie = Number(existing.commission_vie) || 0;
             const liberee = Number(existing.commission_liberee) || 0;
-            const charges = Number(existing.total_charges) || 0;
+            // Recalculé en direct plutôt que lu depuis la valeur enregistrée :
+            // celle-ci a pu être figée avant l'ajout des charges détaillées de
+            // l'app Masrouf (table "expenses") et resterait alors sous-évaluée
+            // tant que la quinzaine n'est pas réenregistrée manuellement.
+            const charges = await calculateCharges(q.date_debut, q.date_fin);
             const depenses = Number(existing.total_depenses) || 0;
             return {
               ...q,
