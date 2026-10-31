@@ -23,6 +23,18 @@ import {
   type Sinistre
 } from '../utils/financialService';
 
+// Noms des mois sans accents pour les noms de tables (table_terme_<mois>_<annee>)
+const MOIS_TABLE: Record<number, string> = {
+  0: 'janvier', 1: 'fevrier', 2: 'mars', 3: 'avril', 4: 'mai', 5: 'juin',
+  6: 'juillet', 7: 'aout', 8: 'septembre', 9: 'octobre', 10: 'novembre', 11: 'decembre'
+};
+const MOIS_OPTIONS = [
+  { value: 0, label: 'Janvier' }, { value: 1, label: 'Février' }, { value: 2, label: 'Mars' },
+  { value: 3, label: 'Avril' }, { value: 4, label: 'Mai' }, { value: 5, label: 'Juin' },
+  { value: 6, label: 'Juillet' }, { value: 7, label: 'Août' }, { value: 8, label: 'Septembre' },
+  { value: 9, label: 'Octobre' }, { value: 10, label: 'Novembre' }, { value: 11, label: 'Décembre' },
+];
+
 interface FinancialManagementProps {
   username: string;
 }
@@ -68,6 +80,14 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     id_depense: '',
     libelle: ''
   });
+  const [avanceClientSearch, setAvanceClientSearch] = useState({
+    mois: new Date().getMonth(),
+    annee: String(new Date().getFullYear()),
+    numContrat: ''
+  });
+  const [avanceClientSearching, setAvanceClientSearching] = useState(false);
+  const [avanceClientSearchError, setAvanceClientSearchError] = useState('');
+  const [avanceClientLocked, setAvanceClientLocked] = useState(false);
 
   // États pour les ristournes
   const [ristournes, setRistournes] = useState<Ristourne[]>([]);
@@ -512,6 +532,56 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
     }
   };
 
+  // Recherche le contrat dans la table mensuelle table_terme_<mois>_<annee>
+  // et remplit automatiquement numéro de contrat / assuré / échéance, pour
+  // éviter la saisie manuelle du numéro de contrat (parfois mal saisi).
+  const handleSearchAvanceClientContrat = async () => {
+    if (!avanceClientSearch.numContrat.trim()) {
+      setAvanceClientSearchError('Veuillez saisir le numéro de contrat.');
+      return;
+    }
+
+    setAvanceClientSearching(true);
+    setAvanceClientSearchError('');
+    try {
+      const monthKey = MOIS_TABLE[avanceClientSearch.mois];
+      const tableName = `table_terme_${monthKey}_${avanceClientSearch.annee}`;
+
+      const { data: termeData, error: termeErr } = await supabase
+        .from(tableName)
+        .select('numero_contrat, assure, echeance')
+        .ilike('numero_contrat', avanceClientSearch.numContrat.trim())
+        .maybeSingle();
+
+      if (termeErr) {
+        setAvanceClientSearchError(`Table "${tableName}" introuvable ou erreur : ${termeErr.message}`);
+        return;
+      }
+      if (!termeData) {
+        setAvanceClientSearchError(`Aucun contrat trouvé dans la table ${tableName} pour ce numéro.`);
+        return;
+      }
+
+      setNewRecette(prev => ({
+        ...prev,
+        numero_contrat: termeData.numero_contrat,
+        assure: termeData.assure || '',
+        echeance: termeData.echeance || prev.echeance
+      }));
+      setAvanceClientLocked(true);
+    } catch (err) {
+      setAvanceClientSearchError(err instanceof Error ? err.message : 'Erreur lors de la recherche.');
+    } finally {
+      setAvanceClientSearching(false);
+    }
+  };
+
+  const handleResetAvanceClientSearch = () => {
+    setAvanceClientLocked(false);
+    setAvanceClientSearchError('');
+    setNewRecette(prev => ({ ...prev, numero_contrat: '', assure: '', echeance: '' }));
+  };
+
   const handleSaveDepense = async () => {
     if (!newDepense.montant) {
       setMessage('Veuillez saisir un montant');
@@ -748,6 +818,9 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         id_depense: '',
         libelle: ''
       });
+      setAvanceClientLocked(false);
+      setAvanceClientSearch({ mois: new Date().getMonth(), annee: String(new Date().getFullYear()), numContrat: '' });
+      setAvanceClientSearchError('');
       loadData();
       if (showDepensesRecuperables) {
         loadDepensesRecuperables();
@@ -1948,35 +2021,101 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
         )}
 
         {newRecette.type_recette === 'Avance Client' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 p-4 bg-blue-50 rounded-lg">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Numéro de contrat</label>
-              <input
-                type="text"
-                value={newRecette.numero_contrat}
-                onChange={(e) => setNewRecette({...newRecette, numero_contrat: e.target.value})}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="CI..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Échéance</label>
-              <input
-                type="date"
-                value={newRecette.echeance}
-                onChange={(e) => setNewRecette({...newRecette, echeance: e.target.value})}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nom de l'assuré</label>
-              <input
-                type="text"
-                value={newRecette.assure}
-                onChange={(e) => setNewRecette({...newRecette, assure: e.target.value})}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Nom de l'assuré"
-              />
+          <div className="mt-4 p-4 bg-blue-50 rounded-lg space-y-4">
+            {!avanceClientLocked ? (
+              <>
+                <h5 className="text-sm font-semibold text-blue-800">
+                  Rechercher le contrat (table_terme du mois/année de l'échéance)
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Mois</label>
+                    <select
+                      value={avanceClientSearch.mois}
+                      onChange={(e) => setAvanceClientSearch({ ...avanceClientSearch, mois: parseInt(e.target.value) })}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      {MOIS_OPTIONS.map(m => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Année</label>
+                    <input
+                      type="number"
+                      value={avanceClientSearch.annee}
+                      onChange={(e) => setAvanceClientSearch({ ...avanceClientSearch, annee: e.target.value })}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Numéro de contrat</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={avanceClientSearch.numContrat}
+                        onChange={(e) => setAvanceClientSearch({ ...avanceClientSearch, numContrat: e.target.value })}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSearchAvanceClientContrat()}
+                        className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="CI..."
+                      />
+                      <button
+                        onClick={handleSearchAvanceClientContrat}
+                        disabled={avanceClientSearching}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 disabled:opacity-50"
+                      >
+                        <Search className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {avanceClientSearchError && (
+                  <p className="text-sm text-red-600">{avanceClientSearchError}</p>
+                )}
+              </>
+            ) : (
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-blue-800 font-medium">✅ Contrat trouvé et verrouillé</p>
+                <button
+                  onClick={handleResetAvanceClientSearch}
+                  className="text-sm text-blue-700 underline hover:text-blue-900"
+                >
+                  Nouvelle recherche
+                </button>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Numéro de contrat</label>
+                <input
+                  type="text"
+                  value={newRecette.numero_contrat}
+                  readOnly
+                  className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
+                  placeholder="Résultat de la recherche"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Échéance</label>
+                <input
+                  type="date"
+                  value={newRecette.echeance}
+                  readOnly
+                  className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nom de l'assuré</label>
+                <input
+                  type="text"
+                  value={newRecette.assure}
+                  readOnly
+                  className="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed"
+                  placeholder="Résultat de la recherche"
+                />
+              </div>
             </div>
           </div>
         )}
