@@ -96,6 +96,14 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     type: string;
     jours: number;
   } | null>(null);
+  // Vérification d'unicité du numéro de contrat Affaire (table "affaire",
+  // toutes dates confondues) : déclenchée dès la sortie du champ, avant de
+  // passer aux autres champs, pour éviter une saisie erronée d'un numéro
+  // déjà utilisé.
+  const [affaireDuplicateCheck, setAffaireDuplicateCheck] = useState<{
+    status: 'idle' | 'checking' | 'blocked';
+    message: string;
+  }>({ status: 'idle', message: '' });
 
   React.useEffect(() => {
     loadAvailableMonths();
@@ -135,6 +143,11 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     let cleanedValue = value;
     if (name === 'contractNumber') {
       cleanedValue = trimSpaces(value);
+      // L'utilisateur retouche le numéro : on lève le blocage éventuel, la
+      // vérification sera refaite à la prochaine sortie du champ (onBlur).
+      if (affaireDuplicateCheck.status !== 'idle') {
+        setAffaireDuplicateCheck({ status: 'idle', message: '' });
+      }
     }
 
     let updatedData = {
@@ -174,6 +187,45 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     }
 
     setFormData(updatedData);
+  };
+
+  // Vérifie, pour un contrat Affaire, si ce numéro existe déjà dans la table
+  // "affaire" (toutes dates confondues) dès la sortie du champ — avant que
+  // l'utilisateur ne passe aux autres champs — pour éviter la saisie d'un
+  // numéro déjà utilisé.
+  const handleCheckAffaireDuplicate = async () => {
+    const numero = trimSpaces(formData.contractNumber);
+    if (formData.type !== 'Affaire' || !numero) return;
+
+    setAffaireDuplicateCheck({ status: 'checking', message: '' });
+    try {
+      const { data, error } = await supabase
+        .from('affaire')
+        .select('numero_contrat, assure, created_at')
+        .ilike('numero_contrat', numero)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Erreur vérification unicité contrat Affaire:', error);
+        setAffaireDuplicateCheck({ status: 'idle', message: '' });
+        return;
+      }
+
+      if (data) {
+        const dateContrat = new Date(data.created_at).toLocaleDateString('fr-FR');
+        setAffaireDuplicateCheck({
+          status: 'blocked',
+          message: `Ce numéro de contrat existe déjà — souscrit le ${dateContrat} pour ${data.assure || 'un assuré non renseigné'}. Veuillez saisir un autre numéro de contrat.`,
+        });
+      } else {
+        setAffaireDuplicateCheck({ status: 'idle', message: '' });
+      }
+    } catch (err) {
+      console.error('Erreur vérification unicité contrat Affaire:', err);
+      setAffaireDuplicateCheck({ status: 'idle', message: '' });
+    }
   };
 
   const searchInXML = async () => {
@@ -753,6 +805,32 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
     isSubmittingRef.current = true;
 
     try {
+    // Garde-fou : si l'utilisateur soumet avant que la vérification
+    // d'unicité (onBlur) n'ait eu le temps de s'exécuter (ex. Entrée dans le
+    // champ), on la refait ici de façon bloquante avant tout enregistrement.
+    if (formData.type === 'Affaire') {
+      const numero = trimSpaces(formData.contractNumber);
+      if (numero) {
+        const { data: duplicate } = await supabase
+          .from('affaire')
+          .select('numero_contrat, assure, created_at')
+          .ilike('numero_contrat', numero)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (duplicate) {
+          const dateContrat = new Date(duplicate.created_at).toLocaleDateString('fr-FR');
+          setAffaireDuplicateCheck({
+            status: 'blocked',
+            message: `Ce numéro de contrat existe déjà — souscrit le ${dateContrat} pour ${duplicate.assure || 'un assuré non renseigné'}. Veuillez saisir un autre numéro de contrat.`,
+          });
+          setMessage('❌ Ce numéro de contrat existe déjà. Veuillez en saisir un autre.');
+          setTimeout(() => setMessage(''), 5000);
+          return;
+        }
+      }
+    }
+
     // Nettoyer le numéro de contrat avant validation. La casse est normalisée
     // en majuscules ici (point unique d'enregistrement, avant écriture dans
     // rapport/Terme/Affaire/Chèques) pour qu'un même contrat ne puisse jamais
@@ -1158,6 +1236,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 name="contractNumber"
                 value={formData.contractNumber}
                 onChange={handleInputChange}
+                onBlur={formData.type === 'Affaire' ? handleCheckAffaireDuplicate : undefined}
                 disabled={isRetourTechniqueMode || isRetourContentieuxMode}
                 className="flex-1 p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 bg-white"
                 placeholder="Entrez le numéro de contrat"
@@ -1174,7 +1253,17 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
                 </button>
               )}
             </div>
+            {formData.type === 'Affaire' && affaireDuplicateCheck.status === 'checking' && (
+              <p className="text-xs text-gray-500 mt-2">Vérification du numéro de contrat...</p>
+            )}
+            {formData.type === 'Affaire' && affaireDuplicateCheck.status === 'blocked' && (
+              <div className="mt-2 bg-red-50 border border-red-300 rounded-xl p-4">
+                <p className="text-sm text-red-800 font-medium">⛔ {affaireDuplicateCheck.message}</p>
+              </div>
+            )}
           </div>
+
+          <fieldset disabled={formData.type === 'Affaire' && affaireDuplicateCheck.status === 'blocked'} className="space-y-4 sm:space-y-6">
 
           {/* Champ Date d'échéance pour Encaissement autre code */}
           {formData.type === 'Encaissement pour autre code' && (
@@ -1684,6 +1773,7 @@ const ContractForm: React.FC<ContractFormProps> = ({ username }) => {
               )}
             </button>
           </div>
+          </fieldset>
         </form>
         </div>
       </div>
