@@ -336,9 +336,10 @@ const CreditsList: React.FC = () => {
         toDate.setHours(23, 59, 59, 999);
         creditDate.setHours(0, 0, 0, 0);
 
-        // Filtre par nom de client avec tolérance
+        // Filtre par nom de client ou numéro de contrat, avec tolérance
         const matchesClientName = filters.nomClient
-          ? normalizeString(credit.assure || '').includes(normalizeString(filters.nomClient))
+          ? normalizeString(credit.assure || '').includes(normalizeString(filters.nomClient)) ||
+            normalizeString(credit.numero_contrat || '').includes(normalizeString(filters.nomClient))
           : true;
 
         return (
@@ -1484,7 +1485,7 @@ const CreditsList: React.FC = () => {
                 name="nomClient"
                 value={filters.nomClient}
                 onChange={handleFilterChange}
-                placeholder="Nom du client..."
+                placeholder="Nom du client ou N° contrat..."
                 className="p-2 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
               />
 
