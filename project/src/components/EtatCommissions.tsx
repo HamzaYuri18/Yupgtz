@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, CreditCard as Edit2, Check, X, DollarSign, TrendingDown, TrendingUp, Download, Filter, Heart, Unlock } from 'lucide-react';
+import { Calendar, CreditCard as Edit2, Check, X, DollarSign, TrendingDown, TrendingUp, Download, Filter, Heart, Unlock, Eye, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { expensesSupabase } from '../lib/expensesSupabase';
 import * as XLSX from 'xlsx';
@@ -16,6 +16,7 @@ interface QuinzaineData {
   commission_liberee: number;
   total_charges: number;
   total_depenses: number;
+  total_salaires: number;
   commission_nette: number;
   statut: 'Non Liquidée' | 'Liquidée';
   date_liquidation: string | null;
@@ -38,6 +39,12 @@ const EtatCommissions: React.FC = () => {
   const [filterAnnee, setFilterAnnee] = useState<string>(String(new Date().getFullYear()));
   const [filterQuinzaine, setFilterQuinzaine] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [salairesModal, setSalairesModal] = useState<{
+    open: boolean;
+    quinzaine: QuinzaineData | null;
+    rows: Array<{ id?: number; mois: number; annee: number; montant_salaires: number; date_liquidation_salaires: string | null; mode_liquidation_salaires: string | null }>;
+    loading: boolean;
+  }>({ open: false, quinzaine: null, rows: [], loading: false });
   const itemsPerPage = 10;
 
   const moisNoms = [
@@ -65,7 +72,7 @@ const EtatCommissions: React.FC = () => {
         date_debut: `${year}-${String(month).padStart(2, '0')}-01`,
         date_fin: `${year}-${String(month).padStart(2, '0')}-15`,
         commission: 0, commission_vie: 0, commission_liberee: 0,
-        total_charges: 0, total_depenses: 0, commission_nette: 0,
+        total_charges: 0, total_depenses: 0, total_salaires: 0, commission_nette: 0,
         statut: 'Non Liquidée', date_liquidation: null, banque: null,
         mode_liquidation: null, remarques: null
       });
@@ -75,7 +82,7 @@ const EtatCommissions: React.FC = () => {
         date_debut: `${year}-${String(month).padStart(2, '0')}-16`,
         date_fin: `${year}-${String(month).padStart(2, '0')}-${lastDay}`,
         commission: 0, commission_vie: 0, commission_liberee: 0,
-        total_charges: 0, total_depenses: 0, commission_nette: 0,
+        total_charges: 0, total_depenses: 0, total_salaires: 0, commission_nette: 0,
         statut: 'Non Liquidée', date_liquidation: null, banque: null,
         mode_liquidation: null, remarques: null
       });
@@ -149,8 +156,22 @@ const EtatCommissions: React.FC = () => {
     } catch { return 0; }
   };
 
-  const calcNette = (commission: number, vie: number, liberee: number, charges: number, depenses: number) =>
-    commission + vie + liberee - charges - depenses;
+  // Somme des salaires (salaires_loyer.montant_salaires) dont la date de
+  // liquidation tombe dans la quinzaine — déduite de la commission nette.
+  const calculateSalaires = async (dateDebut: string, dateFin: string): Promise<number> => {
+    try {
+      const { data, error } = await supabase
+        .from('salaires_loyer')
+        .select('montant_salaires')
+        .gte('date_liquidation_salaires', dateDebut)
+        .lte('date_liquidation_salaires', dateFin);
+      if (error) throw error;
+      return data?.reduce((sum, s) => sum + (Number(s.montant_salaires) || 0), 0) || 0;
+    } catch { return 0; }
+  };
+
+  const calcNette = (commission: number, vie: number, liberee: number, charges: number, depenses: number, salaires: number) =>
+    commission + vie + liberee - charges - depenses - salaires;
 
   const loadQuinzaines = async () => {
     setLoading(true);
@@ -191,6 +212,7 @@ const EtatCommissions: React.FC = () => {
             // tant que la quinzaine n'est pas réenregistrée manuellement.
             const charges = await calculateCharges(q.date_debut, q.date_fin);
             const depenses = Number(existing.total_depenses) || 0;
+            const salaires = await calculateSalaires(q.date_debut, q.date_fin);
             return {
               ...q,
               id: existing.id,
@@ -199,7 +221,8 @@ const EtatCommissions: React.FC = () => {
               commission_liberee: liberee,
               total_charges: charges,
               total_depenses: depenses,
-              commission_nette: calcNette(totalComm, vie, liberee, charges, depenses),
+              total_salaires: salaires,
+              commission_nette: calcNette(totalComm, vie, liberee, charges, depenses, salaires),
               statut: existing.statut,
               date_liquidation: existing.date_liquidation,
               banque: existing.banque,
@@ -209,6 +232,7 @@ const EtatCommissions: React.FC = () => {
           } else {
             const charges = await calculateCharges(q.date_debut, q.date_fin);
             const depenses = await calculateDepenses(q.date_debut, q.date_fin);
+            const salaires = await calculateSalaires(q.date_debut, q.date_fin);
             let commFromTable = 0;
             if (isAfterThreshold(q.annee, q.mois, q.quinzaine)) {
               commFromTable = await calculateCommissionsFromTable(q.date_debut, q.date_fin);
@@ -219,7 +243,8 @@ const EtatCommissions: React.FC = () => {
               commission: totalComm,
               total_charges: charges,
               total_depenses: depenses,
-              commission_nette: calcNette(totalComm, 0, 0, charges, depenses)
+              total_salaires: salaires,
+              commission_nette: calcNette(totalComm, 0, 0, charges, depenses, salaires)
             };
           }
         })
@@ -237,6 +262,7 @@ const EtatCommissions: React.FC = () => {
   const refreshCalculations = async (quinzaine: QuinzaineData) => {
     const charges = await calculateCharges(quinzaine.date_debut, quinzaine.date_fin);
     const depenses = await calculateDepenses(quinzaine.date_debut, quinzaine.date_fin);
+    const salaires = await calculateSalaires(quinzaine.date_debut, quinzaine.date_fin);
     let commFromTable = 0;
     if (isAfterThreshold(quinzaine.annee, quinzaine.mois, quinzaine.quinzaine)) {
       commFromTable = await calculateCommissionsFromTable(quinzaine.date_debut, quinzaine.date_fin);
@@ -247,7 +273,8 @@ const EtatCommissions: React.FC = () => {
     return {
       total_charges: charges,
       total_depenses: depenses,
-      commission_nette: calcNette(commission, vie, liberee, charges, depenses)
+      total_salaires: salaires,
+      commission_nette: calcNette(commission, vie, liberee, charges, depenses, salaires)
     };
   };
 
@@ -269,6 +296,7 @@ const EtatCommissions: React.FC = () => {
         commission_liberee: Number(editData.commission_liberee ?? quinzaine.commission_liberee ?? 0),
         total_charges: calculations.total_charges,
         total_depenses: calculations.total_depenses,
+        total_salaires: calculations.total_salaires,
         commission_nette: calculations.commission_nette,
         statut: editData.statut ?? quinzaine.statut,
         date_liquidation: editData.date_liquidation ?? quinzaine.date_liquidation,
@@ -391,6 +419,25 @@ const EtatCommissions: React.FC = () => {
     } catch { setError('Erreur export dépenses'); }
   };
 
+  // Affiche le détail des salaires (mois concerné, montant, date et mode de
+  // liquidation) dont la date de liquidation tombe dans cette quinzaine.
+  const openSalairesModal = async (quinzaine: QuinzaineData) => {
+    setSalairesModal({ open: true, quinzaine, rows: [], loading: true });
+    try {
+      const { data, error } = await supabase
+        .from('salaires_loyer')
+        .select('id, mois, annee, montant_salaires, date_liquidation_salaires, mode_liquidation_salaires')
+        .gte('date_liquidation_salaires', quinzaine.date_debut)
+        .lte('date_liquidation_salaires', quinzaine.date_fin)
+        .order('date_liquidation_salaires', { ascending: true });
+      if (error) throw error;
+      setSalairesModal(m => ({ ...m, rows: data || [], loading: false }));
+    } catch {
+      setSalairesModal(m => ({ ...m, loading: false }));
+      setError('Erreur lors du chargement du détail des salaires');
+    }
+  };
+
   const applyFilters = () => {
     let filtered = [...quinzaines];
     if (filterAnnee !== 'all') filtered = filtered.filter(q => q.annee === Number(filterAnnee));
@@ -449,11 +496,16 @@ const EtatCommissions: React.FC = () => {
     const depensesDiff = q.total_depenses - prev.total_depenses;
     const depensesPct = prev.total_depenses > 0 ? (depensesDiff / prev.total_depenses) * 100 : 0;
 
+    const salairesDiff = q.total_salaires - prev.total_salaires;
+    const salairesPct = prev.total_salaires > 0 ? (salairesDiff / prev.total_salaires) * 100 : 0;
+
     return {
       chargesDiff,
       chargesPct,
       depensesDiff,
       depensesPct,
+      salairesDiff,
+      salairesPct,
       prevPeriod: `Q${prev.quinzaine} ${moisNoms[prev.mois - 1].substring(0, 3)} ${prev.annee}`
     };
   };
@@ -745,6 +797,13 @@ const EtatCommissions: React.FC = () => {
                           {depensesUp ? '▲' : '▼'} {Math.abs(evo.depensesPct).toFixed(1)}%
                         </span>
                       </span>
+                      {/* Salaires */}
+                      <span className="flex items-center gap-1">
+                        <span className="text-gray-400 text-[10px] uppercase">Salaires:</span>
+                        <span className={`font-bold flex items-center ${evo.salairesDiff > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                          {evo.salairesDiff > 0 ? '▲' : '▼'} {Math.abs(evo.salairesPct).toFixed(1)}%
+                        </span>
+                      </span>
                     </div>
                   </div>
                 );
@@ -769,6 +828,7 @@ const EtatCommissions: React.FC = () => {
                 <th className="px-3 py-4 text-right text-[11px] font-bold text-violet-300 uppercase tracking-wider whitespace-nowrap">Comm. Libérée</th>
                 <th className="px-3 py-4 text-right text-[11px] font-bold text-red-300 uppercase tracking-wider whitespace-nowrap">Charges</th>
                 <th className="px-3 py-4 text-right text-[11px] font-bold text-amber-300 uppercase tracking-wider whitespace-nowrap">Dépenses</th>
+                <th className="px-3 py-4 text-right text-[11px] font-bold text-fuchsia-300 uppercase tracking-wider whitespace-nowrap">Salaires</th>
                 <th className="px-3 py-4 text-right text-[11px] font-bold text-emerald-300 uppercase tracking-wider whitespace-nowrap">Comm. Nette</th>
                 <th className="px-3 py-4 text-left text-[11px] font-bold text-white/70 uppercase tracking-wider">Statut</th>
                 <th className="px-3 py-4 text-left text-[11px] font-bold text-white/70 uppercase tracking-wider">Liquidation</th>
@@ -885,6 +945,28 @@ const EtatCommissions: React.FC = () => {
                         return (
                           <div className={`text-[10px] font-bold mt-0.5 leading-none ${isUp ? 'text-red-500' : 'text-green-600'}`} title={`Evolution par rapport à la quinzaine précédente : ${isUp ? '+' : ''}${evo.depensesDiff.toFixed(3)} DT`}>
                             {isUp ? '▲' : '▼'} {Math.abs(evo.depensesPct).toFixed(1)}%
+                          </div>
+                        );
+                      })()}
+                    </td>
+
+                    {/* Salaires */}
+                    <td
+                      className="px-3 py-3 text-right cursor-pointer hover:bg-fuchsia-50 transition-colors group"
+                      onClick={() => openSalairesModal(quinzaine)}
+                      title="Cliquer pour afficher le détail des salaires"
+                    >
+                      <div className="flex items-center justify-end space-x-1">
+                        <span className="font-semibold text-fuchsia-600">{fmt(quinzaine.total_salaires)}</span>
+                        <Eye className="w-3 h-3 text-fuchsia-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      {(() => {
+                        const evo = getEvolution(quinzaine);
+                        if (!evo || evo.salairesDiff === 0) return null;
+                        const isUp = evo.salairesDiff > 0;
+                        return (
+                          <div className={`text-[10px] font-bold mt-0.5 leading-none ${isUp ? 'text-red-500' : 'text-green-600'}`} title={`Evolution par rapport à la quinzaine précédente : ${isUp ? '+' : ''}${evo.salairesDiff.toFixed(3)} DT`}>
+                            {isUp ? '▲' : '▼'} {Math.abs(evo.salairesPct).toFixed(1)}%
                           </div>
                         );
                       })()}
@@ -1019,6 +1101,91 @@ const EtatCommissions: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Modal — Détail des salaires */}
+      {salairesModal.open && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setSalairesModal(m => ({ ...m, open: false }))}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <Users className="w-6 h-6 text-fuchsia-600" />
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">Détail des salaires</h3>
+                  {salairesModal.quinzaine && (
+                    <p className="text-sm text-gray-500 mt-0.5">
+                      Q{salairesModal.quinzaine.quinzaine} {moisNoms[salairesModal.quinzaine.mois - 1]} {salairesModal.quinzaine.annee}
+                      {' '}({formatDate(salairesModal.quinzaine.date_debut)} – {formatDate(salairesModal.quinzaine.date_fin)})
+                    </p>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => setSalairesModal(m => ({ ...m, open: false }))}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5">
+              {salairesModal.loading ? (
+                <div className="text-center py-10 text-gray-400">Chargement...</div>
+              ) : salairesModal.rows.length === 0 ? (
+                <div className="text-center py-10 text-gray-500">
+                  <Users className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+                  Aucun salaire liquidé sur cette période
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-gray-200">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="px-4 py-2.5 text-left font-semibold text-gray-700">Mois concerné</th>
+                        <th className="px-4 py-2.5 text-left font-semibold text-gray-700">Date liquidation</th>
+                        <th className="px-4 py-2.5 text-left font-semibold text-gray-700">Mode</th>
+                        <th className="px-4 py-2.5 text-right font-semibold text-gray-700">Montant</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {salairesModal.rows.map((r) => (
+                        <tr key={r.id ?? `${r.annee}-${r.mois}`} className="hover:bg-gray-50">
+                          <td className="px-4 py-2.5 font-medium text-gray-900">{moisNoms[r.mois - 1]} {r.annee}</td>
+                          <td className="px-4 py-2.5 text-gray-700">{formatDate(r.date_liquidation_salaires)}</td>
+                          <td className="px-4 py-2.5 text-gray-700">{r.mode_liquidation_salaires || '-'}</td>
+                          <td className="px-4 py-2.5 text-right font-semibold text-fuchsia-700">{fmt(Number(r.montant_salaires) || 0)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-gray-50">
+                      <tr>
+                        <td colSpan={3} className="px-4 py-2.5 text-right font-bold text-gray-700">Total</td>
+                        <td className="px-4 py-2.5 text-right font-bold text-fuchsia-700">
+                          {fmt(salairesModal.rows.reduce((s, r) => s + (Number(r.montant_salaires) || 0), 0))}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => setSalairesModal(m => ({ ...m, open: false }))}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
