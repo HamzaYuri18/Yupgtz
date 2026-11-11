@@ -41,3 +41,10 @@ export interface XMLContract {
   numTel?: string;
   numTel2?: string;
 }
+
+export interface IRDSRow {
+  souscripteur: string;
+  police: string;
+  dateEcheance: string;
+  montantTTC: number;
+}

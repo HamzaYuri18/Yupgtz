@@ -1,5 +1,16 @@
 import * as XLSX from 'xlsx';
-import { XMLContract } from '../types';
+import { XMLContract, IRDSRow } from '../types';
+
+const cellToString = (value: unknown): string =>
+  value === null || value === undefined ? '' : String(value).trim();
+
+const normalizeHeader = (header: unknown): string => {
+  return cellToString(header)
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+};
 
 const convertExcelDate = (excelDate: any): string => {
   if (!excelDate) return '';
@@ -108,4 +119,65 @@ export const parseXLSXFile = (file: File): Promise<XMLContract[]> => {
 
 export const findContractInXLSX = (contracts: XMLContract[], contractNumber: string): XMLContract | null => {
   return contracts.find(contract => contract.contractNumber === contractNumber) || null;
+};
+
+export const parseIRDSXLSXFile = (file: File): Promise<IRDSRow[]> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array', cellDates: false });
+
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true }) as unknown[][];
+
+        if (jsonData.length === 0) {
+          resolve([]);
+          return;
+        }
+
+        const headerRow = jsonData[0];
+        const normalizedHeaders = headerRow.map(normalizeHeader);
+
+        const colSouscripteur = normalizedHeaders.findIndex(h => h === 'souscripteur');
+        const colPolice = normalizedHeaders.findIndex(h => h === 'police');
+        const colDateEcheance = normalizedHeaders.findIndex(h => h.includes('echeance'));
+        const colMontantTTC = normalizedHeaders.findIndex(h => h.includes('montant'));
+
+        if (colSouscripteur === -1 || colPolice === -1 || colDateEcheance === -1 || colMontantTTC === -1) {
+          reject(new Error('Colonnes attendues introuvables. Le fichier doit contenir : Souscripteur, Police, Date d\'échéance, Montant TTC'));
+          return;
+        }
+
+        const rows: IRDSRow[] = [];
+
+        for (let i = 1; i < jsonData.length; i++) {
+          const row = jsonData[i];
+          if (!row || row.length === 0) continue;
+
+          const souscripteur = cellToString(row[colSouscripteur]);
+          const police = cellToString(row[colPolice]);
+          const dateEcheance = convertExcelDate(row[colDateEcheance]);
+          const montantStr = cellToString(row[colMontantTTC]) || '0';
+          const montantTTC = parseFloat(montantStr.replace(',', '.')) || 0;
+
+          if (souscripteur || police) {
+            rows.push({ souscripteur, police, dateEcheance, montantTTC });
+          }
+        }
+
+        resolve(rows);
+      } catch (error) {
+        console.error('❌ Erreur lors du parsing XLSX IRDS:', error);
+        reject(new Error('Erreur lors du parsing du fichier IRDS: ' + (error as Error).message));
+      }
+    };
+
+    reader.onerror = () => reject(new Error('Erreur de lecture du fichier'));
+    reader.readAsArrayBuffer(file);
+  });
 };

@@ -2004,6 +2004,92 @@ export const insertContractsToTable = async (month: string, contracts: any[]): P
   }
 };
 
+// Fonction pour nettoyer/sécuriser un nom de table IRDS à partir du nom saisi par l'utilisateur
+export const sanitizeIrdsTableName = (label: string): string => {
+  let name = label.trim().replace(/[^a-zA-Z0-9_]/g, '_');
+  if (!/^[a-zA-Z_]/.test(name)) {
+    name = 'irds_' + name;
+  }
+  return name.slice(0, 63);
+};
+
+// Fonction pour créer une table IRDS dynamique (Souscripteur, Police, Date d'échéance, Montant TTC)
+export const createIrdsTable = async (tableName: string): Promise<void> => {
+  const { error: checkError } = await supabase
+    .from(tableName)
+    .select('id')
+    .limit(1);
+
+  if (!checkError) {
+    console.log(`✅ Table IRDS ${tableName} existe déjà`);
+    return;
+  }
+
+  const { error: rpcError } = await supabase.rpc('create_irds_table', {
+    table_name: tableName
+  });
+
+  if (rpcError) {
+    console.error(`❌ Erreur lors de la création de la table IRDS ${tableName}:`, rpcError);
+    throw rpcError;
+  }
+
+  console.log(`✅ Table IRDS ${tableName} créée avec succès`);
+};
+
+// Fonction pour insérer les lignes IRDS dans la table dynamique
+export const insertIrdsRows = async (
+  tableName: string,
+  rows: { souscripteur: string; police: string; dateEcheance: string; montantTTC: number }[]
+): Promise<boolean> => {
+  const rowsData = rows.map(row => ({
+    souscripteur: row.souscripteur,
+    police: row.police,
+    date_echeance: row.dateEcheance || null,
+    montant_ttc: Number(row.montantTTC) || 0
+  }));
+
+  const { error } = await supabase
+    .from(tableName)
+    .insert(rowsData);
+
+  if (error) {
+    console.error('❌ Erreur insertion lignes IRDS:', error);
+    return false;
+  }
+
+  console.log(`✅ ${rowsData.length} lignes IRDS insérées dans ${tableName}`);
+  return true;
+};
+
+// Fonction pour enregistrer un import IRDS dans le registre irds_imports
+export const registerIrdsImport = async (nomFichier: string, tableName: string, nbLignes: number): Promise<void> => {
+  const { error } = await supabase
+    .from('irds_imports')
+    .upsert([{ nom_fichier: nomFichier, table_name: tableName, nb_lignes: nbLignes }], {
+      onConflict: 'nom_fichier'
+    });
+
+  if (error) {
+    console.error('❌ Erreur enregistrement import IRDS:', error);
+  }
+};
+
+// Fonction pour récupérer la liste des fichiers IRDS déjà importés
+export const getIrdsImports = async (): Promise<{ nom_fichier: string; table_name: string; nb_lignes: number; created_at: string }[]> => {
+  const { data, error } = await supabase
+    .from('irds_imports')
+    .select('nom_fichier, table_name, nb_lignes, created_at')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('❌ Erreur récupération imports IRDS:', error);
+    return [];
+  }
+
+  return data || [];
+};
+
 // Fonction pour rechercher un contrat dans une table mensuelle
 export const searchContractInTable = async (month: string, contractNumber: string): Promise<any | null> => {
   try {

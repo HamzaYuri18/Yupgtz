@@ -1,8 +1,17 @@
 import React, { useState } from 'react';
-import { Upload, FileX, CheckCircle, AlertCircle } from 'lucide-react';
-import { parseXLSXFile } from '../utils/xlsxParser';
+import { Upload, FileX, CheckCircle, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { parseXLSXFile, parseIRDSXLSXFile } from '../utils/xlsxParser';
 import { saveXMLContracts, getXMLContracts } from '../utils/storage';
-import { createMonthlyTable, insertContractsToTable, getAvailableMonths } from '../utils/supabaseService';
+import {
+  createMonthlyTable,
+  insertContractsToTable,
+  getAvailableMonths,
+  sanitizeIrdsTableName,
+  createIrdsTable,
+  insertIrdsRows,
+  registerIrdsImport,
+  getIrdsImports
+} from '../utils/supabaseService';
 
 const XLSXUploader: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -13,10 +22,82 @@ const XLSXUploader: React.FC = () => {
   const [existingContracts, setExistingContracts] = useState<any[]>([]);
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
 
+  const [irdsFile, setIrdsFile] = useState<File | null>(null);
+  const [irdsName, setIrdsName] = useState<string>('');
+  const [isIrdsUploading, setIsIrdsUploading] = useState(false);
+  const [irdsMessage, setIrdsMessage] = useState('');
+  const [irdsImports, setIrdsImports] = useState<{ nom_fichier: string; table_name: string; nb_lignes: number; created_at: string }[]>([]);
+
   React.useEffect(() => {
     setExistingContracts(getXMLContracts());
     loadAvailableMonths();
+    loadIrdsImports();
   }, []);
+
+  const loadIrdsImports = async () => {
+    const imports = await getIrdsImports();
+    setIrdsImports(imports);
+  };
+
+  const handleIrdsFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      if (selectedFile.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || selectedFile.name.endsWith('.xlsx')) {
+        setIrdsFile(selectedFile);
+        setIrdsMessage('');
+      } else {
+        setIrdsMessage('Veuillez sélectionner un fichier XLSX valide');
+        setIrdsFile(null);
+      }
+    }
+  };
+
+  const clearIrdsFile = () => {
+    setIrdsFile(null);
+    setIrdsName('');
+    setIrdsMessage('');
+  };
+
+  const handleIrdsUpload = async () => {
+    if (!irdsFile || !irdsName.trim()) {
+      setIrdsMessage('Veuillez sélectionner un fichier et saisir un nom (ex: IRDS_Juin_2026)');
+      return;
+    }
+
+    setIsIrdsUploading(true);
+    setIrdsMessage('');
+
+    try {
+      const rows = await parseIRDSXLSXFile(irdsFile);
+
+      if (rows.length === 0) {
+        setIrdsMessage('❌ Aucune ligne exploitable trouvée dans le fichier');
+        setIsIrdsUploading(false);
+        return;
+      }
+
+      const tableName = sanitizeIrdsTableName(irdsName);
+
+      await createIrdsTable(tableName);
+
+      const insertSuccess = await insertIrdsRows(tableName, rows);
+      if (!insertSuccess) {
+        throw new Error('Échec de l\'insertion des données IRDS');
+      }
+
+      await registerIrdsImport(irdsName.trim(), tableName, rows.length);
+
+      setIrdsMessage(`✅ ${rows.length} lignes importées avec succès dans Supabase (table: ${tableName})`);
+      setIrdsFile(null);
+      setIrdsName('');
+      await loadIrdsImports();
+    } catch (error) {
+      console.error('❌ Erreur lors de l\'import IRDS:', error);
+      setIrdsMessage('❌ Erreur lors de l\'import IRDS: ' + (error as Error).message);
+    }
+
+    setIsIrdsUploading(false);
+  };
 
   const loadAvailableMonths = async () => {
     const months = await getAvailableMonths();
@@ -242,6 +323,131 @@ const XLSXUploader: React.FC = () => {
 
 Note: La première ligne doit contenir les en-têtes. Les colonnes NUM_TEL et NUM_TEL_2 sont optionnelles.`}
           </pre>
+        </div>
+
+        {/* Import IRDS */}
+        <div className="mt-10 pt-8 border-t border-gray-200">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="p-2 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-lg shadow-md">
+              <FileSpreadsheet className="w-6 h-6 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">Import IRDS</h2>
+          </div>
+
+          <div className="mb-6">
+            <label htmlFor="irds-name" className="block text-sm font-medium text-gray-700 mb-2">
+              Nom du fichier / de la table (ex: IRDS_Juin_2026)
+            </label>
+            <input
+              type="text"
+              id="irds-name"
+              value={irdsName}
+              onChange={(e) => setIrdsName(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 bg-gradient-to-r from-purple-50 to-white"
+              placeholder="Ex: IRDS_Juin_2026"
+              required
+            />
+          </div>
+
+          {irdsImports.length > 0 && (
+            <div className="mb-6 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-4 border border-purple-200 shadow-sm">
+              <h3 className="text-sm font-semibold text-purple-800 mb-2 flex items-center">
+                <div className="w-2 h-2 bg-purple-500 rounded-full mr-2"></div>
+                Fichiers IRDS déjà importés:
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {irdsImports.map((imp, index) => (
+                  <span
+                    key={index}
+                    title={`${imp.nb_lignes} ligne(s)`}
+                    className="px-3 py-1 bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-800 rounded-full text-sm shadow-sm border border-purple-200"
+                  >
+                    {imp.nom_fichier}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-purple-400 hover:bg-purple-50/30 transition-all duration-200 bg-gradient-to-br from-gray-50 to-white">
+            <input
+              type="file"
+              accept=".xlsx"
+              onChange={handleIrdsFileChange}
+              className="hidden"
+              id="irds-xlsx-upload"
+            />
+
+            {!irdsFile ? (
+              <label htmlFor="irds-xlsx-upload" className="cursor-pointer">
+                <div className="w-12 h-12 mx-auto mb-4 p-2 bg-gradient-to-r from-purple-400 to-indigo-400 rounded-full">
+                  <Upload className="w-8 h-8 text-white" />
+                </div>
+                <p className="text-lg text-gray-600 mb-2">Cliquez pour sélectionner un fichier IRDS (XLSX)</p>
+                <p className="text-sm text-gray-400">Ou glissez-déposez votre fichier ici</p>
+              </label>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-center space-x-3">
+                  <div className="p-1 bg-green-100 rounded-full">
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                  </div>
+                  <span className="text-lg font-medium text-gray-900">{irdsFile.name}</span>
+                  <button
+                    onClick={clearIrdsFile}
+                    className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded-full transition-all duration-200"
+                  >
+                    <FileX className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <button
+                  onClick={handleIrdsUpload}
+                  disabled={isIrdsUploading || !irdsName.trim()}
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-400 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 flex items-center space-x-2 mx-auto shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                >
+                  {isIrdsUploading ? (
+                    <div className="w-5 h-5 border-2 border-white/70 border-t-white rounded-full animate-spin"></div>
+                  ) : (
+                    <Upload className="w-5 h-5" />
+                  )}
+                  <span>{isIrdsUploading ? 'Import en cours...' : 'Importer vers Supabase'}</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {irdsMessage && (
+            <div className={`mt-4 p-4 rounded-lg text-sm flex items-center space-x-2 ${
+              irdsMessage.includes('succès')
+               ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200 shadow-sm'
+               : 'bg-gradient-to-r from-red-50 to-pink-50 text-red-700 border border-red-200 shadow-sm'
+            }`}>
+              {irdsMessage.includes('succès') ? (
+                <CheckCircle className="w-5 h-5" />
+              ) : (
+                <AlertCircle className="w-5 h-5" />
+              )}
+              <span>{irdsMessage}</span>
+            </div>
+          )}
+
+          <div className="mt-8 bg-gray-50 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <div className="w-3 h-3 bg-gray-500 rounded-full mr-2"></div>
+              Format XLSX attendu:
+            </h3>
+            <pre className="bg-gradient-to-r from-white to-gray-50 p-4 rounded-lg border border-gray-200 text-sm overflow-x-auto shadow-sm">
+{`Fichier Excel (.xlsx) avec les colonnes suivantes (ordre libre):
+
+| Souscripteur | Police   | Date d'échéance | Montant TTC |
+|--------------|----------|------------------|-------------|
+| Jean Dupont  | POL-001  | 2026-06-30       | 1500.00     |
+| Marie Martin | POL-002  | 2026-06-15       | 2000.00     |
+
+Note: La première ligne doit contenir les en-têtes.`}
+            </pre>
+          </div>
         </div>
 
         {/* Liste des contrats XLSX existants */}
