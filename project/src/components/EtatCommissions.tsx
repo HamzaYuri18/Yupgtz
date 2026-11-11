@@ -42,7 +42,7 @@ const EtatCommissions: React.FC = () => {
   const [salairesModal, setSalairesModal] = useState<{
     open: boolean;
     quinzaine: QuinzaineData | null;
-    rows: Array<{ id?: number; mois: number; annee: number; montant_salaires: number; date_liquidation_salaires: string | null; mode_liquidation_salaires: string | null }>;
+    rows: Array<{ id?: number; mois: number; annee: number; montant_salaires: number; date_liquidation_salaires: string | null; mode_liquidation_salaires: string | null; remarques_salaires: string | null }>;
     loading: boolean;
   }>({ open: false, quinzaine: null, rows: [], loading: false });
   const itemsPerPage = 10;
@@ -426,7 +426,7 @@ const EtatCommissions: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from('salaires_loyer')
-        .select('id, mois, annee, montant_salaires, date_liquidation_salaires, mode_liquidation_salaires')
+        .select('id, mois, annee, montant_salaires, date_liquidation_salaires, mode_liquidation_salaires, remarques_salaires')
         .gte('date_liquidation_salaires', quinzaine.date_debut)
         .lte('date_liquidation_salaires', quinzaine.date_fin)
         .order('date_liquidation_salaires', { ascending: true });
@@ -1149,6 +1149,7 @@ const EtatCommissions: React.FC = () => {
                         <th className="px-4 py-2.5 text-left font-semibold text-gray-700">Mois concerné</th>
                         <th className="px-4 py-2.5 text-left font-semibold text-gray-700">Date liquidation</th>
                         <th className="px-4 py-2.5 text-left font-semibold text-gray-700">Mode</th>
+                        <th className="px-4 py-2.5 text-left font-semibold text-gray-700">Remarques</th>
                         <th className="px-4 py-2.5 text-right font-semibold text-gray-700">Montant</th>
                       </tr>
                     </thead>
@@ -1158,13 +1159,16 @@ const EtatCommissions: React.FC = () => {
                           <td className="px-4 py-2.5 font-medium text-gray-900">{moisNoms[r.mois - 1]} {r.annee}</td>
                           <td className="px-4 py-2.5 text-gray-700">{formatDate(r.date_liquidation_salaires)}</td>
                           <td className="px-4 py-2.5 text-gray-700">{r.mode_liquidation_salaires || '-'}</td>
+                          <td className="px-4 py-2.5 text-gray-600 italic max-w-[180px]" title={r.remarques_salaires || ''}>
+                            {r.remarques_salaires || '-'}
+                          </td>
                           <td className="px-4 py-2.5 text-right font-semibold text-fuchsia-700">{fmt(Number(r.montant_salaires) || 0)}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot className="bg-gray-50">
                       <tr>
-                        <td colSpan={3} className="px-4 py-2.5 text-right font-bold text-gray-700">Total</td>
+                        <td colSpan={4} className="px-4 py-2.5 text-right font-bold text-gray-700">Total</td>
                         <td className="px-4 py-2.5 text-right font-bold text-fuchsia-700">
                           {fmt(salairesModal.rows.reduce((s, r) => s + (Number(r.montant_salaires) || 0), 0))}
                         </td>

@@ -8,6 +8,7 @@ export interface SalaireLoyer {
   statut_salaires: boolean;
   mode_liquidation_salaires: string | null;
   date_liquidation_salaires: string | null;
+  remarques_salaires: string | null;
   montant_loyer: number;
   statut_loyer: boolean;
   mode_liquidation_loyer: string | null;
@@ -178,6 +179,7 @@ export const upsertSalaireLoyer = async (salaire: SalaireLoyer): Promise<boolean
       statut_salaires: salaire.statut_salaires,
       mode_liquidation_salaires: salaire.statut_salaires ? salaire.mode_liquidation_salaires : null,
       date_liquidation_salaires: salaire.statut_salaires ? salaire.date_liquidation_salaires : null,
+      remarques_salaires: salaire.remarques_salaires || null,
       montant_loyer: salaire.montant_loyer,
       statut_loyer: salaire.statut_loyer,
       mode_liquidation_loyer: salaire.statut_loyer ? salaire.mode_liquidation_loyer : null,

@@ -91,6 +91,7 @@ export default function SalairesLoyer() {
         statut_salaires: editData.statut_salaires || false,
         mode_liquidation_salaires: editData.statut_salaires ? editData.mode_liquidation_salaires || null : null,
         date_liquidation_salaires: editData.statut_salaires ? editData.date_liquidation_salaires || null : null,
+        remarques_salaires: editData.remarques_salaires || null,
         montant_loyer: editData.montant_loyer || 0,
         statut_loyer: editData.statut_loyer || false,
         mode_liquidation_loyer: editData.statut_loyer ? editData.mode_liquidation_loyer || null : null,
@@ -251,6 +252,11 @@ export default function SalairesLoyer() {
                         {isSalairesPaid && salaire.mode_liquidation_salaires && (
                           <p className="text-xs text-gray-400">{salaire.mode_liquidation_salaires}</p>
                         )}
+                        {salaire.remarques_salaires && (
+                          <p className="text-xs text-gray-400 italic mt-0.5" title={salaire.remarques_salaires}>
+                            💬 {salaire.remarques_salaires.length > 30 ? `${salaire.remarques_salaires.slice(0, 30)}…` : salaire.remarques_salaires}
+                          </p>
+                        )}
                       </td>
 
                       <td className="px-4 py-3 text-center">
@@ -407,6 +413,18 @@ export default function SalairesLoyer() {
                                 />
                               </div>
                             </div>
+                            {editType === 'salaires' && (
+                              <div className="mt-3">
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Remarques</label>
+                                <textarea
+                                  value={editData.remarques_salaires || ''}
+                                  onChange={e => setEditData({ ...editData, remarques_salaires: e.target.value || null })}
+                                  rows={2}
+                                  placeholder="Note libre sur ce salaire..."
+                                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                                />
+                              </div>
+                            )}
                             <div className="flex gap-2 mt-3">
                               <button
                                 onClick={handleSave}
