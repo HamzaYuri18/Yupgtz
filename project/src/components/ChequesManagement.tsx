@@ -257,8 +257,9 @@ export default function ChequesManagement() {
     }
 
     try {
-    const pdf = new jsPDF('portrait', 'mm', 'a4');
+    const pdf = new jsPDF('landscape', 'mm', 'a4');
     const pageWidth = pdf.internal.pageSize.width;
+    const pageHeight = pdf.internal.pageSize.height;
     const leftMargin = 15;
     const rightMargin = 15;
     const contentWidth = pageWidth - leftMargin - rightMargin;
@@ -282,11 +283,11 @@ export default function ChequesManagement() {
     y += 10;
 
     const cols = [
-      { label: 'N° Chèque', width: 26 },
-      { label: 'N° Contrat', width: 30 },
-      { label: 'Assuré', width: 45 },
-      { label: 'Banque', width: 35 },
-      { label: 'Montant (DT)', width: contentWidth - (26 + 30 + 45 + 35) },
+      { label: 'N° Chèque', width: 32 },
+      { label: 'N° Contrat', width: 38 },
+      { label: 'Assuré', width: 75 },
+      { label: 'Banque', width: 55 },
+      { label: 'Montant (DT)', width: contentWidth - (32 + 38 + 75 + 55) },
     ];
 
     const drawRow = (values: string[], yPos: number, bold = false) => {
@@ -311,14 +312,14 @@ export default function ChequesManagement() {
       total += montant;
       const partielDuJour = montant < parseFloat(c.Montant || '0') - 0.001;
       drawRow([
-        truncate(c.Numero_Cheque, 14),
-        truncate(c.Numero_Contrat, 16),
-        truncate(c.Assure, 24),
-        truncate(c.Banque, 18),
+        truncate(c.Numero_Cheque, 20),
+        truncate(c.Numero_Contrat, 22),
+        truncate(c.Assure, 42),
+        truncate(c.Banque, 30),
         montant.toFixed(3) + (partielDuJour ? ' (partiel)' : ''),
       ], y);
       y += 7;
-      if (y > 270) {
+      if (y > pageHeight - 25) {
         pdf.addPage();
         y = 20;
       }
