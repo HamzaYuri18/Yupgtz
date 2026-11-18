@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { Check, X, Filter, Calendar, TrendingUp, CreditCard, CheckCircle, Clock, ChevronDown, Plus } from 'lucide-react';
+import { Check, X, Filter, Calendar, TrendingUp, CreditCard, CheckCircle, Clock, ChevronDown, Plus, Undo2, FileDown } from 'lucide-react';
+import jsPDF from 'jspdf';
 import { getSession } from '../utils/auth';
 
 interface Cheque {
@@ -132,6 +133,111 @@ export default function ChequesManagement() {
     finally { setSaving(false); }
   };
 
+  // ── Annuler l'encaissement (Hamza uniquement) ───────────────────────────
+  const handleAnnulerEncaissement = async () => {
+    if (!isHamza || !selectedCheque) return;
+    if (!confirm('Êtes-vous sûr de vouloir annuler l\'encaissement de ce chèque ?')) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('Cheques')
+        .update({ Statut: 'Non Encaissé', date_encaissement: null })
+        .eq('id', selectedCheque.id);
+      if (error) throw error;
+      setShowModal(false);
+      setSelectedCheque(null);
+      await loadCheques();
+    } catch { alert('Erreur lors de l\'annulation de l\'encaissement'); }
+    finally { setSaving(false); }
+  };
+
+  // ── Chèques encaissés aujourd'hui (remise à zéro automatiquement le jour suivant) ──
+  const todayStr = new Date().toISOString().split('T')[0];
+  const chequesEncaissesAujourdhui = cheques.filter(c => c.date_encaissement === todayStr);
+  const montantEncaisseAujourdhui = chequesEncaissesAujourdhui.reduce((s, c) => s + parseFloat(c.Montant || '0'), 0);
+
+  const truncate = (s: string, max: number) => (s && s.length > max ? s.slice(0, max - 1) + '…' : (s || ''));
+
+  const handleDownloadBordereauEncaissement = () => {
+    if (chequesEncaissesAujourdhui.length === 0) return;
+
+    const pdf = new jsPDF('portrait', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.width;
+    const leftMargin = 15;
+    const rightMargin = 15;
+    const contentWidth = pageWidth - leftMargin - rightMargin;
+    let y = 20;
+
+    pdf.setFontSize(16);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('AGENCE SHIRI FARES HAMZA', pageWidth / 2, y, { align: 'center' });
+    y += 7;
+    pdf.setFontSize(13);
+    pdf.text('STAR ASSURANCE', pageWidth / 2, y, { align: 'center' });
+    y += 12;
+
+    pdf.setFontSize(14);
+    pdf.text('BORDEREAU DE REMISE DE CHEQUES A L\'ENCAISSEMENT', pageWidth / 2, y, { align: 'center', maxWidth: contentWidth });
+    y += 10;
+
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Date de remise : ${new Date().toLocaleDateString('fr-FR')}`, leftMargin, y);
+    y += 10;
+
+    const cols = [
+      { label: 'N° Chèque', width: 26 },
+      { label: 'N° Contrat', width: 30 },
+      { label: 'Assuré', width: 45 },
+      { label: 'Banque', width: 35 },
+      { label: 'Montant (DT)', width: contentWidth - (26 + 30 + 45 + 35) },
+    ];
+
+    const drawRow = (values: string[], yPos: number, bold = false) => {
+      let x = leftMargin;
+      pdf.setFont('helvetica', bold ? 'bold' : 'normal');
+      cols.forEach((col, i) => {
+        pdf.text(values[i], x + 2, yPos);
+        x += col.width;
+      });
+    };
+
+    pdf.setFillColor(230, 230, 230);
+    pdf.rect(leftMargin, y - 5, contentWidth, 8, 'F');
+    drawRow(cols.map(c => c.label), y, true);
+    y += 6;
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(leftMargin, y, leftMargin + contentWidth, y);
+    y += 6;
+
+    let total = 0;
+    chequesEncaissesAujourdhui.forEach(c => {
+      const montant = parseFloat(c.Montant || '0');
+      total += montant;
+      drawRow([
+        truncate(c.Numero_Cheque, 14),
+        truncate(c.Numero_Contrat, 16),
+        truncate(c.Assure, 24),
+        truncate(c.Banque, 18),
+        montant.toLocaleString('fr-FR', { minimumFractionDigits: 3 }),
+      ], y);
+      y += 7;
+      if (y > 270) {
+        pdf.addPage();
+        y = 20;
+      }
+    });
+
+    y += 2;
+    pdf.line(leftMargin, y, leftMargin + contentWidth, y);
+    y += 9;
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(`Nombre de chèques : ${chequesEncaissesAujourdhui.length}`, leftMargin, y);
+    y += 7;
+    pdf.text(`Montant total : ${total.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`, leftMargin, y);
+
+    pdf.save(`bordereau_remise_cheques_${todayStr}.pdf`);
+  };
+
   // ── Ajouter un chèque manquant (Hamza uniquement) ───────────────────────
   const openAddModal = () => {
     setAddForm(emptyAddForm);
@@ -218,6 +324,16 @@ export default function ChequesManagement() {
               <Clock className="w-3.5 h-3.5" />
               En attente : <span className="font-bold ml-1">{cheques.filter(c => c.Statut !== 'Encaissé').length}</span>
             </span>
+            <button
+              onClick={handleDownloadBordereauEncaissement}
+              disabled={chequesEncaissesAujourdhui.length === 0}
+              title={chequesEncaissesAujourdhui.length === 0 ? 'Aucun chèque encaissé aujourd\'hui' : 'Télécharger le bordereau de remise'}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 rounded-lg text-amber-300 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              Encaissés aujourd'hui : <span className="font-bold ml-1">{chequesEncaissesAujourdhui.length}</span>
+              <span className="text-amber-200/80">({fmt(montantEncaisseAujourdhui)})</span>
+            </button>
           </div>
         </div>
       </div>
@@ -570,12 +686,24 @@ export default function ChequesManagement() {
                     </button>
                   </>
                 ) : (
-                  <button
-                    onClick={() => { setShowModal(false); setSelectedCheque(null); }}
-                    className="w-full py-3 bg-gradient-to-r from-slate-700 to-slate-800 text-white font-semibold rounded-xl hover:from-slate-800 hover:to-slate-900 transition-all"
-                  >
-                    Fermer
-                  </button>
+                  <>
+                    {isHamza && (
+                      <button
+                        onClick={handleAnnulerEncaissement}
+                        disabled={saving}
+                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-xl hover:from-red-700 hover:to-red-800 disabled:opacity-50 transition-all shadow-sm"
+                      >
+                        {saving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                        Annuler l'encaissement
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { setShowModal(false); setSelectedCheque(null); }}
+                      className={`${isHamza ? 'px-5' : 'w-full'} py-3 bg-gradient-to-r from-slate-700 to-slate-800 text-white font-semibold rounded-xl hover:from-slate-800 hover:to-slate-900 transition-all`}
+                    >
+                      Fermer
+                    </button>
+                  </>
                 )}
               </div>
             </div>
