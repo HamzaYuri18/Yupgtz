@@ -315,7 +315,7 @@ export default function ChequesManagement() {
         truncate(c.Numero_Contrat, 16),
         truncate(c.Assure, 24),
         truncate(c.Banque, 18),
-        montant.toLocaleString('fr-FR', { minimumFractionDigits: 3 }) + (partielDuJour ? ' (partiel)' : ''),
+        montant.toFixed(3) + (partielDuJour ? ' (partiel)' : ''),
       ], y);
       y += 7;
       if (y > 270) {
@@ -330,7 +330,7 @@ export default function ChequesManagement() {
     pdf.setFont('helvetica', 'bold');
     pdf.text(`Nombre d'encaissements : ${encaissementsAujourdhui.length}`, leftMargin, y);
     y += 7;
-    pdf.text(`Montant total : ${total.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`, leftMargin, y);
+    pdf.text(`Montant total : ${total.toFixed(3)} DT`, leftMargin, y);
 
     pdf.save(`bordereau_remise_cheques_${todayStr}.pdf`);
     } catch (err) {
