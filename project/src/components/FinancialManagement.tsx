@@ -467,6 +467,10 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
   };
 
   const handleMarquerDepensePayee = async (depenseId: number) => {
+    if (!isHamza) {
+      return;
+    }
+
     if (!confirm('Êtes-vous sûr de vouloir marquer cette dépense comme payée/soldée ?')) {
       return;
     }
@@ -1781,7 +1785,7 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                   <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Date Récup. Prévue</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Statut</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Créé par</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Action</th>
+                  {isHamza && <th className="px-6 py-3 text-left text-xs font-medium text-yellow-600 uppercase tracking-wider">Action</th>}
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -1810,20 +1814,22 @@ const FinancialManagement: React.FC<FinancialManagementProps> = ({ username }) =
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{depense.cree_par}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {depense.statut_depense !== 'Payé' && (
-                        <button
-                          onClick={() => handleMarquerDepensePayee(depense.id!)}
-                          className="px-3 py-1 text-xs font-semibold rounded bg-green-600 text-white hover:bg-green-700 transition-colors"
-                          title="Marquer comme payé/soldé"
-                        >
-                          Marquer Payé
-                        </button>
-                      )}
-                      {depense.statut_depense === 'Payé' && (
-                        <span className="text-xs text-gray-400 italic">Soldé</span>
-                      )}
-                    </td>
+                    {isHamza && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {depense.statut_depense !== 'Payé' && (
+                          <button
+                            onClick={() => handleMarquerDepensePayee(depense.id!)}
+                            className="px-3 py-1 text-xs font-semibold rounded bg-green-600 text-white hover:bg-green-700 transition-colors"
+                            title="Marquer comme payé/soldé"
+                          >
+                            Marquer Payé
+                          </button>
+                        )}
+                        {depense.statut_depense === 'Payé' && (
+                          <span className="text-xs text-gray-400 italic">Soldé</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
