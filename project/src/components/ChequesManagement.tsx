@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { Check, X, Filter, Calendar, TrendingUp, CreditCard, CheckCircle, Clock, ChevronDown, Plus, Undo2, FileDown } from 'lucide-react';
+import { Check, X, Filter, Calendar, TrendingUp, CreditCard, CheckCircle, Clock, ChevronDown, Plus, Undo2, FileDown, Percent } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { getSession } from '../utils/auth';
 
@@ -18,6 +18,13 @@ interface Cheque {
   date_encaissement?: string;
 }
 
+interface DetailChequePartiel {
+  id: number;
+  cheque_id: number;
+  montant: number;
+  date_encaissement: string;
+}
+
 const currentMonth = new Date().toISOString().slice(0, 7);
 
 function fmt(n: number) {
@@ -26,6 +33,13 @@ function fmt(n: number) {
 function fmtDate(d: string) {
   if (!d) return '-';
   return new Date(d).toLocaleDateString('fr-FR');
+}
+// Date locale (pas UTC) pour éviter le décalage d'un jour autour de minuit en Tunisie (UTC+1)
+function getLocalDateStr(d: Date = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 const emptyAddForm = {
@@ -44,8 +58,12 @@ export default function ChequesManagement() {
   const [loading, setLoading] = useState(true);
   const [selectedCheque, setSelectedCheque] = useState<Cheque | null>(null);
   const [encaissementDate, setEncaissementDate] = useState('');
+  const [encaissementMontant, setEncaissementMontant] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // ── Encaissements partiels ──────────────────────────────────────────────
+  const [detailsByCheque, setDetailsByCheque] = useState<Record<number, DetailChequePartiel[]>>({});
 
   // ── Ajout manuel d'un chèque (Hamza uniquement) ─────────────────────────
   const [showAddModal, setShowAddModal] = useState(false);
@@ -63,7 +81,7 @@ export default function ChequesManagement() {
   // ── Stats mois ───────────────────────────────────────────────────────────
   const [statsMois, setStatsMois] = useState(currentMonth);
 
-  useEffect(() => { loadCheques(); }, []);
+  useEffect(() => { loadCheques(); loadPartialDetails(); }, []);
 
   const loadCheques = async () => {
     setLoading(true);
@@ -74,6 +92,37 @@ export default function ChequesManagement() {
       setCheques(data || []);
     } catch { alert('Erreur chargement chèques'); }
     finally { setLoading(false); }
+  };
+
+  const loadPartialDetails = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('details_cheques_encaisses_partiellement')
+        .select('*')
+        .order('date_encaissement', { ascending: true });
+      if (error) throw error;
+      const grouped: Record<number, DetailChequePartiel[]> = {};
+      (data || []).forEach((d: DetailChequePartiel) => {
+        if (!grouped[d.cheque_id]) grouped[d.cheque_id] = [];
+        grouped[d.cheque_id].push(d);
+      });
+      setDetailsByCheque(grouped);
+    } catch (err) {
+      console.error('Erreur chargement détails encaissements partiels:', err);
+    }
+  };
+
+  const getCumulativePartial = (chequeId: number) =>
+    (detailsByCheque[chequeId] || []).reduce((s, d) => s + Number(d.montant), 0);
+
+  const getReste = (c: Cheque) => parseFloat(c.Montant || '0') - getCumulativePartial(c.id);
+
+  const openChequeModal = (c: Cheque) => {
+    setSelectedCheque(c);
+    setEncaissementDate(getLocalDateStr());
+    const reste = getReste(c);
+    setEncaissementMontant(reste > 0 ? reste.toFixed(3) : '');
+    setShowModal(true);
   };
 
   // ── Filtrage ─────────────────────────────────────────────────────────────
@@ -102,64 +151,97 @@ export default function ChequesManagement() {
     const inMonth = cheques.filter(c => c.created_at.slice(0, 7) === statsMois);
     const total = inMonth.length;
     const encaisses = inMonth.filter(c => c.Statut === 'Encaissé').length;
-    const nonEncaisses = total - encaisses;
+    const partiels = inMonth.filter(c => c.Statut === 'Encaissé partiellement').length;
+    const nonEncaisses = total - encaisses - partiels;
     const montantTotal = inMonth.reduce((s, c) => s + parseFloat(c.Montant || '0'), 0);
     const montantEncaisse = inMonth.filter(c => c.Statut === 'Encaissé')
       .reduce((s, c) => s + parseFloat(c.Montant || '0'), 0);
+    const montantPartielRecu = inMonth.filter(c => c.Statut === 'Encaissé partiellement')
+      .reduce((s, c) => s + (detailsByCheque[c.id] || []).reduce((s2, d) => s2 + Number(d.montant), 0), 0);
     const pctEncaisse = total > 0 ? Math.round((encaisses / total) * 100) : 0;
-    const pctNon = 100 - pctEncaisse;
-    return { total, encaisses, nonEncaisses, montantTotal, montantEncaisse, pctEncaisse, pctNon };
-  }, [cheques, statsMois]);
+    const pctPartiel = total > 0 ? Math.round((partiels / total) * 100) : 0;
+    const pctNon = 100 - pctEncaisse - pctPartiel;
+    return { total, encaisses, partiels, nonEncaisses, montantTotal, montantEncaisse, montantPartielRecu, pctEncaisse, pctPartiel, pctNon };
+  }, [cheques, statsMois, detailsByCheque]);
 
   const availableMonths = useMemo(() => {
     const s = new Set(cheques.map(c => c.created_at.slice(0, 7)));
     return Array.from(s).sort().reverse();
   }, [cheques]);
 
-  // ── Encaisser ────────────────────────────────────────────────────────────
+  // ── Encaisser (total ou partiel) ────────────────────────────────────────
   const handleEncaisser = async () => {
-    if (!selectedCheque || !encaissementDate) return;
+    if (!selectedCheque || !encaissementDate || !encaissementMontant) return;
+    const montantSaisi = parseFloat(encaissementMontant);
+    if (isNaN(montantSaisi) || montantSaisi <= 0) {
+      alert('Veuillez saisir un montant valide.');
+      return;
+    }
+    const reste = getReste(selectedCheque);
+    if (montantSaisi > reste + 0.001) {
+      alert(`Le montant saisi (${fmt(montantSaisi)}) dépasse le reste à encaisser (${fmt(reste)}).`);
+      return;
+    }
+
     setSaving(true);
     try {
+      const { error: insError } = await supabase.from('details_cheques_encaisses_partiellement')
+        .insert([{ cheque_id: selectedCheque.id, montant: montantSaisi, date_encaissement: encaissementDate }]);
+      if (insError) throw insError;
+
+      const complet = montantSaisi >= reste - 0.001;
       const { error } = await supabase.from('Cheques')
-        .update({ Statut: 'Encaissé', date_encaissement: encaissementDate })
+        .update(complet
+          ? { Statut: 'Encaissé', date_encaissement: encaissementDate }
+          : { Statut: 'Encaissé partiellement' })
         .eq('id', selectedCheque.id);
       if (error) throw error;
+
       setShowModal(false);
       setSelectedCheque(null);
       setEncaissementDate('');
-      await loadCheques();
+      setEncaissementMontant('');
+      await Promise.all([loadCheques(), loadPartialDetails()]);
     } catch { alert('Erreur lors de l\'encaissement'); }
     finally { setSaving(false); }
   };
 
-  // ── Annuler l'encaissement (Hamza uniquement) ───────────────────────────
+  // ── Annuler l'encaissement, total ou partiel (Hamza uniquement) ────────
   const handleAnnulerEncaissement = async () => {
     if (!isHamza || !selectedCheque) return;
-    if (!confirm('Êtes-vous sûr de vouloir annuler l\'encaissement de ce chèque ?')) return;
+    if (!confirm('Êtes-vous sûr de vouloir annuler l\'encaissement de ce chèque ? L\'historique des encaissements partiels sera supprimé.')) return;
     setSaving(true);
     try {
+      const { error: delError } = await supabase.from('details_cheques_encaisses_partiellement')
+        .delete()
+        .eq('cheque_id', selectedCheque.id);
+      if (delError) throw delError;
+
       const { error } = await supabase.from('Cheques')
         .update({ Statut: 'Non Encaissé', date_encaissement: null })
         .eq('id', selectedCheque.id);
       if (error) throw error;
       setShowModal(false);
       setSelectedCheque(null);
-      await loadCheques();
+      await Promise.all([loadCheques(), loadPartialDetails()]);
     } catch { alert('Erreur lors de l\'annulation de l\'encaissement'); }
     finally { setSaving(false); }
   };
 
   // ── Chèques encaissés aujourd'hui (remise à zéro automatiquement le jour suivant) ──
-  const todayStr = new Date().toISOString().split('T')[0];
-  const chequesEncaissesAujourdhui = cheques.filter(c => c.date_encaissement === todayStr);
+  const todayStr = getLocalDateStr();
+  const chequesEncaissesAujourdhui = cheques.filter(c => (c.date_encaissement || '').slice(0, 10) === todayStr);
   const montantEncaisseAujourdhui = chequesEncaissesAujourdhui.reduce((s, c) => s + parseFloat(c.Montant || '0'), 0);
 
   const truncate = (s: string, max: number) => (s && s.length > max ? s.slice(0, max - 1) + '…' : (s || ''));
 
   const handleDownloadBordereauEncaissement = () => {
-    if (chequesEncaissesAujourdhui.length === 0) return;
+    if (chequesEncaissesAujourdhui.length === 0) {
+      alert('Aucun chèque encaissé aujourd\'hui.');
+      return;
+    }
 
+    try {
     const pdf = new jsPDF('portrait', 'mm', 'a4');
     const pageWidth = pdf.internal.pageSize.width;
     const leftMargin = 15;
@@ -236,6 +318,10 @@ export default function ChequesManagement() {
     pdf.text(`Montant total : ${total.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`, leftMargin, y);
 
     pdf.save(`bordereau_remise_cheques_${todayStr}.pdf`);
+    } catch (err) {
+      console.error('Erreur génération bordereau:', err);
+      alert('Erreur lors de la génération du bordereau PDF.');
+    }
   };
 
   // ── Ajouter un chèque manquant (Hamza uniquement) ───────────────────────
@@ -320,15 +406,18 @@ export default function ChequesManagement() {
               <CheckCircle className="w-3.5 h-3.5" />
               Encaissés : <span className="font-bold ml-1">{cheques.filter(c => c.Statut === 'Encaissé').length}</span>
             </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/20 rounded-lg text-orange-300 text-sm">
+              <Percent className="w-3.5 h-3.5" />
+              Partiels : <span className="font-bold ml-1">{cheques.filter(c => c.Statut === 'Encaissé partiellement').length}</span>
+            </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 rounded-lg text-red-300 text-sm">
               <Clock className="w-3.5 h-3.5" />
-              En attente : <span className="font-bold ml-1">{cheques.filter(c => c.Statut !== 'Encaissé').length}</span>
+              En attente : <span className="font-bold ml-1">{cheques.filter(c => c.Statut === 'Non Encaissé').length}</span>
             </span>
             <button
               onClick={handleDownloadBordereauEncaissement}
-              disabled={chequesEncaissesAujourdhui.length === 0}
               title={chequesEncaissesAujourdhui.length === 0 ? 'Aucun chèque encaissé aujourd\'hui' : 'Télécharger le bordereau de remise'}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 rounded-lg text-amber-300 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 rounded-lg text-amber-300 text-sm transition-colors"
             >
               <FileDown className="w-3.5 h-3.5" />
               Encaissés aujourd'hui : <span className="font-bold ml-1">{chequesEncaissesAujourdhui.length}</span>
@@ -370,7 +459,7 @@ export default function ChequesManagement() {
 
           <div className="p-5">
             {/* KPI cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-5">
               <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
                 <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wide mb-1">Total chèques</p>
                 <p className="text-3xl font-bold text-indigo-700">{stats.total}</p>
@@ -379,6 +468,11 @@ export default function ChequesManagement() {
                 <p className="text-xs font-semibold text-emerald-500 uppercase tracking-wide mb-1">Encaissés</p>
                 <p className="text-3xl font-bold text-emerald-700">{stats.encaisses}</p>
                 <p className="text-xs text-emerald-600 mt-1">{stats.pctEncaisse}% du total</p>
+              </div>
+              <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
+                <p className="text-xs font-semibold text-orange-500 uppercase tracking-wide mb-1">Partiels</p>
+                <p className="text-3xl font-bold text-orange-700">{stats.partiels}</p>
+                <p className="text-xs text-orange-600 mt-1">{stats.pctPartiel}% du total</p>
               </div>
               <div className="bg-red-50 rounded-xl p-4 border border-red-100">
                 <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-1">En attente</p>
@@ -389,20 +483,28 @@ export default function ChequesManagement() {
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Montant total</p>
                 <p className="text-xl font-bold text-slate-700">{fmt(stats.montantTotal)}</p>
                 <p className="text-xs text-slate-500 mt-1">Encaissé : {fmt(stats.montantEncaisse)}</p>
+                {stats.montantPartielRecu > 0 && (
+                  <p className="text-xs text-orange-600 mt-0.5">Reçu (partiels) : {fmt(stats.montantPartielRecu)}</p>
+                )}
               </div>
             </div>
 
             {/* Barre de progression */}
             {stats.total > 0 && (
               <div>
-                <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+                <div className="flex justify-between text-xs text-gray-500 mb-1.5 flex-wrap gap-1">
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Encaissés {stats.pctEncaisse}%</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />Partiels {stats.pctPartiel}%</span>
                   <span className="flex items-center gap-1">En attente {stats.pctNon}%<span className="w-2 h-2 rounded-full bg-red-400 inline-block" /></span>
                 </div>
                 <div className="h-3 rounded-full bg-gray-100 overflow-hidden flex">
                   <div
                     className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-500"
                     style={{ width: `${stats.pctEncaisse}%` }}
+                  />
+                  <div
+                    className="h-full bg-gradient-to-r from-orange-400 to-orange-300 transition-all duration-500"
+                    style={{ width: `${stats.pctPartiel}%` }}
                   />
                   <div
                     className="h-full bg-gradient-to-r from-red-400 to-red-300 transition-all duration-500"
@@ -445,6 +547,7 @@ export default function ChequesManagement() {
                 >
                   <option value="all">Tous les statuts</option>
                   <option value="Non Encaissé">Non Encaissé</option>
+                  <option value="Encaissé partiellement">Encaissé partiellement</option>
                   <option value="Encaissé">Encaissé</option>
                 </select>
                 <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -507,13 +610,21 @@ export default function ChequesManagement() {
                   <tr><td colSpan={10} className="px-6 py-12 text-center text-gray-400">Aucun chèque trouvé</td></tr>
                 ) : filtered.map((c, idx) => {
                   const encaisse = c.Statut === 'Encaissé';
+                  const partiel = c.Statut === 'Encaissé partiellement';
+                  const partialTitle = partiel
+                    ? 'Encaissements partiels :\n' + (detailsByCheque[c.id] || [])
+                        .map(d => `${fmtDate(d.date_encaissement)} : ${fmt(Number(d.montant))}`)
+                        .join('\n') + `\nReste à encaisser : ${fmt(getReste(c))}`
+                    : undefined;
                   return (
                     <tr
                       key={c.id}
-                      onClick={() => { setSelectedCheque(c); setEncaissementDate(new Date().toISOString().split('T')[0]); setShowModal(true); }}
+                      onClick={() => openChequeModal(c)}
                       className={`border-l-4 cursor-pointer transition-all duration-150 ${
                         encaisse
                           ? `border-l-emerald-500 ${idx % 2 === 0 ? 'bg-emerald-50/40' : 'bg-white'} hover:bg-emerald-100/50`
+                          : partiel
+                          ? `border-l-orange-400 ${idx % 2 === 0 ? 'bg-orange-50/40' : 'bg-white'} hover:bg-orange-100/50`
                           : `border-l-red-400 ${idx % 2 === 0 ? 'bg-white' : 'bg-red-50/20'} hover:bg-red-50/60`
                       }`}
                     >
@@ -525,10 +636,17 @@ export default function ChequesManagement() {
                       <td className="px-4 py-3 text-gray-700">{fmtDate(c.Date_Encaissement_prévue)}</td>
                       <td className="px-4 py-3 text-gray-700">{fmtDate(c.created_at)}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                          encaisse ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-red-100 text-red-700 border border-red-200'
-                        }`}>
-                          {encaisse ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                        <span
+                          title={partialTitle}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            encaisse
+                              ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                              : partiel
+                              ? 'bg-orange-100 text-orange-700 border border-orange-200'
+                              : 'bg-red-100 text-red-700 border border-red-200'
+                          }`}
+                        >
+                          {encaisse ? <CheckCircle className="w-3 h-3" /> : partiel ? <Percent className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
                           {c.Statut}
                         </span>
                       </td>
@@ -540,7 +658,7 @@ export default function ChequesManagement() {
                       <td className="px-4 py-3">
                         {!encaisse && (
                           <button
-                            onClick={e => { e.stopPropagation(); setSelectedCheque(c); setEncaissementDate(new Date().toISOString().split('T')[0]); setShowModal(true); }}
+                            onClick={e => { e.stopPropagation(); openChequeModal(c); }}
                             className="inline-flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg text-xs font-semibold hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-sm"
                           >
                             <Check className="w-3.5 h-3.5" />Encaisser
@@ -560,21 +678,32 @@ export default function ChequesManagement() {
               <p className="p-8 text-center text-gray-400">Aucun chèque trouvé</p>
             ) : filtered.map(c => {
               const encaisse = c.Statut === 'Encaissé';
+              const partiel = c.Statut === 'Encaissé partiellement';
+              const partialTitle = partiel
+                ? 'Encaissements partiels :\n' + (detailsByCheque[c.id] || [])
+                    .map(d => `${fmtDate(d.date_encaissement)} : ${fmt(Number(d.montant))}`)
+                    .join('\n') + `\nReste à encaisser : ${fmt(getReste(c))}`
+                : undefined;
               return (
                 <div
                   key={c.id}
-                  onClick={() => { setSelectedCheque(c); setEncaissementDate(new Date().toISOString().split('T')[0]); setShowModal(true); }}
-                  className={`p-4 border-l-4 cursor-pointer transition-colors ${encaisse ? 'border-l-emerald-500 bg-emerald-50/30' : 'border-l-red-400 bg-white'}`}
+                  onClick={() => openChequeModal(c)}
+                  className={`p-4 border-l-4 cursor-pointer transition-colors ${
+                    encaisse ? 'border-l-emerald-500 bg-emerald-50/30' : partiel ? 'border-l-orange-400 bg-orange-50/30' : 'border-l-red-400 bg-white'
+                  }`}
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <p className="text-xs text-gray-400 mb-0.5">N° Contrat</p>
                       <p className="font-mono font-semibold text-gray-900">{c.Numero_Contrat}</p>
                     </div>
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
-                      encaisse ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {encaisse ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                    <span
+                      title={partialTitle}
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
+                        encaisse ? 'bg-emerald-100 text-emerald-700' : partiel ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'
+                      }`}
+                    >
+                      {encaisse ? <CheckCircle className="w-3 h-3" /> : partiel ? <Percent className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
                       {c.Statut}
                     </span>
                   </div>
@@ -584,6 +713,10 @@ export default function ChequesManagement() {
                     <span className="text-gray-500">Banque</span><span className="text-gray-700">{c.Banque}</span>
                     <span className="text-gray-500">Date enc. prévue</span><span className="text-gray-700">{fmtDate(c.Date_Encaissement_prévue)}</span>
                     <span className="text-gray-500">Date émission</span><span className="text-gray-700">{fmtDate(c.created_at)}</span>
+                    {partiel && <>
+                      <span className="text-gray-500">Reste à encaisser</span>
+                      <span className="text-orange-700 font-medium">{fmt(getReste(c))}</span>
+                    </>}
                     {c.date_encaissement && <>
                       <span className="text-gray-500">Encaissé le</span>
                       <span className="text-emerald-700 font-medium">{fmtDate(c.date_encaissement)}</span>
@@ -591,7 +724,7 @@ export default function ChequesManagement() {
                   </div>
                   {!encaisse && (
                     <button
-                      onClick={e => { e.stopPropagation(); setSelectedCheque(c); setEncaissementDate(new Date().toISOString().split('T')[0]); setShowModal(true); }}
+                      onClick={e => { e.stopPropagation(); openChequeModal(c); }}
                       className="mt-3 w-full flex items-center justify-center gap-2 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl text-sm font-semibold"
                     >
                       <Check className="w-4 h-4" />Encaisser
@@ -605,16 +738,24 @@ export default function ChequesManagement() {
       </div>
 
       {/* ── Modal ── */}
-      {showModal && selectedCheque && (
+      {showModal && selectedCheque && (() => {
+        const encaisse = selectedCheque.Statut === 'Encaissé';
+        const partiel = selectedCheque.Statut === 'Encaissé partiellement';
+        const dejaEncaisse = getCumulativePartial(selectedCheque.id);
+        const reste = getReste(selectedCheque);
+        const historique = detailsByCheque[selectedCheque.id] || [];
+        const closeModal = () => { setShowModal(false); setSelectedCheque(null); setEncaissementDate(''); setEncaissementMontant(''); };
+
+        return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             {/* Header modal */}
-            <div className={`px-6 py-4 ${selectedCheque.Statut === 'Encaissé' ? 'bg-gradient-to-r from-emerald-600 to-emerald-700' : 'bg-gradient-to-r from-indigo-600 to-indigo-700'}`}>
+            <div className={`px-6 py-4 ${encaisse ? 'bg-gradient-to-r from-emerald-600 to-emerald-700' : partiel ? 'bg-gradient-to-r from-orange-500 to-orange-600' : 'bg-gradient-to-r from-indigo-600 to-indigo-700'}`}>
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-bold text-white">
-                  {selectedCheque.Statut === 'Non Encaissé' ? 'Encaisser le chèque' : 'Détails du chèque'}
+                  {selectedCheque.Statut === 'Non Encaissé' ? 'Encaisser le chèque' : partiel ? 'Poursuivre l\'encaissement' : 'Détails du chèque'}
                 </h3>
-                <button onClick={() => { setShowModal(false); setSelectedCheque(null); setEncaissementDate(''); }}
+                <button onClick={closeModal}
                   className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
                   <X className="w-4 h-4" />
                 </button>
@@ -639,77 +780,108 @@ export default function ChequesManagement() {
                   </div>
                 ))}
                 <div className="bg-indigo-50 rounded-xl p-3">
-                  <p className="text-xs text-indigo-400 mb-0.5">Montant</p>
+                  <p className="text-xs text-indigo-400 mb-0.5">Montant du chèque</p>
                   <p className="text-sm font-bold text-indigo-900">{fmt(parseFloat(selectedCheque.Montant || '0'))}</p>
                 </div>
+                {(partiel || encaisse) && dejaEncaisse > 0 && (
+                  <div className="bg-emerald-50 rounded-xl p-3">
+                    <p className="text-xs text-emerald-500 mb-0.5">Déjà encaissé</p>
+                    <p className="text-sm font-bold text-emerald-900">{fmt(dejaEncaisse)}</p>
+                  </div>
+                )}
+                {partiel && (
+                  <div className="bg-orange-50 rounded-xl p-3">
+                    <p className="text-xs text-orange-500 mb-0.5">Reste à encaisser</p>
+                    <p className="text-sm font-bold text-orange-900">{fmt(reste)}</p>
+                  </div>
+                )}
               </div>
 
-              {selectedCheque.Statut === 'Encaissé' && selectedCheque.date_encaissement && (
+              {historique.length > 0 && (
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Historique des encaissements</p>
+                  <div className="space-y-1">
+                    {historique.map(d => (
+                      <div key={d.id} className="flex justify-between text-sm">
+                        <span className="text-gray-600">{fmtDate(d.date_encaissement)}</span>
+                        <span className="font-medium text-gray-900">{fmt(Number(d.montant))}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {encaisse && selectedCheque.date_encaissement && (
                 <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
                   <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
                   <div>
-                    <p className="text-xs text-emerald-600">Date d'encaissement</p>
+                    <p className="text-xs text-emerald-600">Date d'encaissement (soldé)</p>
                     <p className="font-semibold text-emerald-800">{fmtDate(selectedCheque.date_encaissement)}</p>
                   </div>
                 </div>
               )}
 
-              {selectedCheque.Statut === 'Non Encaissé' && (
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Date d'encaissement *</label>
-                  <input
-                    type="date"
-                    value={encaissementDate}
-                    onChange={e => setEncaissementDate(e.target.value)}
-                    max={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
+              {!encaisse && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Montant à encaisser *</label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      max={reste}
+                      value={encaissementMontant}
+                      onChange={e => setEncaissementMontant(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Reste à encaisser : {fmt(reste)}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Date d'encaissement *</label>
+                    <input
+                      type="date"
+                      value={encaissementDate}
+                      onChange={e => setEncaissementDate(e.target.value)}
+                      max={getLocalDateStr()}
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                  </div>
                 </div>
               )}
 
-              <div className="flex gap-3 pt-1">
-                {selectedCheque.Statut === 'Non Encaissé' ? (
-                  <>
-                    <button
-                      onClick={handleEncaisser}
-                      disabled={!encaissementDate || saving}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white font-semibold rounded-xl hover:from-emerald-700 hover:to-emerald-800 disabled:opacity-50 transition-all shadow-sm"
-                    >
-                      {saving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check className="w-4 h-4" />}
-                      Confirmer l'encaissement
-                    </button>
-                    <button
-                      onClick={() => { setShowModal(false); setSelectedCheque(null); setEncaissementDate(''); }}
-                      className="px-5 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors"
-                    >
-                      Annuler
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {isHamza && (
-                      <button
-                        onClick={handleAnnulerEncaissement}
-                        disabled={saving}
-                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-xl hover:from-red-700 hover:to-red-800 disabled:opacity-50 transition-all shadow-sm"
-                      >
-                        {saving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Undo2 className="w-4 h-4" />}
-                        Annuler l'encaissement
-                      </button>
-                    )}
-                    <button
-                      onClick={() => { setShowModal(false); setSelectedCheque(null); }}
-                      className={`${isHamza ? 'px-5' : 'w-full'} py-3 bg-gradient-to-r from-slate-700 to-slate-800 text-white font-semibold rounded-xl hover:from-slate-800 hover:to-slate-900 transition-all`}
-                    >
-                      Fermer
-                    </button>
-                  </>
+              <div className="flex flex-col sm:flex-row gap-3 pt-1">
+                {!encaisse && (
+                  <button
+                    onClick={handleEncaisser}
+                    disabled={!encaissementDate || !encaissementMontant || saving}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white font-semibold rounded-xl hover:from-emerald-700 hover:to-emerald-800 disabled:opacity-50 transition-all shadow-sm"
+                  >
+                    {saving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check className="w-4 h-4" />}
+                    Confirmer l'encaissement
+                  </button>
                 )}
+                {isHamza && (partiel || encaisse) && (
+                  <button
+                    onClick={handleAnnulerEncaissement}
+                    disabled={saving}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-xl hover:from-red-700 hover:to-red-800 disabled:opacity-50 transition-all shadow-sm"
+                  >
+                    {saving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                    Annuler l'encaissement
+                  </button>
+                )}
+                <button
+                  onClick={closeModal}
+                  className="px-5 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors"
+                >
+                  {selectedCheque.Statut === 'Non Encaissé' ? 'Annuler' : 'Fermer'}
+                </button>
               </div>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── Modal : ajouter un chèque manquant (Hamza uniquement) ── */}
       {showAddModal && isHamza && (
