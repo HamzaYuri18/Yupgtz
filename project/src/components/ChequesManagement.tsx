@@ -228,16 +228,31 @@ export default function ChequesManagement() {
     finally { setSaving(false); }
   };
 
-  // ── Chèques encaissés aujourd'hui (remise à zéro automatiquement le jour suivant) ──
+  // ── Encaissements du jour, total ou partiel (remise à zéro automatiquement le jour suivant) ──
   const todayStr = getLocalDateStr();
-  const chequesEncaissesAujourdhui = cheques.filter(c => (c.date_encaissement || '').slice(0, 10) === todayStr);
-  const montantEncaisseAujourdhui = chequesEncaissesAujourdhui.reduce((s, c) => s + parseFloat(c.Montant || '0'), 0);
+  const encaissementsAujourdhui = (() => {
+    const rows: { cheque: Cheque; montant: number }[] = [];
+    cheques.forEach(c => {
+      const detailsDuJour = (detailsByCheque[c.id] || []).filter(d => (d.date_encaissement || '').slice(0, 10) === todayStr);
+      if (detailsDuJour.length > 0) {
+        detailsDuJour.forEach(d => rows.push({ cheque: c, montant: Number(d.montant) }));
+      } else if (c.Statut === 'Encaissé' && (c.date_encaissement || '').slice(0, 10) === todayStr) {
+        // Chèque encaissé avant la mise en place de l'historique des encaissements partiels
+        rows.push({ cheque: c, montant: parseFloat(c.Montant || '0') });
+      }
+    });
+    return rows;
+  })();
+  const montantEncaisseAujourdhui = encaissementsAujourdhui.reduce((s, r) => s + r.montant, 0);
 
-  const truncate = (s: string, max: number) => (s && s.length > max ? s.slice(0, max - 1) + '…' : (s || ''));
+  const truncate = (s: unknown, max: number) => {
+    const str = s === null || s === undefined ? '' : String(s);
+    return str.length > max ? str.slice(0, max - 1) + '…' : str;
+  };
 
   const handleDownloadBordereauEncaissement = () => {
-    if (chequesEncaissesAujourdhui.length === 0) {
-      alert('Aucun chèque encaissé aujourd\'hui.');
+    if (encaissementsAujourdhui.length === 0) {
+      alert('Aucun encaissement aujourd\'hui.');
       return;
     }
 
@@ -292,15 +307,15 @@ export default function ChequesManagement() {
     y += 6;
 
     let total = 0;
-    chequesEncaissesAujourdhui.forEach(c => {
-      const montant = parseFloat(c.Montant || '0');
+    encaissementsAujourdhui.forEach(({ cheque: c, montant }) => {
       total += montant;
+      const partielDuJour = montant < parseFloat(c.Montant || '0') - 0.001;
       drawRow([
         truncate(c.Numero_Cheque, 14),
         truncate(c.Numero_Contrat, 16),
         truncate(c.Assure, 24),
         truncate(c.Banque, 18),
-        montant.toLocaleString('fr-FR', { minimumFractionDigits: 3 }),
+        montant.toLocaleString('fr-FR', { minimumFractionDigits: 3 }) + (partielDuJour ? ' (partiel)' : ''),
       ], y);
       y += 7;
       if (y > 270) {
@@ -313,7 +328,7 @@ export default function ChequesManagement() {
     pdf.line(leftMargin, y, leftMargin + contentWidth, y);
     y += 9;
     pdf.setFont('helvetica', 'bold');
-    pdf.text(`Nombre de chèques : ${chequesEncaissesAujourdhui.length}`, leftMargin, y);
+    pdf.text(`Nombre d'encaissements : ${encaissementsAujourdhui.length}`, leftMargin, y);
     y += 7;
     pdf.text(`Montant total : ${total.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} DT`, leftMargin, y);
 
@@ -416,11 +431,11 @@ export default function ChequesManagement() {
             </span>
             <button
               onClick={handleDownloadBordereauEncaissement}
-              title={chequesEncaissesAujourdhui.length === 0 ? 'Aucun chèque encaissé aujourd\'hui' : 'Télécharger le bordereau de remise'}
+              title={encaissementsAujourdhui.length === 0 ? 'Aucun encaissement aujourd\'hui' : 'Télécharger le bordereau de remise'}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 rounded-lg text-amber-300 text-sm transition-colors"
             >
               <FileDown className="w-3.5 h-3.5" />
-              Encaissés aujourd'hui : <span className="font-bold ml-1">{chequesEncaissesAujourdhui.length}</span>
+              Encaissés aujourd'hui : <span className="font-bold ml-1">{encaissementsAujourdhui.length}</span>
               <span className="text-amber-200/80">({fmt(montantEncaisseAujourdhui)})</span>
             </button>
           </div>
