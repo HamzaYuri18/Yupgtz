@@ -67,7 +67,11 @@ interface ActiveCarnetNotif {
 
 const LOW_STOCK_THRESHOLD = 50;
 
-const AttestationSequences: React.FC = () => {
+interface AttestationSequencesProps {
+  username?: string;
+}
+
+const AttestationSequences: React.FC<AttestationSequencesProps> = ({ username }) => {
   const [numeroDebut, setNumeroDebut] = useState('');
   const [numeroFin, setNumeroFin] = useState('');
   const [nombreAttestations, setNombreAttestations] = useState(0);
@@ -86,7 +90,7 @@ const AttestationSequences: React.FC = () => {
   });
   const [isLoadingCarnetStats, setIsLoadingCarnetStats] = useState(false);
   const [showCarnetStats, setShowCarnetStats] = useState(false);
-  const [currentUser, setCurrentUser] = useState<string>('');
+  const [currentUser, setCurrentUser] = useState<string>(username || '');
   const [remainingModal, setRemainingModal] = useState<RemainingModalState>({
     open: false,
     carnetName: '',
@@ -102,12 +106,18 @@ const AttestationSequences: React.FC = () => {
   const [activeCarnetNotif, setActiveCarnetNotif] = useState<ActiveCarnetNotif | null>(null);
   const [activeCarnetNotifVisible, setActiveCarnetNotifVisible] = useState(false);
 
+  const isHamza = currentUser.toLowerCase() === 'hamza';
+
   const itemsPerPage = 10;
 
   useEffect(() => {
+    if (username) {
+      setCurrentUser(username);
+      return;
+    }
     const session = getSession();
     if (session) setCurrentUser(session.username);
-  }, []);
+  }, [username]);
 
   useEffect(() => {
     loadCarnets();
@@ -465,7 +475,7 @@ const AttestationSequences: React.FC = () => {
   };
 
   const handleResetAttestation = async (attestationId: string, numeroAttestation: string) => {
-    if (currentUser !== 'Hamza') {
+    if (!isHamza) {
       alert('Seul Hamza peut vider les données d\'une attestation');
       return;
     }
@@ -803,7 +813,7 @@ const AttestationSequences: React.FC = () => {
 
 
       {/* Nouveau Carnet — Hamza seulement */}
-      {currentUser === 'Hamza' && (
+      {isHamza && (
         <div className="bg-white rounded-lg shadow-md p-6">
           <div className="flex items-center gap-3 mb-6">
             <FileText className="w-6 h-6 text-blue-600" />
@@ -883,7 +893,7 @@ const AttestationSequences: React.FC = () => {
               <BarChart2 className="w-4 h-4" />
               {showCarnetStats ? 'Masquer stats' : 'Voir statistiques'}
             </button>
-            {currentUser === 'Hamza' && (
+            {isHamza && (
               <button
                 onClick={handleOpenBarreesModal}
                 className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
@@ -1070,7 +1080,7 @@ const AttestationSequences: React.FC = () => {
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date Impression</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Montant</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Statut</th>
-                    {currentUser === 'Hamza' && (
+                    {isHamza && (
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Actions</th>
                     )}
                   </tr>
@@ -1078,7 +1088,7 @@ const AttestationSequences: React.FC = () => {
                 <tbody className="divide-y divide-gray-200">
                   {paginatedAttestations.length === 0 ? (
                     <tr>
-                      <td colSpan={currentUser === 'Hamza' ? 7 : 6} className="px-4 py-8 text-center text-gray-500">
+                      <td colSpan={isHamza ? 7 : 6} className="px-4 py-8 text-center text-gray-500">
                         <Search className="w-12 h-12 mx-auto mb-2 text-gray-400" />
                         Aucune attestation imprimée
                       </td>
@@ -1117,7 +1127,7 @@ const AttestationSequences: React.FC = () => {
                               : attestation.statut || 'Imprimée'}
                           </span>
                         </td>
-                        {currentUser === 'Hamza' && (
+                        {isHamza && (
                           <td className="px-4 py-3 text-sm">
                             <button
                               onClick={() => handleResetAttestation(attestation.id, attestation.numero_attestation)}
