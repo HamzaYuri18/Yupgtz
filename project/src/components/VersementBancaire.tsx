@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw, CreditCard as Edit, Save, X, MessageSquare, RotateCcw, Plus } from 'lucide-react';
+import { DollarSign, Calendar, Building2, Download, FileSpreadsheet, TrendingUp, RefreshCw, CreditCard as Edit, Save, X, MessageSquare, RotateCcw, Plus, Send } from 'lucide-react';
 import {
   getRecentSessions,
   getSessionsByDateRange,
@@ -11,6 +11,7 @@ import {
 } from '../utils/sessionService';
 import * as XLSX from 'xlsx';
 import { generateAvisVersementPDF } from '../utils/avisVersementPDF';
+import { generateOrdreVirementPDF } from '../utils/ordreVirementPDF';
 import { supabase } from '../lib/supabase';
 import { expensesSupabase } from '../lib/expensesSupabase';
 import { numberToWords } from '../utils/numberToWords';
@@ -47,6 +48,36 @@ interface VersementSupplementaire {
   libelle: string;
   cree_par: string;
 }
+
+interface CompteEmetteurVirement {
+  id: number;
+  titulaire: string;
+  numero_compte: string;
+  banque: string;
+}
+
+interface BeneficiaireVirement {
+  id: number;
+  nom: string;
+  numero_compte: string;
+  banque: string;
+}
+
+const emptyOrdreVirementForm = {
+  compteEmetteurId: '',
+  titulaireEmetteur: '',
+  numeroCompteEmetteur: '',
+  banqueEmetteur: '',
+  saveEmetteur: true,
+  beneficiaireId: '',
+  beneficiaire: '',
+  numeroCompteBeneficiaire: '',
+  banqueBeneficiaire: '',
+  saveBeneficiaire: true,
+  montant: '',
+  objet: '',
+  dateVirement: new Date().toISOString().split('T')[0],
+};
 
 const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const isHamza = username === 'Hamza';
@@ -102,6 +133,13 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [suppMontant, setSuppMontant] = useState('');
   const [suppLibelle, setSuppLibelle] = useState('');
   const [savingSupp, setSavingSupp] = useState(false);
+
+  // Ordres de virement
+  const [showOrdreVirementModal, setShowOrdreVirementModal] = useState(false);
+  const [comptesEmetteurs, setComptesEmetteurs] = useState<CompteEmetteurVirement[]>([]);
+  const [beneficiairesVirement, setBeneficiairesVirement] = useState<BeneficiaireVirement[]>([]);
+  const [ordreVirementForm, setOrdreVirementForm] = useState(emptyOrdreVirementForm);
+  const [savingOrdreVirement, setSavingOrdreVirement] = useState(false);
 
   // Charges détaillées de l'autre projet Supabase (table "expenses"),
   // regroupées et sommées par date de session, pour compléter la valeur
@@ -610,6 +648,119 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     }
   };
 
+  // ── Ordres de virement ──────────────────────────────────────────────────
+  const openOrdreVirementModal = async () => {
+    setOrdreVirementForm(emptyOrdreVirementForm);
+    setShowOrdreVirementModal(true);
+    try {
+      const [{ data: comptesData }, { data: benefData }] = await Promise.all([
+        supabase.from('comptes_emetteurs_virement').select('*').order('titulaire', { ascending: true }),
+        supabase.from('beneficiaires_virement').select('*').order('nom', { ascending: true }),
+      ]);
+      setComptesEmetteurs(comptesData || []);
+      setBeneficiairesVirement(benefData || []);
+    } catch (err) {
+      console.error('Erreur chargement comptes/bénéficiaires de virement:', err);
+    }
+  };
+
+  const handleSelectCompteEmetteur = (id: string) => {
+    if (!id) {
+      setOrdreVirementForm(f => ({
+        ...f, compteEmetteurId: '', titulaireEmetteur: '', numeroCompteEmetteur: '', banqueEmetteur: '', saveEmetteur: true
+      }));
+      return;
+    }
+    const compte = comptesEmetteurs.find(c => String(c.id) === id);
+    if (compte) {
+      setOrdreVirementForm(f => ({
+        ...f, compteEmetteurId: id, titulaireEmetteur: compte.titulaire, numeroCompteEmetteur: compte.numero_compte,
+        banqueEmetteur: compte.banque, saveEmetteur: false
+      }));
+    }
+  };
+
+  const handleSelectBeneficiaireVirement = (id: string) => {
+    if (!id) {
+      setOrdreVirementForm(f => ({
+        ...f, beneficiaireId: '', beneficiaire: '', numeroCompteBeneficiaire: '', banqueBeneficiaire: '', saveBeneficiaire: true
+      }));
+      return;
+    }
+    const benef = beneficiairesVirement.find(b => String(b.id) === id);
+    if (benef) {
+      setOrdreVirementForm(f => ({
+        ...f, beneficiaireId: id, beneficiaire: benef.nom, numeroCompteBeneficiaire: benef.numero_compte,
+        banqueBeneficiaire: benef.banque, saveBeneficiaire: false
+      }));
+    }
+  };
+
+  const handleSaveOrdreVirement = async () => {
+    const f = ordreVirementForm;
+    if (!f.titulaireEmetteur.trim() || !f.numeroCompteEmetteur.trim() || !f.banqueEmetteur.trim() ||
+        !f.beneficiaire.trim() || !f.numeroCompteBeneficiaire.trim() || !f.banqueBeneficiaire.trim() ||
+        !f.montant || parseFloat(f.montant) <= 0 || !f.objet.trim() || !f.dateVirement) {
+      setMessage('Veuillez remplir tous les champs obligatoires de l\'ordre de virement.');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+
+    setSavingOrdreVirement(true);
+    try {
+      if (f.saveEmetteur) {
+        await supabase.from('comptes_emetteurs_virement').upsert({
+          titulaire: f.titulaireEmetteur.trim(),
+          numero_compte: f.numeroCompteEmetteur.trim(),
+          banque: f.banqueEmetteur.trim(),
+          cree_par: username,
+        }, { onConflict: 'titulaire,numero_compte' });
+      }
+      if (f.saveBeneficiaire) {
+        await supabase.from('beneficiaires_virement').upsert({
+          nom: f.beneficiaire.trim(),
+          numero_compte: f.numeroCompteBeneficiaire.trim(),
+          banque: f.banqueBeneficiaire.trim(),
+          cree_par: username,
+        }, { onConflict: 'nom,numero_compte' });
+      }
+
+      const { error } = await supabase.from('ordres_virement').insert({
+        titulaire_emetteur: f.titulaireEmetteur.trim(),
+        numero_compte_emetteur: f.numeroCompteEmetteur.trim(),
+        banque_emetteur: f.banqueEmetteur.trim(),
+        beneficiaire: f.beneficiaire.trim(),
+        numero_compte_beneficiaire: f.numeroCompteBeneficiaire.trim(),
+        banque_beneficiaire: f.banqueBeneficiaire.trim(),
+        montant: parseFloat(f.montant),
+        objet: f.objet.trim(),
+        date_virement: f.dateVirement,
+        cree_par: username,
+      });
+      if (error) throw error;
+
+      generateOrdreVirementPDF({
+        titulaireEmetteur: f.titulaireEmetteur.trim(),
+        numeroCompteEmetteur: f.numeroCompteEmetteur.trim(),
+        banqueEmetteur: f.banqueEmetteur.trim(),
+        beneficiaire: f.beneficiaire.trim(),
+        numeroCompteBeneficiaire: f.numeroCompteBeneficiaire.trim(),
+        banqueBeneficiaire: f.banqueBeneficiaire.trim(),
+        montant: parseFloat(f.montant),
+        objet: f.objet.trim(),
+        dateVirement: f.dateVirement,
+      });
+
+      setMessage('✅ Ordre de virement enregistré et téléchargé avec succès');
+      setShowOrdreVirementModal(false);
+    } catch (err) {
+      setMessage(err instanceof Error ? `❌ Erreur : ${err.message}` : '❌ Erreur lors de l\'enregistrement de l\'ordre de virement.');
+    } finally {
+      setSavingOrdreVirement(false);
+      setTimeout(() => setMessage(''), 4000);
+    }
+  };
+
   // Total des versements affichés (sessions + versements supplémentaires)
   const totalVersementsAffiches =
     versementsParDate.reduce((sum, s) => sum + (s.versement || 0), 0) +
@@ -870,11 +1021,20 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
       )}
 
       <div className="bg-white rounded-lg shadow-lg p-6">
-        <div className="flex items-center space-x-3 mb-6">
-          <div className="p-2 bg-green-100 rounded-lg">
-            <Building2 className="w-6 h-6 text-green-600" />
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <Building2 className="w-6 h-6 text-green-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800">Versement Bancaire</h2>
           </div>
-          <h2 className="text-2xl font-bold text-gray-800">Versement Bancaire</h2>
+          <button
+            onClick={openOrdreVirementModal}
+            className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
+          >
+            <Send className="w-5 h-5" />
+            <span>Ordre de Virement</span>
+          </button>
         </div>
 
         {message && (
@@ -1495,6 +1655,186 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                   Annuler
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showOrdreVirementModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-6 space-y-6 my-8">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                <Send className="w-6 h-6 text-indigo-600" />
+                Ordre de Virement Bancaire
+              </h2>
+              <button
+                onClick={() => setShowOrdreVirementModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Émetteur */}
+              <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-200 space-y-3">
+                <h3 className="font-bold text-indigo-900">Donneur d'ordre (émetteur)</h3>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Compte émetteur enregistré</label>
+                  <select
+                    value={ordreVirementForm.compteEmetteurId}
+                    onChange={(e) => handleSelectCompteEmetteur(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  >
+                    <option value="">+ Nouveau compte émetteur</option>
+                    {comptesEmetteurs.map(c => (
+                      <option key={c.id} value={c.id}>{c.titulaire} — {c.numero_compte} ({c.banque})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Titulaire du compte *</label>
+                  <input
+                    type="text"
+                    value={ordreVirementForm.titulaireEmetteur}
+                    onChange={(e) => setOrdreVirementForm(f => ({ ...f, titulaireEmetteur: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Numéro de compte *</label>
+                  <input
+                    type="text"
+                    value={ordreVirementForm.numeroCompteEmetteur}
+                    onChange={(e) => setOrdreVirementForm(f => ({ ...f, numeroCompteEmetteur: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Banque *</label>
+                  <input
+                    type="text"
+                    value={ordreVirementForm.banqueEmetteur}
+                    onChange={(e) => setOrdreVirementForm(f => ({ ...f, banqueEmetteur: e.target.value }))}
+                    placeholder="Ex: ATTIJARI"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-xs text-indigo-800">
+                  <input
+                    type="checkbox"
+                    checked={ordreVirementForm.saveEmetteur}
+                    onChange={(e) => setOrdreVirementForm(f => ({ ...f, saveEmetteur: e.target.checked }))}
+                  />
+                  Enregistrer ce compte émetteur pour réutilisation
+                </label>
+              </div>
+
+              {/* Bénéficiaire */}
+              <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200 space-y-3">
+                <h3 className="font-bold text-emerald-900">Bénéficiaire</h3>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Bénéficiaire enregistré</label>
+                  <select
+                    value={ordreVirementForm.beneficiaireId}
+                    onChange={(e) => handleSelectBeneficiaireVirement(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  >
+                    <option value="">+ Nouveau bénéficiaire</option>
+                    {beneficiairesVirement.map(b => (
+                      <option key={b.id} value={b.id}>{b.nom} — {b.numero_compte} ({b.banque})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Nom du bénéficiaire *</label>
+                  <input
+                    type="text"
+                    value={ordreVirementForm.beneficiaire}
+                    onChange={(e) => setOrdreVirementForm(f => ({ ...f, beneficiaire: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Numéro de compte *</label>
+                  <input
+                    type="text"
+                    value={ordreVirementForm.numeroCompteBeneficiaire}
+                    onChange={(e) => setOrdreVirementForm(f => ({ ...f, numeroCompteBeneficiaire: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Banque *</label>
+                  <input
+                    type="text"
+                    value={ordreVirementForm.banqueBeneficiaire}
+                    onChange={(e) => setOrdreVirementForm(f => ({ ...f, banqueBeneficiaire: e.target.value }))}
+                    placeholder="Ex: BIAT"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-xs text-emerald-800">
+                  <input
+                    type="checkbox"
+                    checked={ordreVirementForm.saveBeneficiaire}
+                    onChange={(e) => setOrdreVirementForm(f => ({ ...f, saveBeneficiaire: e.target.checked }))}
+                  />
+                  Enregistrer ce bénéficiaire pour réutilisation
+                </label>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Montant (DT) *</label>
+                <input
+                  type="number"
+                  step="0.001"
+                  value={ordreVirementForm.montant}
+                  onChange={(e) => setOrdreVirementForm(f => ({ ...f, montant: e.target.value }))}
+                  placeholder="0.000"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Objet du virement *</label>
+                <input
+                  type="text"
+                  value={ordreVirementForm.objet}
+                  onChange={(e) => setOrdreVirementForm(f => ({ ...f, objet: e.target.value }))}
+                  placeholder="Ex: Règlement facture..."
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Date *</label>
+                <input
+                  type="date"
+                  value={ordreVirementForm.dateVirement}
+                  onChange={(e) => setOrdreVirementForm(f => ({ ...f, dateVirement: e.target.value }))}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setShowOrdreVirementModal(false)}
+                disabled={savingOrdreVirement}
+                className="flex-1 px-4 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleSaveOrdreVirement}
+                disabled={savingOrdreVirement}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              >
+                <Download className="w-5 h-5" />
+                {savingOrdreVirement ? 'Enregistrement...' : 'Valider et télécharger le PDF'}
+              </button>
             </div>
           </div>
         </div>
