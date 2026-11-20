@@ -63,12 +63,31 @@ interface BeneficiaireVirement {
   banque: string;
 }
 
-const emptyOrdreVirementForm = {
-  compteEmetteurId: '',
-  titulaireEmetteur: '',
-  numeroCompteEmetteur: '',
-  banqueEmetteur: '',
-  saveEmetteur: true,
+interface OrdreVirementRow {
+  id: number;
+  titulaire_emetteur: string;
+  numero_compte_emetteur: string;
+  banque_emetteur: string;
+  date_virement: string;
+  cree_par: string;
+  created_at: string;
+}
+
+interface LigneVirementRow {
+  id: number;
+  ordre_id: number;
+  beneficiaire: string;
+  numero_compte_beneficiaire: string;
+  banque_beneficiaire: string;
+  montant: number;
+  objet: string;
+}
+
+let ligneVirementFormSeq = 0;
+const nextLigneVirementFormId = () => `ligne-${++ligneVirementFormSeq}`;
+
+const emptyLigneVirementForm = () => ({
+  formId: nextLigneVirementFormId(),
   beneficiaireId: '',
   beneficiaire: '',
   numeroCompteBeneficiaire: '',
@@ -76,8 +95,17 @@ const emptyOrdreVirementForm = {
   saveBeneficiaire: true,
   montant: '',
   objet: '',
+});
+
+const emptyOrdreVirementForm = () => ({
+  compteEmetteurId: '',
+  titulaireEmetteur: '',
+  numeroCompteEmetteur: '',
+  banqueEmetteur: '',
+  saveEmetteur: true,
   dateVirement: new Date().toISOString().split('T')[0],
-};
+  lignes: [emptyLigneVirementForm()],
+});
 
 const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const isHamza = username === 'Hamza';
@@ -138,8 +166,14 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
   const [showOrdreVirementModal, setShowOrdreVirementModal] = useState(false);
   const [comptesEmetteurs, setComptesEmetteurs] = useState<CompteEmetteurVirement[]>([]);
   const [beneficiairesVirement, setBeneficiairesVirement] = useState<BeneficiaireVirement[]>([]);
-  const [ordreVirementForm, setOrdreVirementForm] = useState(emptyOrdreVirementForm);
+  const [ordreVirementForm, setOrdreVirementForm] = useState(emptyOrdreVirementForm());
   const [savingOrdreVirement, setSavingOrdreVirement] = useState(false);
+
+  // Historique des ordres de virement
+  const [showHistoriqueVirements, setShowHistoriqueVirements] = useState(false);
+  const [loadingHistoriqueVirements, setLoadingHistoriqueVirements] = useState(false);
+  const [ordresVirementHistory, setOrdresVirementHistory] = useState<OrdreVirementRow[]>([]);
+  const [lignesByOrdre, setLignesByOrdre] = useState<Record<number, LigneVirementRow[]>>({});
 
   // Charges détaillées de l'autre projet Supabase (table "expenses"),
   // regroupées et sommées par date de session, pour compléter la valeur
@@ -650,7 +684,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
 
   // ── Ordres de virement ──────────────────────────────────────────────────
   const openOrdreVirementModal = async () => {
-    setOrdreVirementForm(emptyOrdreVirementForm);
+    setOrdreVirementForm(emptyOrdreVirementForm());
     setShowOrdreVirementModal(true);
     try {
       const [{ data: comptesData }, { data: benefData }] = await Promise.all([
@@ -680,28 +714,57 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
     }
   };
 
-  const handleSelectBeneficiaireVirement = (id: string) => {
-    if (!id) {
-      setOrdreVirementForm(f => ({
-        ...f, beneficiaireId: '', beneficiaire: '', numeroCompteBeneficiaire: '', banqueBeneficiaire: '', saveBeneficiaire: true
-      }));
-      return;
-    }
-    const benef = beneficiairesVirement.find(b => String(b.id) === id);
-    if (benef) {
-      setOrdreVirementForm(f => ({
-        ...f, beneficiaireId: id, beneficiaire: benef.nom, numeroCompteBeneficiaire: benef.numero_compte,
-        banqueBeneficiaire: benef.banque, saveBeneficiaire: false
-      }));
-    }
+  const handleAddLigneVirement = () => {
+    setOrdreVirementForm(f => ({ ...f, lignes: [...f.lignes, emptyLigneVirementForm()] }));
   };
+
+  const handleRemoveLigneVirement = (formId: string) => {
+    setOrdreVirementForm(f => ({
+      ...f,
+      lignes: f.lignes.length > 1 ? f.lignes.filter(l => l.formId !== formId) : f.lignes
+    }));
+  };
+
+  const handleSelectBeneficiaireVirement = (formId: string, id: string) => {
+    setOrdreVirementForm(f => ({
+      ...f,
+      lignes: f.lignes.map(l => {
+        if (l.formId !== formId) return l;
+        if (!id) {
+          return { ...l, beneficiaireId: '', beneficiaire: '', numeroCompteBeneficiaire: '', banqueBeneficiaire: '', saveBeneficiaire: true };
+        }
+        const benef = beneficiairesVirement.find(b => String(b.id) === id);
+        if (!benef) return l;
+        return {
+          ...l, beneficiaireId: id, beneficiaire: benef.nom, numeroCompteBeneficiaire: benef.numero_compte,
+          banqueBeneficiaire: benef.banque, saveBeneficiaire: false
+        };
+      })
+    }));
+  };
+
+  const updateLigneVirement = (formId: string, patch: Partial<ReturnType<typeof emptyLigneVirementForm>>) => {
+    setOrdreVirementForm(f => ({
+      ...f,
+      lignes: f.lignes.map(l => (l.formId === formId ? { ...l, ...patch } : l))
+    }));
+  };
+
+  const totalOrdreVirement = ordreVirementForm.lignes.reduce((s, l) => s + (parseFloat(l.montant) || 0), 0);
 
   const handleSaveOrdreVirement = async () => {
     const f = ordreVirementForm;
-    if (!f.titulaireEmetteur.trim() || !f.numeroCompteEmetteur.trim() || !f.banqueEmetteur.trim() ||
-        !f.beneficiaire.trim() || !f.numeroCompteBeneficiaire.trim() || !f.banqueBeneficiaire.trim() ||
-        !f.montant || parseFloat(f.montant) <= 0 || !f.objet.trim() || !f.dateVirement) {
-      setMessage('Veuillez remplir tous les champs obligatoires de l\'ordre de virement.');
+    if (!f.titulaireEmetteur.trim() || !f.numeroCompteEmetteur.trim() || !f.banqueEmetteur.trim() || !f.dateVirement) {
+      setMessage('Veuillez remplir tous les champs obligatoires de l\'émetteur et la date.');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+    const lignesInvalides = f.lignes.some(l =>
+      !l.beneficiaire.trim() || !l.numeroCompteBeneficiaire.trim() || !l.banqueBeneficiaire.trim() ||
+      !l.montant || parseFloat(l.montant) <= 0 || !l.objet.trim()
+    );
+    if (lignesInvalides) {
+      setMessage('Veuillez remplir tous les champs obligatoires de chaque bénéficiaire.');
       setTimeout(() => setMessage(''), 3000);
       return;
     }
@@ -716,48 +779,138 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
           cree_par: username,
         }, { onConflict: 'titulaire,numero_compte' });
       }
-      if (f.saveBeneficiaire) {
-        await supabase.from('beneficiaires_virement').upsert({
-          nom: f.beneficiaire.trim(),
-          numero_compte: f.numeroCompteBeneficiaire.trim(),
-          banque: f.banqueBeneficiaire.trim(),
-          cree_par: username,
-        }, { onConflict: 'nom,numero_compte' });
+
+      for (const l of f.lignes) {
+        if (l.saveBeneficiaire) {
+          await supabase.from('beneficiaires_virement').upsert({
+            nom: l.beneficiaire.trim(),
+            numero_compte: l.numeroCompteBeneficiaire.trim(),
+            banque: l.banqueBeneficiaire.trim(),
+            cree_par: username,
+          }, { onConflict: 'nom,numero_compte' });
+        }
       }
 
-      const { error } = await supabase.from('ordres_virement').insert({
+      const { data: ordreData, error } = await supabase.from('ordres_virement').insert({
         titulaire_emetteur: f.titulaireEmetteur.trim(),
         numero_compte_emetteur: f.numeroCompteEmetteur.trim(),
         banque_emetteur: f.banqueEmetteur.trim(),
-        beneficiaire: f.beneficiaire.trim(),
-        numero_compte_beneficiaire: f.numeroCompteBeneficiaire.trim(),
-        banque_beneficiaire: f.banqueBeneficiaire.trim(),
-        montant: parseFloat(f.montant),
-        objet: f.objet.trim(),
         date_virement: f.dateVirement,
         cree_par: username,
-      });
+      }).select('id').single();
       if (error) throw error;
+
+      const lignesAInserer = f.lignes.map(l => ({
+        ordre_id: ordreData.id,
+        beneficiaire: l.beneficiaire.trim(),
+        numero_compte_beneficiaire: l.numeroCompteBeneficiaire.trim(),
+        banque_beneficiaire: l.banqueBeneficiaire.trim(),
+        montant: parseFloat(l.montant),
+        objet: l.objet.trim(),
+      }));
+      const { error: lignesError } = await supabase.from('lignes_virement_bancaire').insert(lignesAInserer);
+      if (lignesError) throw lignesError;
 
       generateOrdreVirementPDF({
         titulaireEmetteur: f.titulaireEmetteur.trim(),
         numeroCompteEmetteur: f.numeroCompteEmetteur.trim(),
         banqueEmetteur: f.banqueEmetteur.trim(),
-        beneficiaire: f.beneficiaire.trim(),
-        numeroCompteBeneficiaire: f.numeroCompteBeneficiaire.trim(),
-        banqueBeneficiaire: f.banqueBeneficiaire.trim(),
-        montant: parseFloat(f.montant),
-        objet: f.objet.trim(),
         dateVirement: f.dateVirement,
+        lignes: lignesAInserer.map(l => ({
+          beneficiaire: l.beneficiaire,
+          numeroCompteBeneficiaire: l.numero_compte_beneficiaire,
+          banqueBeneficiaire: l.banque_beneficiaire,
+          montant: l.montant,
+          objet: l.objet,
+        })),
       });
 
       setMessage('✅ Ordre de virement enregistré et téléchargé avec succès');
       setShowOrdreVirementModal(false);
+      if (showHistoriqueVirements) loadHistoriqueVirements();
     } catch (err) {
       setMessage(err instanceof Error ? `❌ Erreur : ${err.message}` : '❌ Erreur lors de l\'enregistrement de l\'ordre de virement.');
     } finally {
       setSavingOrdreVirement(false);
       setTimeout(() => setMessage(''), 4000);
+    }
+  };
+
+  // ── Historique des ordres de virement ──────────────────────────────────
+  const loadHistoriqueVirements = async () => {
+    setLoadingHistoriqueVirements(true);
+    try {
+      const { data: ordresData, error } = await supabase
+        .from('ordres_virement')
+        .select('*')
+        .order('date_virement', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      setOrdresVirementHistory(ordresData || []);
+
+      const ids = (ordresData || []).map((o: OrdreVirementRow) => o.id);
+      if (ids.length > 0) {
+        const { data: lignesData } = await supabase
+          .from('lignes_virement_bancaire')
+          .select('*')
+          .in('ordre_id', ids);
+        const grouped: Record<number, LigneVirementRow[]> = {};
+        (lignesData || []).forEach((l: LigneVirementRow) => {
+          if (!grouped[l.ordre_id]) grouped[l.ordre_id] = [];
+          grouped[l.ordre_id].push(l);
+        });
+        setLignesByOrdre(grouped);
+      } else {
+        setLignesByOrdre({});
+      }
+    } catch (err) {
+      console.error('Erreur chargement historique virements:', err);
+      setOrdresVirementHistory([]);
+    } finally {
+      setLoadingHistoriqueVirements(false);
+    }
+  };
+
+  const toggleHistoriqueVirements = () => {
+    const next = !showHistoriqueVirements;
+    setShowHistoriqueVirements(next);
+    if (next) loadHistoriqueVirements();
+  };
+
+  const handleReimprimerOrdreVirement = (ordre: OrdreVirementRow) => {
+    const lignes = lignesByOrdre[ordre.id] || [];
+    generateOrdreVirementPDF({
+      titulaireEmetteur: ordre.titulaire_emetteur,
+      numeroCompteEmetteur: ordre.numero_compte_emetteur,
+      banqueEmetteur: ordre.banque_emetteur,
+      dateVirement: ordre.date_virement,
+      lignes: lignes.map(l => ({
+        beneficiaire: l.beneficiaire,
+        numeroCompteBeneficiaire: l.numero_compte_beneficiaire,
+        banqueBeneficiaire: l.banque_beneficiaire,
+        montant: Number(l.montant),
+        objet: l.objet,
+      })),
+    });
+  };
+
+  const handleDeleteOrdreVirement = async (ordreId: number) => {
+    if (!window.confirm('Supprimer définitivement cet ordre de virement et toutes ses lignes ?')) return;
+    try {
+      const { error } = await supabase.from('ordres_virement').delete().eq('id', ordreId);
+      if (error) throw error;
+      setOrdresVirementHistory(prev => prev.filter(o => o.id !== ordreId));
+      setLignesByOrdre(prev => {
+        const next = { ...prev };
+        delete next[ordreId];
+        return next;
+      });
+      setMessage('✅ Ordre de virement supprimé');
+    } catch (err) {
+      setMessage(err instanceof Error ? `❌ Erreur : ${err.message}` : '❌ Erreur lors de la suppression.');
+    } finally {
+      setTimeout(() => setMessage(''), 3000);
     }
   };
 
@@ -1028,22 +1181,103 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
             </div>
             <h2 className="text-2xl font-bold text-gray-800">Versement Bancaire</h2>
           </div>
-          <button
-            onClick={openOrdreVirementModal}
-            className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
-          >
-            <Send className="w-5 h-5" />
-            <span>Ordre de Virement</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={toggleHistoriqueVirements}
+              className="flex items-center space-x-2 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
+            >
+              <Calendar className="w-5 h-5" />
+              <span>{showHistoriqueVirements ? 'Masquer' : 'Historique Virements'}</span>
+            </button>
+            <button
+              onClick={openOrdreVirementModal}
+              className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
+            >
+              <Send className="w-5 h-5" />
+              <span>Ordre de Virement</span>
+            </button>
+          </div>
         </div>
 
         {message && (
           <div className={`mb-4 p-3 rounded-lg ${
-            message.includes('✅') || message.includes('succès') ? 'bg-green-100 text-green-800' : 
+            message.includes('✅') || message.includes('succès') ? 'bg-green-100 text-green-800' :
             message.includes('⚠️') || message.includes('Incohérence') ? 'bg-yellow-100 text-yellow-800' :
             'bg-red-100 text-red-800'
           }`}>
             {message}
+          </div>
+        )}
+
+        {showHistoriqueVirements && (
+          <div className="mb-6 bg-gray-50 rounded-xl border border-gray-200 p-4">
+            <h3 className="font-bold text-gray-800 mb-3">Historique des Ordres de Virement</h3>
+            {loadingHistoriqueVirements ? (
+              <div className="flex items-center justify-center py-8 text-gray-400">
+                <RefreshCw className="w-5 h-5 animate-spin mr-2" />
+                <span className="text-sm">Chargement…</span>
+              </div>
+            ) : ordresVirementHistory.length === 0 ? (
+              <p className="text-sm text-gray-500 py-4 text-center">Aucun ordre de virement enregistré</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Émetteur</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Bénéficiaires</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Montant total</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Créé par</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {ordresVirementHistory.map(ordre => {
+                      const lignes = lignesByOrdre[ordre.id] || [];
+                      const total = lignes.reduce((s, l) => s + Number(l.montant), 0);
+                      return (
+                        <tr key={ordre.id} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{ordre.date_virement}</td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                            {ordre.titulaire_emetteur}
+                            <span className="text-gray-400"> ({ordre.banque_emetteur})</span>
+                          </td>
+                          <td
+                            className="px-3 py-2 whitespace-nowrap text-sm text-gray-700"
+                            title={lignes.map(l => `${l.beneficiaire} : ${Number(l.montant).toFixed(3)} DT (${l.objet})`).join('\n')}
+                          >
+                            {lignes.length}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm font-semibold text-indigo-700">
+                            {total.toFixed(3)} DT
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700">{ordre.cree_par}</td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleReimprimerOrdreVirement(ordre)}
+                                title="Réimprimer le PDF"
+                                className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteOrdreVirement(ordre.id)}
+                                title="Supprimer"
+                                className="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
@@ -1676,7 +1910,7 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Émetteur */}
               <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-200 space-y-3">
                 <h3 className="font-bold text-indigo-900">Donneur d'ordre (émetteur)</h3>
@@ -1731,92 +1965,127 @@ const VersementBancaire: React.FC<VersementBancaireProps> = ({ username }) => {
                 </label>
               </div>
 
-              {/* Bénéficiaire */}
-              <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200 space-y-3">
-                <h3 className="font-bold text-emerald-900">Bénéficiaire</h3>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Bénéficiaire enregistré</label>
-                  <select
-                    value={ordreVirementForm.beneficiaireId}
-                    onChange={(e) => handleSelectBeneficiaireVirement(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  >
-                    <option value="">+ Nouveau bénéficiaire</option>
-                    {beneficiairesVirement.map(b => (
-                      <option key={b.id} value={b.id}>{b.nom} — {b.numero_compte} ({b.banque})</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Nom du bénéficiaire *</label>
-                  <input
-                    type="text"
-                    value={ordreVirementForm.beneficiaire}
-                    onChange={(e) => setOrdreVirementForm(f => ({ ...f, beneficiaire: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Numéro de compte *</label>
-                  <input
-                    type="text"
-                    value={ordreVirementForm.numeroCompteBeneficiaire}
-                    onChange={(e) => setOrdreVirementForm(f => ({ ...f, numeroCompteBeneficiaire: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Banque *</label>
-                  <input
-                    type="text"
-                    value={ordreVirementForm.banqueBeneficiaire}
-                    onChange={(e) => setOrdreVirementForm(f => ({ ...f, banqueBeneficiaire: e.target.value }))}
-                    placeholder="Ex: BIAT"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  />
-                </div>
-                <label className="flex items-center gap-2 text-xs text-emerald-800">
-                  <input
-                    type="checkbox"
-                    checked={ordreVirementForm.saveBeneficiaire}
-                    onChange={(e) => setOrdreVirementForm(f => ({ ...f, saveBeneficiaire: e.target.checked }))}
-                  />
-                  Enregistrer ce bénéficiaire pour réutilisation
-                </label>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Montant (DT) *</label>
-                <input
-                  type="number"
-                  step="0.001"
-                  value={ordreVirementForm.montant}
-                  onChange={(e) => setOrdreVirementForm(f => ({ ...f, montant: e.target.value }))}
-                  placeholder="0.000"
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Objet du virement *</label>
-                <input
-                  type="text"
-                  value={ordreVirementForm.objet}
-                  onChange={(e) => setOrdreVirementForm(f => ({ ...f, objet: e.target.value }))}
-                  placeholder="Ex: Règlement facture..."
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Date *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Date du virement *</label>
                 <input
                   type="date"
                   value={ordreVirementForm.dateVirement}
                   onChange={(e) => setOrdreVirementForm(f => ({ ...f, dateVirement: e.target.value }))}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 />
+                <div className="mt-3 bg-gray-50 rounded-xl p-4 border border-gray-200">
+                  <p className="text-xs text-gray-500">Nombre de bénéficiaires</p>
+                  <p className="text-xl font-bold text-gray-800">{ordreVirementForm.lignes.length}</p>
+                  <p className="text-xs text-gray-500 mt-2">Montant total</p>
+                  <p className="text-xl font-bold text-indigo-700">{totalOrdreVirement.toFixed(3)} DT</p>
+                </div>
               </div>
+            </div>
+
+            {/* Bénéficiaires (multiples) */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-emerald-900">Bénéficiaires</h3>
+                <button
+                  onClick={handleAddLigneVirement}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Ajouter un bénéficiaire
+                </button>
+              </div>
+
+              {ordreVirementForm.lignes.map((ligne, idx) => (
+                <div key={ligne.formId} className="bg-emerald-50 rounded-xl p-4 border border-emerald-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-700 uppercase">Bénéficiaire {idx + 1}</span>
+                    {ordreVirementForm.lignes.length > 1 && (
+                      <button
+                        onClick={() => handleRemoveLigneVirement(ligne.formId)}
+                        className="text-red-600 hover:text-red-800"
+                        title="Supprimer ce bénéficiaire"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Bénéficiaire enregistré</label>
+                    <select
+                      value={ligne.beneficiaireId}
+                      onChange={(e) => handleSelectBeneficiaireVirement(ligne.formId, e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="">+ Nouveau bénéficiaire</option>
+                      {beneficiairesVirement.map(b => (
+                        <option key={b.id} value={b.id}>{b.nom} — {b.numero_compte} ({b.banque})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Nom du bénéficiaire *</label>
+                      <input
+                        type="text"
+                        value={ligne.beneficiaire}
+                        onChange={(e) => updateLigneVirement(ligne.formId, { beneficiaire: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Numéro de compte *</label>
+                      <input
+                        type="text"
+                        value={ligne.numeroCompteBeneficiaire}
+                        onChange={(e) => updateLigneVirement(ligne.formId, { numeroCompteBeneficiaire: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Banque *</label>
+                      <input
+                        type="text"
+                        value={ligne.banqueBeneficiaire}
+                        onChange={(e) => updateLigneVirement(ligne.formId, { banqueBeneficiaire: e.target.value })}
+                        placeholder="Ex: BIAT"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Montant (DT) *</label>
+                      <input
+                        type="number"
+                        step="0.001"
+                        value={ligne.montant}
+                        onChange={(e) => updateLigneVirement(ligne.formId, { montant: e.target.value })}
+                        placeholder="0.000"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Objet du virement *</label>
+                      <input
+                        type="text"
+                        value={ligne.objet}
+                        onChange={(e) => updateLigneVirement(ligne.formId, { objet: e.target.value })}
+                        placeholder="Ex: Règlement facture..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-xs text-emerald-800">
+                    <input
+                      type="checkbox"
+                      checked={ligne.saveBeneficiaire}
+                      onChange={(e) => updateLigneVirement(ligne.formId, { saveBeneficiaire: e.target.checked })}
+                    />
+                    Enregistrer ce bénéficiaire pour réutilisation
+                  </label>
+                </div>
+              ))}
             </div>
 
             <div className="flex gap-3 pt-2">
